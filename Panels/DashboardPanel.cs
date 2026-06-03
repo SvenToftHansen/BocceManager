@@ -15,6 +15,19 @@ public class DashboardPanel : UserControl
         BackColor = AppTheme.ContentBackground;
         Dock = DockStyle.Fill;
         BuildUI();
+        AppParameterService.DefaultsChanged += OnDefaultsChanged;
+    }
+
+    private void OnDefaultsChanged(object? sender, DefaultsChangedEventArgs e)
+    {
+        LoadDefaultsUI();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+            AppParameterService.DefaultsChanged -= OnDefaultsChanged;
+        base.Dispose(disposing);
     }
 
     private void BuildUI()

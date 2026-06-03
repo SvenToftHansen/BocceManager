@@ -71,6 +71,19 @@ public class SeasonPanel : UserControl
         Dock = DockStyle.Fill;
         BuildUI();
         LoadLeagueList();
+        AppParameterService.DefaultsChanged += OnDefaultsChanged;
+    }
+
+    private void OnDefaultsChanged(object? sender, DefaultsChangedEventArgs e)
+    {
+        LoadLeagueList();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+            AppParameterService.DefaultsChanged -= OnDefaultsChanged;
+        base.Dispose(disposing);
     }
 
     public void SelectSeason(int seasonId)

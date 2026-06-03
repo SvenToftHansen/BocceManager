@@ -3,8 +3,15 @@ using BocceManager.Data.Entities;
 
 namespace BocceManager.Services;
 
+public class DefaultsChangedEventArgs : EventArgs
+{
+    public int? LeagueId { get; set; }
+    public int? SeasonId { get; set; }
+}
+
 public static class AppParameterService
 {
+    public static event EventHandler<DefaultsChangedEventArgs>? DefaultsChanged;
     public static List<AppParameter> Load(BocceDbContext db)
         => [.. db.AppParameters.OrderBy(p => p.Key)];
 
@@ -53,6 +60,7 @@ public static class AppParameterService
             param.Value = leagueId?.ToString() ?? "";
         }
         db.SaveChanges();
+        RaiseDefaultsChanged(leagueId, GetDefaultSeasonId(db));
     }
 
     public static void SetDefaultSeasonId(BocceDbContext db, int? seasonId)
@@ -72,6 +80,12 @@ public static class AppParameterService
             param.Value = seasonId?.ToString() ?? "";
         }
         db.SaveChanges();
+        RaiseDefaultsChanged(GetDefaultLeagueId(db), seasonId);
+    }
+
+    private static void RaiseDefaultsChanged(int? leagueId, int? seasonId)
+    {
+        DefaultsChanged?.Invoke(null, new DefaultsChangedEventArgs { LeagueId = leagueId, SeasonId = seasonId });
     }
 
     public static bool HasDefaults(BocceDbContext db)
