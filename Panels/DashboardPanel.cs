@@ -265,14 +265,25 @@ public class DashboardPanel : UserControl
         _leagueCombo!.DisplayMember = "Name";
         _leagueCombo!.ValueMember = "Id";
 
-        // If exactly one season exists, auto-select it and its league
+        // If exactly one season exists, auto-select it and its league (without triggering event)
         if (allSeasons.Count == 1)
         {
             var season = allSeasons.First();
+            var currentLeagueDefault = AppParameterService.GetDefaultLeagueId(_db);
+            var currentSeasonDefault = AppParameterService.GetDefaultSeasonId(_db);
+
+            // Only update if not already set to avoid infinite recursion
+            if (currentLeagueDefault != season.LeagueId || currentSeasonDefault != season.Id)
+            {
+                AppParameterService.DefaultsChanged -= OnDefaultsChanged;
+                AppParameterService.SetDefaultLeagueId(_db, season.LeagueId);
+                AppParameterService.SetDefaultSeasonId(_db, season.Id);
+                AppParameterService.DefaultsChanged += OnDefaultsChanged;
+            }
+
+            // Now set combo selections
             _leagueCombo!.SelectedValue = season.LeagueId;
             _seasonCombo!.SelectedValue = season.Id;
-            AppParameterService.SetDefaultLeagueId(_db, season.LeagueId);
-            AppParameterService.SetDefaultSeasonId(_db, season.Id);
         }
         else
         {
