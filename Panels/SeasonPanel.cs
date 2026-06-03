@@ -1,5 +1,6 @@
 using BocceManager.Data;
 using BocceManager.Data.Entities;
+using BocceManager.Services;
 using BocceManager.UI.Theme;
 using Microsoft.EntityFrameworkCore;
 
@@ -494,15 +495,32 @@ public class SeasonPanel : UserControl
     {
         _leagueCombo.SelectedIndexChanged -= OnLeagueSelected;
         _leagueCombo.Items.Clear();
+
+        int? defaultLeagueId = null;
         try
         {
             using var db = new BocceDbContext();
             foreach (var l in db.Leagues.OrderBy(l => l.Name).ToList())
                 _leagueCombo.Items.Add(new IntItem(l.Id, l.Name + (l.IsActive ? "" : " (inactive)")));
+
+            defaultLeagueId = AppParameterService.GetDefaultLeagueId(db);
         }
         catch { }
+
         _leagueCombo.SelectedIndexChanged += OnLeagueSelected;
-        if (_leagueCombo.Items.Count > 0) _leagueCombo.SelectedIndex = 0;
+        if (_leagueCombo.Items.Count > 0)
+        {
+            // Try to select default league; fall back to first
+            if (defaultLeagueId.HasValue)
+            {
+                int idx = _leagueCombo.Items.Cast<IntItem>().ToList().FindIndex(item => item.Id == defaultLeagueId);
+                _leagueCombo.SelectedIndex = idx >= 0 ? idx : 0;
+            }
+            else
+            {
+                _leagueCombo.SelectedIndex = 0;
+            }
+        }
         else ClearEditor();
     }
 
@@ -517,6 +535,8 @@ public class SeasonPanel : UserControl
     {
         _seasonCombo.SelectedIndexChanged -= OnSeasonSelected;
         _seasonCombo.Items.Clear();
+
+        int? defaultSeasonId = null;
         try
         {
             using var db = new BocceDbContext();
@@ -526,10 +546,25 @@ public class SeasonPanel : UserControl
                 var label = s.Name + (s.IsCurrent ? "  ★" : "") + (s.IsActive ? "" : " (inactive)");
                 _seasonCombo.Items.Add(new IntItem(s.Id, label));
             }
+
+            defaultSeasonId = AppParameterService.GetDefaultSeasonId(db);
         }
         catch { }
+
         _seasonCombo.SelectedIndexChanged += OnSeasonSelected;
-        if (_seasonCombo.Items.Count > 0) _seasonCombo.SelectedIndex = 0;
+        if (_seasonCombo.Items.Count > 0)
+        {
+            // Try to select default season; fall back to first
+            if (defaultSeasonId.HasValue)
+            {
+                int idx = _seasonCombo.Items.Cast<IntItem>().ToList().FindIndex(item => item.Id == defaultSeasonId);
+                _seasonCombo.SelectedIndex = idx >= 0 ? idx : 0;
+            }
+            else
+            {
+                _seasonCombo.SelectedIndex = 0;
+            }
+        }
         else ClearEditor();
     }
 

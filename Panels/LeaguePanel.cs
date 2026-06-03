@@ -320,18 +320,32 @@ public class LeaguePanel : UserControl
         _leagueCombo.SelectedIndexChanged -= OnLeagueSelected;
         _leagueCombo.Items.Clear();
 
+        int? defaultLeagueId = null;
         try
         {
             using var db = new BocceDbContext();
             foreach (var l in db.Leagues.OrderBy(l => l.Name).ToList())
                 _leagueCombo.Items.Add(new ComboItem(l.Id, l.Name + (l.IsActive ? "" : " (inactive)")));
+
+            defaultLeagueId = AppParameterService.GetDefaultLeagueId(db);
         }
         catch { }
 
         _leagueCombo.SelectedIndexChanged += OnLeagueSelected;
 
         if (_leagueCombo.Items.Count > 0)
-            _leagueCombo.SelectedIndex = 0;
+        {
+            // Try to select default league; fall back to first
+            if (defaultLeagueId.HasValue)
+            {
+                int idx = _leagueCombo.Items.Cast<ComboItem>().ToList().FindIndex(item => item.Id == defaultLeagueId);
+                _leagueCombo.SelectedIndex = idx >= 0 ? idx : 0;
+            }
+            else
+            {
+                _leagueCombo.SelectedIndex = 0;
+            }
+        }
         else
             ClearEditorForm();
     }

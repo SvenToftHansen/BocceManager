@@ -235,36 +235,44 @@ public class DashboardPanel : UserControl
         _seasonCombo.SelectedIndexChanged += SeasonCombo_SelectedIndexChanged;
         panel.Controls.Add(_seasonCombo);
 
-        // Load and populate
         LoadDefaultsUI();
-
-        // Check if there's only one season; if so, auto-select
-        var seasons = _db.Seasons.Where(s => s.IsActive).ToList();
-        if (seasons.Count == 1)
-        {
-            var season = seasons.First();
-            _leagueCombo.SelectedValue = season.LeagueId;
-            _seasonCombo.SelectedValue = season.Id;
-        }
 
         return panel;
     }
 
     private void LoadDefaultsUI()
     {
-        var leagues = _db.Leagues.Where(l => l.IsActive).OrderBy(l => l.Name).ToList();
-        _leagueCombo!.DataSource = leagues;
+        var allSeasons = _db.Seasons.Where(s => s.IsActive).ToList();
+        var leaguesWithSeasons = _db.Leagues
+            .Where(l => l.IsActive && _db.Seasons.Any(s => s.LeagueId == l.Id && s.IsActive))
+            .OrderBy(l => l.Name)
+            .ToList();
+
+        _leagueCombo!.DataSource = leaguesWithSeasons;
         _leagueCombo!.DisplayMember = "Name";
         _leagueCombo!.ValueMember = "Id";
 
-        var defaultLeagueId = AppParameterService.GetDefaultLeagueId(_db);
-        if (defaultLeagueId.HasValue && leagues.Any(l => l.Id == defaultLeagueId))
+        // If exactly one season exists, auto-select it and its league
+        if (allSeasons.Count == 1)
         {
-            _leagueCombo!.SelectedValue = defaultLeagueId;
+            var season = allSeasons.First();
+            _leagueCombo!.SelectedValue = season.LeagueId;
+            _seasonCombo!.SelectedValue = season.Id;
+            AppParameterService.SetDefaultLeagueId(_db, season.LeagueId);
+            AppParameterService.SetDefaultSeasonId(_db, season.Id);
         }
-        else if (leagues.Count > 0)
+        else
         {
-            _leagueCombo!.SelectedIndex = 0;
+            // Otherwise load saved defaults
+            var defaultLeagueId = AppParameterService.GetDefaultLeagueId(_db);
+            if (defaultLeagueId.HasValue && leaguesWithSeasons.Any(l => l.Id == defaultLeagueId))
+            {
+                _leagueCombo!.SelectedValue = defaultLeagueId;
+            }
+            else if (leaguesWithSeasons.Count > 0)
+            {
+                _leagueCombo!.SelectedIndex = 0;
+            }
         }
     }
 
