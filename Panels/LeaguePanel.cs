@@ -130,15 +130,29 @@ public class LeaguePanel : UserControl
         };
         y += 44;
 
-        // Rules Text
-        var lblRules = Lbl("Rules Text", y);
+        // Rule Additions / Changes
+        var lblRules = new Label
+        {
+            Text = "Rule Additions /\nChanges",
+            Font = AppTheme.FontDefaultBold, ForeColor = AppTheme.TextPrimary,
+            AutoSize = false, Size = new Size(172, 48),
+            Location = new Point(labelX, y + 3), TextAlign = ContentAlignment.TopLeft
+        };
         _rtbRules = new RichTextBox
         {
             Location = new Point(inputX, y), Size = new Size(inputW, 150),
             Font = AppTheme.FontDefault, BackColor = AppTheme.ContentBackground, ForeColor = AppTheme.TextPrimary,
             BorderStyle = BorderStyle.FixedSingle, ScrollBars = RichTextBoxScrollBars.Vertical
         };
-        y += 166;
+        var lblRulesHint = new Label
+        {
+            Text = "Optional — captures any rule variations or additions specific to this league, " +
+                   "applied alongside the club’s official rules document. Most leagues leave this blank.",
+            AutoSize = true, MaximumSize = new Size(inputW, 0),
+            Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted,
+            Location = new Point(inputX, y + 154)
+        };
+        y += 260;
 
         // Players Per Team Minimum
         var lblMin = Lbl("Players / Team Min", y);
@@ -170,7 +184,7 @@ public class LeaguePanel : UserControl
         };
 
         scroll.Controls.AddRange([
-            lblName, _txtName, lblDesc, _txtDescription, lblRules, _rtbRules,
+            lblName, _txtName, lblDesc, _txtDescription, lblRules, _rtbRules, lblRulesHint,
             lblMin, _numMin, lblMinHint,
             lblMax, _numMax, lblMaxHint,
             lblActive, _chkActive, lblCreatedLbl, _lblCreatedAt
