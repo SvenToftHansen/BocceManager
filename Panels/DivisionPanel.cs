@@ -8,6 +8,8 @@ namespace BocceManager.Panels;
 
 public class DivisionPanel : UserControl
 {
+    private bool _isLoadingData = false;
+
     // ── State ────────────────────────────────────────────────────────────────
     private int? _selectedLeagueId;
     private int? _selectedSeasonId;
@@ -406,35 +408,43 @@ public class DivisionPanel : UserControl
 
     private void LoadLeagueList()
     {
-        _leagueCombo.SelectedIndexChanged -= OnLeagueSelected;
-        _leagueCombo.Items.Clear();
-
-        int? defaultLeagueId = null;
+        _isLoadingData = true;
         try
         {
-            using var db = new BocceDbContext();
-            foreach (var l in db.Leagues.OrderBy(l => l.Name).ToList())
-                _leagueCombo.Items.Add(new IntItem(l.Id, l.Name + (l.IsActive ? "" : " (inactive)")));
+            _leagueCombo.SelectedIndexChanged -= OnLeagueSelected;
+            _leagueCombo.Items.Clear();
 
-            defaultLeagueId = AppParameterService.GetDefaultLeagueId(db);
+            int? defaultLeagueId = null;
+            try
+            {
+                using var db = new BocceDbContext();
+                foreach (var l in db.Leagues.OrderBy(l => l.Name).ToList())
+                    _leagueCombo.Items.Add(new IntItem(l.Id, l.Name + (l.IsActive ? "" : " (inactive)")));
+
+                defaultLeagueId = AppParameterService.GetDefaultLeagueId(db);
+            }
+            catch { }
+
+            _leagueCombo.SelectedIndexChanged += OnLeagueSelected;
+            if (_leagueCombo.Items.Count > 0)
+            {
+                // Try to select default league; fall back to first
+                if (defaultLeagueId.HasValue)
+                {
+                    int idx = _leagueCombo.Items.Cast<IntItem>().ToList().FindIndex(item => item.Id == defaultLeagueId);
+                    _leagueCombo.SelectedIndex = idx >= 0 ? idx : 0;
+                }
+                else
+                {
+                    _leagueCombo.SelectedIndex = 0;
+                }
+            }
+            else ClearEditor();
         }
-        catch { }
-
-        _leagueCombo.SelectedIndexChanged += OnLeagueSelected;
-        if (_leagueCombo.Items.Count > 0)
+        finally
         {
-            // Try to select default league; fall back to first
-            if (defaultLeagueId.HasValue)
-            {
-                int idx = _leagueCombo.Items.Cast<IntItem>().ToList().FindIndex(item => item.Id == defaultLeagueId);
-                _leagueCombo.SelectedIndex = idx >= 0 ? idx : 0;
-            }
-            else
-            {
-                _leagueCombo.SelectedIndex = 0;
-            }
+            _isLoadingData = false;
         }
-        else ClearEditor();
     }
 
     private void OnLeagueSelected(object? sender, EventArgs e)
@@ -443,48 +453,59 @@ public class DivisionPanel : UserControl
         {
             _selectedLeagueId = item.Id;
             LoadSeasonList(item.Id);
-            // Update default league when user selects
-            using var db = new BocceDbContext();
-            AppParameterService.SetDefaultLeagueId(db, item.Id);
+            // Update default league only if user selected (not during data load)
+            if (!_isLoadingData)
+            {
+                using var db = new BocceDbContext();
+                AppParameterService.SetDefaultLeagueId(db, item.Id);
+            }
         }
         else ClearEditor();
     }
 
     private void LoadSeasonList(int leagueId)
     {
-        _seasonCombo.SelectedIndexChanged -= OnSeasonSelected;
-        _seasonCombo.Items.Clear();
-
-        int? defaultSeasonId = null;
+        _isLoadingData = true;
         try
         {
-            using var db = new BocceDbContext();
-            foreach (var s in db.Seasons.Where(s => s.LeagueId == leagueId)
-                .OrderByDescending(s => s.IsCurrent).ThenByDescending(s => s.StartDate).ToList())
+            _seasonCombo.SelectedIndexChanged -= OnSeasonSelected;
+            _seasonCombo.Items.Clear();
+
+            int? defaultSeasonId = null;
+            try
             {
-                _seasonCombo.Items.Add(new IntItem(s.Id,
-                    s.Name + (s.IsCurrent ? "  ★" : "") + (s.IsActive ? "" : " (inactive)")));
+                using var db = new BocceDbContext();
+                foreach (var s in db.Seasons.Where(s => s.LeagueId == leagueId)
+                    .OrderByDescending(s => s.IsCurrent).ThenByDescending(s => s.StartDate).ToList())
+                {
+                    _seasonCombo.Items.Add(new IntItem(s.Id,
+                        s.Name + (s.IsCurrent ? "  ★" : "") + (s.IsActive ? "" : " (inactive)")));
+                }
+
+                defaultSeasonId = AppParameterService.GetDefaultSeasonId(db);
             }
+            catch { }
 
-            defaultSeasonId = AppParameterService.GetDefaultSeasonId(db);
+            _seasonCombo.SelectedIndexChanged += OnSeasonSelected;
+            if (_seasonCombo.Items.Count > 0)
+            {
+                // Try to select default season; fall back to first
+                if (defaultSeasonId.HasValue)
+                {
+                    int idx = _seasonCombo.Items.Cast<IntItem>().ToList().FindIndex(item => item.Id == defaultSeasonId);
+                    _seasonCombo.SelectedIndex = idx >= 0 ? idx : 0;
+                }
+                else
+                {
+                    _seasonCombo.SelectedIndex = 0;
+                }
+            }
+            else ClearEditor();
         }
-        catch { }
-
-        _seasonCombo.SelectedIndexChanged += OnSeasonSelected;
-        if (_seasonCombo.Items.Count > 0)
+        finally
         {
-            // Try to select default season; fall back to first
-            if (defaultSeasonId.HasValue)
-            {
-                int idx = _seasonCombo.Items.Cast<IntItem>().ToList().FindIndex(item => item.Id == defaultSeasonId);
-                _seasonCombo.SelectedIndex = idx >= 0 ? idx : 0;
-            }
-            else
-            {
-                _seasonCombo.SelectedIndex = 0;
-            }
+            _isLoadingData = false;
         }
-        else ClearEditor();
     }
 
     private void OnSeasonSelected(object? sender, EventArgs e)
@@ -493,9 +514,12 @@ public class DivisionPanel : UserControl
         {
             _selectedSeasonId = item.Id;
             LoadDivisionList(item.Id);
-            // Update default season when user selects
-            using var db = new BocceDbContext();
-            AppParameterService.SetDefaultSeasonId(db, item.Id);
+            // Update default season only if user selected (not during data load)
+            if (!_isLoadingData)
+            {
+                using var db = new BocceDbContext();
+                AppParameterService.SetDefaultSeasonId(db, item.Id);
+            }
         }
         else ClearEditor();
     }

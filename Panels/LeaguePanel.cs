@@ -9,6 +9,7 @@ namespace BocceManager.Panels;
 public class LeaguePanel : UserControl
 {
     private int? _selectedLeagueId;
+    private bool _isLoadingData = false;
 
     // Header
     private ComboBox _leagueCombo = null!;
@@ -330,37 +331,45 @@ public class LeaguePanel : UserControl
 
     private void LoadLeagueList()
     {
-        _leagueCombo.SelectedIndexChanged -= OnLeagueSelected;
-        _leagueCombo.Items.Clear();
-
-        int? defaultLeagueId = null;
+        _isLoadingData = true;
         try
         {
-            using var db = new BocceDbContext();
-            foreach (var l in db.Leagues.OrderBy(l => l.Name).ToList())
-                _leagueCombo.Items.Add(new ComboItem(l.Id, l.Name + (l.IsActive ? "" : " (inactive)")));
+            _leagueCombo.SelectedIndexChanged -= OnLeagueSelected;
+            _leagueCombo.Items.Clear();
 
-            defaultLeagueId = AppParameterService.GetDefaultLeagueId(db);
-        }
-        catch { }
-
-        _leagueCombo.SelectedIndexChanged += OnLeagueSelected;
-
-        if (_leagueCombo.Items.Count > 0)
-        {
-            // Try to select default league; fall back to first
-            if (defaultLeagueId.HasValue)
+            int? defaultLeagueId = null;
+            try
             {
-                int idx = _leagueCombo.Items.Cast<ComboItem>().ToList().FindIndex(item => item.Id == defaultLeagueId);
-                _leagueCombo.SelectedIndex = idx >= 0 ? idx : 0;
+                using var db = new BocceDbContext();
+                foreach (var l in db.Leagues.OrderBy(l => l.Name).ToList())
+                    _leagueCombo.Items.Add(new ComboItem(l.Id, l.Name + (l.IsActive ? "" : " (inactive)")));
+
+                defaultLeagueId = AppParameterService.GetDefaultLeagueId(db);
+            }
+            catch { }
+
+            _leagueCombo.SelectedIndexChanged += OnLeagueSelected;
+
+            if (_leagueCombo.Items.Count > 0)
+            {
+                // Try to select default league; fall back to first
+                if (defaultLeagueId.HasValue)
+                {
+                    int idx = _leagueCombo.Items.Cast<ComboItem>().ToList().FindIndex(item => item.Id == defaultLeagueId);
+                    _leagueCombo.SelectedIndex = idx >= 0 ? idx : 0;
+                }
+                else
+                {
+                    _leagueCombo.SelectedIndex = 0;
+                }
             }
             else
-            {
-                _leagueCombo.SelectedIndex = 0;
-            }
+                ClearEditorForm();
         }
-        else
-            ClearEditorForm();
+        finally
+        {
+            _isLoadingData = false;
+        }
     }
 
     private void OnLeagueSelected(object? sender, EventArgs e)
@@ -368,9 +377,12 @@ public class LeaguePanel : UserControl
         if (_leagueCombo.SelectedItem is ComboItem item)
         {
             LoadLeague(item.Id);
-            // Update default league when user selects
-            using var db = new BocceDbContext();
-            AppParameterService.SetDefaultLeagueId(db, item.Id);
+            // Update default league only if user selected (not during data load)
+            if (!_isLoadingData)
+            {
+                using var db = new BocceDbContext();
+                AppParameterService.SetDefaultLeagueId(db, item.Id);
+            }
         }
         else
             ClearEditorForm();
