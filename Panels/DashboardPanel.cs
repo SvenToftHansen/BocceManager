@@ -9,6 +9,7 @@ public class DashboardPanel : UserControl
     private BocceDbContext _db = new();
     private ComboBox? _leagueCombo;
     private ComboBox? _seasonCombo;
+    private bool _isUpdatingDefaults = false;
 
     public DashboardPanel()
     {
@@ -255,67 +256,73 @@ public class DashboardPanel : UserControl
 
     private void LoadDefaultsUI()
     {
-        var allLeagues = _db.Leagues.Where(l => l.IsActive).OrderBy(l => l.Name).ToList();
-        var allSeasons = _db.Seasons.Where(s => s.IsActive).ToList();
-
-        _leagueCombo!.DataSource = allLeagues;
-        _leagueCombo!.DisplayMember = "Name";
-        _leagueCombo!.ValueMember = "Id";
-
-        int? autoLeagueId = null;
-        int? autoSeasonId = null;
-
-        // Auto-select logic: find league with season closest to today
-        var leaguesWithSeasons = allLeagues.Where(l => allSeasons.Any(s => s.LeagueId == l.Id)).ToList();
-        if (leaguesWithSeasons.Count > 0)
+        _isUpdatingDefaults = true;
+        try
         {
-            // Pick league whose season is closest to today
-            autoLeagueId = leaguesWithSeasons
-                .OrderBy(l => allSeasons.Where(s => s.LeagueId == l.Id && s.StartDate.HasValue)
-                    .Min(s => Math.Abs((s.StartDate!.Value.ToDateTime(TimeOnly.MinValue) - DateTime.Today).Days)))
-                .First().Id;
+            var allLeagues = _db.Leagues.Where(l => l.IsActive).OrderBy(l => l.Name).ToList();
+            var allSeasons = _db.Seasons.Where(s => s.IsActive).ToList();
 
-            // Pick season: if multiple current, pick closest to today; else first
-            var seasonsInLeague = allSeasons.Where(s => s.LeagueId == autoLeagueId).ToList();
-            var currentSeasons = seasonsInLeague.Where(s => s.IsCurrent).ToList();
+            _leagueCombo!.DataSource = allLeagues;
+            _leagueCombo!.DisplayMember = "Name";
+            _leagueCombo!.ValueMember = "Id";
 
-            if (currentSeasons.Count > 0)
+            int? autoLeagueId = null;
+            int? autoSeasonId = null;
+
+            // Auto-select logic: find league with season closest to today
+            var leaguesWithSeasons = allLeagues.Where(l => allSeasons.Any(s => s.LeagueId == l.Id)).ToList();
+            if (leaguesWithSeasons.Count > 0)
             {
-                autoSeasonId = currentSeasons
-                    .OrderBy(s => s.StartDate.HasValue ? Math.Abs((s.StartDate!.Value.ToDateTime(TimeOnly.MinValue) - DateTime.Today).Days) : int.MaxValue)
+                // Pick league whose season is closest to today
+                autoLeagueId = leaguesWithSeasons
+                    .OrderBy(l => allSeasons.Where(s => s.LeagueId == l.Id && s.StartDate.HasValue)
+                        .Min(s => Math.Abs((s.StartDate!.Value.ToDateTime(TimeOnly.MinValue) - DateTime.Today).Days)))
                     .First().Id;
+
+                // Pick season: if multiple current, pick closest to today; else first
+                var seasonsInLeague = allSeasons.Where(s => s.LeagueId == autoLeagueId).ToList();
+                var currentSeasons = seasonsInLeague.Where(s => s.IsCurrent).ToList();
+
+                if (currentSeasons.Count > 0)
+                {
+                    autoSeasonId = currentSeasons
+                        .OrderBy(s => s.StartDate.HasValue ? Math.Abs((s.StartDate!.Value.ToDateTime(TimeOnly.MinValue) - DateTime.Today).Days) : int.MaxValue)
+                        .First().Id;
+                }
+                else if (seasonsInLeague.Count > 0)
+                {
+                    autoSeasonId = seasonsInLeague.First().Id;
+                }
             }
-            else if (seasonsInLeague.Count > 0)
+            else if (allLeagues.Count > 0)
             {
-                autoSeasonId = seasonsInLeague.First().Id;
+                // No leagues have seasons; select first league
+                autoLeagueId = allLeagues.First().Id;
             }
+
+            // Update defaults if auto-selection differs from current
+            var currentLeagueDefault = AppParameterService.GetDefaultLeagueId(_db);
+            var currentSeasonDefault = AppParameterService.GetDefaultSeasonId(_db);
+
+            if (autoLeagueId.HasValue && (currentLeagueDefault != autoLeagueId || currentSeasonDefault != autoSeasonId))
+            {
+                AppParameterService.SetDefaultLeagueId(_db, autoLeagueId);
+                AppParameterService.SetDefaultSeasonId(_db, autoSeasonId);
+            }
+
+            // Set combo selections
+            if (autoLeagueId.HasValue)
+                _leagueCombo!.SelectedValue = autoLeagueId;
+            else if (allLeagues.Count > 0)
+                _leagueCombo!.SelectedIndex = 0;
+
+            if (autoSeasonId.HasValue)
+                _seasonCombo!.SelectedValue = autoSeasonId;
         }
-        else if (allLeagues.Count > 0)
+        finally
         {
-            // No leagues have seasons; select first league
-            autoLeagueId = allLeagues.First().Id;
+            _isUpdatingDefaults = false;
         }
-
-        // Update defaults if auto-selection differs from current
-        var currentLeagueDefault = AppParameterService.GetDefaultLeagueId(_db);
-        var currentSeasonDefault = AppParameterService.GetDefaultSeasonId(_db);
-
-        if (autoLeagueId.HasValue && (currentLeagueDefault != autoLeagueId || currentSeasonDefault != autoSeasonId))
-        {
-            AppParameterService.DefaultsChanged -= OnDefaultsChanged;
-            AppParameterService.SetDefaultLeagueId(_db, autoLeagueId);
-            AppParameterService.SetDefaultSeasonId(_db, autoSeasonId);
-            AppParameterService.DefaultsChanged += OnDefaultsChanged;
-        }
-
-        // Set combo selections
-        if (autoLeagueId.HasValue)
-            _leagueCombo!.SelectedValue = autoLeagueId;
-        else if (allLeagues.Count > 0)
-            _leagueCombo!.SelectedIndex = 0;
-
-        if (autoSeasonId.HasValue)
-            _seasonCombo!.SelectedValue = autoSeasonId;
     }
 
     private void LeagueCombo_SelectedIndexChanged(object? sender, EventArgs e)
@@ -341,14 +348,24 @@ public class DashboardPanel : UserControl
             {
                 _seasonCombo!.SelectedIndex = 0;
             }
+            else
+            {
+                _seasonCombo!.SelectedValue = null;
+            }
+
+            // Save the new league as default only if user selected it (not during auto-selection)
+            if (!_isUpdatingDefaults)
+            {
+                AppParameterService.SetDefaultLeagueId(_db, leagueId);
+            }
         }
     }
 
     private void SeasonCombo_SelectedIndexChanged(object? sender, EventArgs e)
     {
-        if (_leagueCombo?.SelectedValue is int leagueId && _seasonCombo?.SelectedValue is int seasonId)
+        if (_seasonCombo?.SelectedValue is int seasonId && !_isUpdatingDefaults)
         {
-            AppParameterService.SetDefaultLeagueId(_db, leagueId);
+            // Save the new season as default (user selected it)
             AppParameterService.SetDefaultSeasonId(_db, seasonId);
         }
     }
