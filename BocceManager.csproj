@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <PackageReference Include="FastReport.OpenSource" Version="2026.2.1" />
+    <PackageReference Include="Mammoth" Version="1.11.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

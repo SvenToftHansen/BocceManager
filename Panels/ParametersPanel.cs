@@ -161,6 +161,7 @@ public class ParametersPanel : UserControl
             using var db = new BocceDbContext();
             foreach (var p in AppParameterService.Load(db))
                 grid.Rows.Add(p.Id, p.Key, p.Value, p.Description ?? "");
+            grid.ClearSelection();
         }
         catch { }
     }

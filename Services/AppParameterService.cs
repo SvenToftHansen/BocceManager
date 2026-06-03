@@ -23,4 +23,61 @@ public static class AppParameterService
 
     // Formats an optional int for display — null renders as an em-dash.
     public static string Fmt(int? v) => v.HasValue ? v.Value.ToString() : "—";
+
+    public static int? GetDefaultLeagueId(BocceDbContext db)
+    {
+        var param = db.AppParameters.FirstOrDefault(p => p.Key == "DefaultLeagueId");
+        return param != null && int.TryParse(param.Value, out var id) ? id : null;
+    }
+
+    public static int? GetDefaultSeasonId(BocceDbContext db)
+    {
+        var param = db.AppParameters.FirstOrDefault(p => p.Key == "DefaultSeasonId");
+        return param != null && int.TryParse(param.Value, out var id) ? id : null;
+    }
+
+    public static void SetDefaultLeagueId(BocceDbContext db, int? leagueId)
+    {
+        var param = db.AppParameters.FirstOrDefault(p => p.Key == "DefaultLeagueId");
+        if (param == null)
+        {
+            db.AppParameters.Add(new AppParameter
+            {
+                Key = "DefaultLeagueId",
+                Value = leagueId?.ToString() ?? "",
+                Description = "Default league for user context"
+            });
+        }
+        else
+        {
+            param.Value = leagueId?.ToString() ?? "";
+        }
+        db.SaveChanges();
+    }
+
+    public static void SetDefaultSeasonId(BocceDbContext db, int? seasonId)
+    {
+        var param = db.AppParameters.FirstOrDefault(p => p.Key == "DefaultSeasonId");
+        if (param == null)
+        {
+            db.AppParameters.Add(new AppParameter
+            {
+                Key = "DefaultSeasonId",
+                Value = seasonId?.ToString() ?? "",
+                Description = "Default season for user context"
+            });
+        }
+        else
+        {
+            param.Value = seasonId?.ToString() ?? "";
+        }
+        db.SaveChanges();
+    }
+
+    public static bool HasDefaults(BocceDbContext db)
+    {
+        var leagueId = GetDefaultLeagueId(db);
+        var seasonId = GetDefaultSeasonId(db);
+        return leagueId.HasValue && seasonId.HasValue;
+    }
 }

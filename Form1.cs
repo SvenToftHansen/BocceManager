@@ -13,7 +13,7 @@ public partial class MainForm : Form
         Players, Teams,
         ScoreEntry, Schedule,
         Standings, Playoffs,
-        SpareLists, Announcements, Fees, EmailLists, Parameters, Theme
+        SpareLists, Announcements, Fees, EmailLists, Documents, Parameters, Theme
     }
 
     private NavSection _currentSection = NavSection.Dashboard;
@@ -153,6 +153,7 @@ public partial class MainForm : Form
             add("Announcements",  NavSection.Announcements);
             add("Fees",           NavSection.Fees);
             add("Email Lists",    NavSection.EmailLists);
+            add("Documents",      NavSection.Documents);
             add("Parameters",     NavSection.Parameters);
             add("Theme",          NavSection.Theme);
         });
@@ -219,6 +220,9 @@ public partial class MainForm : Form
     {
         NavSection.Dashboard  => new DashboardPanel(),
         NavSection.Leagues    => new LeaguePanel(),
+        NavSection.Seasons    => new SeasonPanel(),
+        NavSection.Divisions  => new DivisionPanel(),
+        NavSection.Documents  => new DocumentsPanel(),
         NavSection.Parameters => new ParametersPanel(),
         NavSection.Theme      => new ThemePanel(),
         _ => new PlaceholderPanel(SectionTitle(section))
@@ -226,7 +230,19 @@ public partial class MainForm : Form
 
     // Called by panels that need to jump to the Seasons section with a pre-selected season.
     // seasonId will be used to pre-select once SeasonPanel is built.
-    public void NavigateToSeasons(int? seasonId = null) => Navigate(NavSection.Seasons);
+    public void NavigateToDivision(int? divisionId = null)
+    {
+        Navigate(NavSection.Divisions);
+        if (divisionId.HasValue && _currentPanel is DivisionPanel dp)
+            dp.SelectDivision(divisionId.Value);
+    }
+
+    public void NavigateToSeasons(int? seasonId = null)
+    {
+        Navigate(NavSection.Seasons);
+        if (seasonId.HasValue && _currentPanel is SeasonPanel sp)
+            sp.SelectSeason(seasonId.Value);
+    }
 
     private static string SectionTitle(NavSection section) => section switch
     {
@@ -244,6 +260,7 @@ public partial class MainForm : Form
         NavSection.Announcements => "Announcements",
         NavSection.Fees          => "Fees",
         NavSection.EmailLists    => "Email Lists",
+        NavSection.Documents     => "Documents",
         NavSection.Parameters    => "Parameters",
         NavSection.Theme         => "Theme",
         _ => section.ToString()

@@ -1,10 +1,15 @@
 using BocceManager.Data;
+using BocceManager.Services;
 using BocceManager.UI.Theme;
 
 namespace BocceManager.Panels;
 
 public class DashboardPanel : UserControl
 {
+    private BocceDbContext _db = new();
+    private ComboBox? _leagueCombo;
+    private ComboBox? _seasonCombo;
+
     public DashboardPanel()
     {
         BackColor = AppTheme.ContentBackground;
@@ -92,14 +97,21 @@ public class DashboardPanel : UserControl
         statsPanel.Margin = new Padding(0, 0, 0, 28);
         flow.Controls.Add(statsPanel);
 
-        // Getting started heading
-        flow.Controls.Add(FlowLabel("Getting Started",
-            AppTheme.FontSectionHeading, AppTheme.TextPrimary, bottomPad: 8));
+        // Separator
+        flow.Controls.Add(new Panel
+        {
+            Size = new Size(flowWidth, 1),
+            BackColor = AppTheme.Separator,
+            Margin = new Padding(0, 0, 0, 16)
+        });
 
-        // Steps
-        flow.Controls.Add(FlowLabel(
-            "1. Add a Park  →  2. Create a League  →  3. Set up a Season  →  4. Add Divisions & Teams  →  5. Enter Scores",
-            AppTheme.FontDefault, AppTheme.TextSecondary, bottomPad: 0));
+        // Default League and Season section
+        flow.Controls.Add(FlowLabel("Default League and Season",
+            AppTheme.FontSectionHeading, AppTheme.TextPrimary, bottomPad: 12));
+
+        var defaultsPanel = BuildDefaultsPanel(flowWidth);
+        defaultsPanel.Margin = new Padding(0, 0, 0, 24);
+        flow.Controls.Add(defaultsPanel);
 
         scroll.Controls.Add(flow);
         Controls.Add(scroll);
@@ -166,5 +178,128 @@ public class DashboardPanel : UserControl
         }
 
         return panel;
+    }
+
+    private Panel BuildDefaultsPanel(int width)
+    {
+        var panel = new Panel
+        {
+            Size = new Size(width, 100),
+            BackColor = AppTheme.ContentBackground
+        };
+
+        // League label and combo
+        panel.Controls.Add(new Label
+        {
+            Text = "League:",
+            Font = AppTheme.FontSmall,
+            ForeColor = AppTheme.TextPrimary,
+            Location = new Point(0, 0),
+            AutoSize = true
+        });
+
+        _leagueCombo = new ComboBox
+        {
+            Location = new Point(0, 20),
+            Width = 250,
+            Height = 24,
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            BackColor = AppTheme.Surface,
+            ForeColor = AppTheme.TextPrimary,
+            Font = AppTheme.FontDefault
+        };
+        _leagueCombo.SelectedIndexChanged += LeagueCombo_SelectedIndexChanged;
+        panel.Controls.Add(_leagueCombo);
+
+        // Season label and combo
+        panel.Controls.Add(new Label
+        {
+            Text = "Season:",
+            Font = AppTheme.FontSmall,
+            ForeColor = AppTheme.TextPrimary,
+            Location = new Point(280, 0),
+            AutoSize = true
+        });
+
+        _seasonCombo = new ComboBox
+        {
+            Location = new Point(280, 20),
+            Width = 250,
+            Height = 24,
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            BackColor = AppTheme.Surface,
+            ForeColor = AppTheme.TextPrimary,
+            Font = AppTheme.FontDefault,
+            Enabled = false
+        };
+        _seasonCombo.SelectedIndexChanged += SeasonCombo_SelectedIndexChanged;
+        panel.Controls.Add(_seasonCombo);
+
+        // Load and populate
+        LoadDefaultsUI();
+
+        // Check if there's only one season; if so, auto-select
+        var seasons = _db.Seasons.Where(s => s.IsActive).ToList();
+        if (seasons.Count == 1)
+        {
+            var season = seasons.First();
+            _leagueCombo.SelectedValue = season.LeagueId;
+            _seasonCombo.SelectedValue = season.Id;
+        }
+
+        return panel;
+    }
+
+    private void LoadDefaultsUI()
+    {
+        var leagues = _db.Leagues.Where(l => l.IsActive).OrderBy(l => l.Name).ToList();
+        _leagueCombo!.DataSource = leagues;
+        _leagueCombo!.DisplayMember = "Name";
+        _leagueCombo!.ValueMember = "Id";
+
+        var defaultLeagueId = AppParameterService.GetDefaultLeagueId(_db);
+        if (defaultLeagueId.HasValue && leagues.Any(l => l.Id == defaultLeagueId))
+        {
+            _leagueCombo!.SelectedValue = defaultLeagueId;
+        }
+        else if (leagues.Count > 0)
+        {
+            _leagueCombo!.SelectedIndex = 0;
+        }
+    }
+
+    private void LeagueCombo_SelectedIndexChanged(object? sender, EventArgs e)
+    {
+        if (_leagueCombo?.SelectedValue is int leagueId)
+        {
+            var seasons = _db.Seasons
+                .Where(s => s.LeagueId == leagueId && s.IsActive)
+                .OrderByDescending(s => s.Name)
+                .ToList();
+
+            _seasonCombo!.DataSource = seasons;
+            _seasonCombo!.DisplayMember = "Name";
+            _seasonCombo!.ValueMember = "Id";
+            _seasonCombo!.Enabled = seasons.Any();
+
+            var defaultSeasonId = AppParameterService.GetDefaultSeasonId(_db);
+            if (defaultSeasonId.HasValue && seasons.Any(s => s.Id == defaultSeasonId))
+            {
+                _seasonCombo!.SelectedValue = defaultSeasonId;
+            }
+            else if (seasons.Count > 0)
+            {
+                _seasonCombo!.SelectedIndex = 0;
+            }
+        }
+    }
+
+    private void SeasonCombo_SelectedIndexChanged(object? sender, EventArgs e)
+    {
+        if (_leagueCombo?.SelectedValue is int leagueId && _seasonCombo?.SelectedValue is int seasonId)
+        {
+            AppParameterService.SetDefaultLeagueId(_db, leagueId);
+            AppParameterService.SetDefaultSeasonId(_db, seasonId);
+        }
     }
 }

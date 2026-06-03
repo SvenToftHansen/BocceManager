@@ -67,6 +67,13 @@ public class BocceDbContext : DbContext
     public DbSet<PlayoffMatch> PlayoffMatches => Set<PlayoffMatch>();
     public DbSet<PlayoffGame> PlayoffGames => Set<PlayoffGame>();
 
+    // Documents
+    public DbSet<ClubDocument> ClubDocuments => Set<ClubDocument>();
+
+    // Finance
+    public DbSet<GlAccount>    GlAccounts    => Set<GlAccount>();
+    public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
+
     protected override void OnConfiguring(DbContextOptionsBuilder options)
         => options.UseSqlite($"Data Source={DbPath}");
 
@@ -87,6 +94,17 @@ public class BocceDbContext : DbContext
         model.Entity<TeamStanding>().HasIndex(e => new { e.TeamId, e.DivisionId }).IsUnique();
         model.Entity<EmailListMember>().HasIndex(e => new { e.EmailListId, e.PlayerId }).IsUnique();
         model.Entity<LeagueOfficial>().HasIndex(e => new { e.LeagueId, e.PlayerId }).IsUnique();
+
+        // GlAccount unique code
+        model.Entity<GlAccount>().HasIndex(e => e.Code).IsUnique();
+
+        // JournalEntry: two FKs to GlAccount
+        model.Entity<JournalEntry>()
+            .HasOne(e => e.DebitAccount).WithMany(a => a.DebitEntries)
+            .HasForeignKey(e => e.DebitAccountId).OnDelete(DeleteBehavior.Restrict);
+        model.Entity<JournalEntry>()
+            .HasOne(e => e.CreditAccount).WithMany(a => a.CreditEntries)
+            .HasForeignKey(e => e.CreditAccountId).OnDelete(DeleteBehavior.Restrict);
 
         // BocceMatch: multiple FKs to Team
         model.Entity<BocceMatch>()

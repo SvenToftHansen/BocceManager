@@ -11,6 +11,7 @@ public class League
 
     public int? PlayersPerTeamMinimum { get; set; }
     public int? PlayersPerTeamMaximum { get; set; }
+    public int  MaxTeamsInDivision    { get; set; } = 0;
 
     public ICollection<Season> Seasons { get; set; } = [];
 }

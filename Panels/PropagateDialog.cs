@@ -104,10 +104,12 @@ public class PropagateDialog : Form
             Font                   = AppTheme.FontDefault,
             ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
             {
-                BackColor  = AppTheme.GridHeaderBackground,
-                ForeColor  = AppTheme.GridHeaderText,
-                Font       = AppTheme.FontGridHeader,
-                Padding    = new Padding(4, 0, 0, 0)
+                BackColor          = AppTheme.GridHeaderBackground,
+                ForeColor          = AppTheme.GridHeaderText,
+                SelectionBackColor = AppTheme.GridHeaderBackground,
+                SelectionForeColor = AppTheme.GridHeaderText,
+                Font               = AppTheme.FontGridHeader,
+                Padding            = new Padding(4, 0, 0, 0)
             },
             EnableHeadersVisualStyles = false,
             RowTemplate = { Height = 30 },
@@ -150,6 +152,7 @@ public class PropagateDialog : Form
             row.Tag = t;
             _grid.Rows.Add(row);
         }
+        _grid.ClearSelection();
 
         // ── Toolbar ───────────────────────────────────────────────────────────
         var toolbar = new Panel

@@ -21,6 +21,7 @@ public class LeaguePanel : UserControl
     private Label        _lblCreatedAt   = null!;
     private NumericUpDown _numMin        = null!;
     private NumericUpDown _numMax        = null!;
+    private NumericUpDown _numMaxTeams   = null!;
     private Button       _btnSave        = null!;
     private Button       _btnDelete      = null!;
 
@@ -166,6 +167,12 @@ public class LeaguePanel : UserControl
         var lblMaxHint = Hint("  Seasons and Divisions inherit this unless overridden.", inputX + 100, y + 4);
         y += 44;
 
+        // Max Teams in Division
+        var lblMaxTeams = Lbl("Max Teams / Division", y);
+        _numMaxTeams = NumericBox(inputX, y);
+        var lblMaxTeamsHint = Hint("  Seasons and Divisions inherit this unless overridden. 0 = no limit.", inputX + 100, y + 4);
+        y += 44;
+
         // Active
         var lblActive = Lbl("Active", y);
         _chkActive = new CheckBox
@@ -187,6 +194,7 @@ public class LeaguePanel : UserControl
             lblName, _txtName, lblDesc, _txtDescription, lblRules, _rtbRules, lblRulesHint,
             lblMin, _numMin, lblMinHint,
             lblMax, _numMax, lblMaxHint,
+            lblMaxTeams, _numMaxTeams, lblMaxTeamsHint,
             lblActive, _chkActive, lblCreatedLbl, _lblCreatedAt
         ]);
 
@@ -254,10 +262,12 @@ public class LeaguePanel : UserControl
             ReadOnly = true,
             ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
             {
-                BackColor = AppTheme.GridHeaderBackground,
-                ForeColor = AppTheme.GridHeaderText,
-                Font = AppTheme.FontGridHeader,
-                Padding = new Padding(4, 0, 0, 0)
+                BackColor          = AppTheme.GridHeaderBackground,
+                ForeColor          = AppTheme.GridHeaderText,
+                SelectionBackColor = AppTheme.GridHeaderBackground,
+                SelectionForeColor = AppTheme.GridHeaderText,
+                Font               = AppTheme.FontGridHeader,
+                Padding            = new Padding(4, 0, 0, 0)
             },
             EnableHeadersVisualStyles = false,
             RowTemplate = { Height = 30 },
@@ -267,13 +277,14 @@ public class LeaguePanel : UserControl
         _seasonsGrid.AlternatingRowsDefaultCellStyle =
             new DataGridViewCellStyle { BackColor = AppTheme.GridAlternateRow };
 
-        _seasonsGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "SeasonId",  Visible = false,              FillWeight = 1,  MinimumWidth = 2  });
+        _seasonsGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "SeasonId",  Visible = false,              FillWeight = 1,  MinimumWidth = 2   });
         _seasonsGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "Name",       HeaderText = "Season Name",   FillWeight = 28, MinimumWidth = 130 });
-        _seasonsGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "StartDate",  HeaderText = "Start Date",    FillWeight = 14, MinimumWidth = 90  });
-        _seasonsGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "EndDate",    HeaderText = "End Date",      FillWeight = 14, MinimumWidth = 90  });
+        _seasonsGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "StartDate",  HeaderText = "Start Date",    FillWeight = 13, MinimumWidth = 90  });
+        _seasonsGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "Weeks",      HeaderText = "Weeks",         FillWeight = 7,  MinimumWidth = 55  });
         _seasonsGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "Divisions",  HeaderText = "Divisions",     FillWeight = 10, MinimumWidth = 70  });
-        _seasonsGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "Teams",      HeaderText = "Teams",         FillWeight = 10, MinimumWidth = 60  });
-        _seasonsGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Active",     HeaderText = "Active",        FillWeight = 9,  MinimumWidth = 60  });
+        _seasonsGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "Teams",      HeaderText = "Teams",         FillWeight = 8,  MinimumWidth = 60  });
+        _seasonsGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Current",    HeaderText = "Current",       FillWeight = 8,  MinimumWidth = 60  });
+        _seasonsGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Active",     HeaderText = "Active",        FillWeight = 8,  MinimumWidth = 60  });
 
         _seasonsGrid.CellDoubleClick += OnSeasonDoubleClick;
 
@@ -348,6 +359,7 @@ public class LeaguePanel : UserControl
             _lblCreatedAt.Text   = league.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
             _numMin.Value        = league.PlayersPerTeamMinimum ?? 0;
             _numMax.Value        = league.PlayersPerTeamMaximum ?? 0;
+            _numMaxTeams.Value   = league.MaxTeamsInDivision;
         }
         catch { }
 
@@ -365,6 +377,7 @@ public class LeaguePanel : UserControl
         _lblCreatedAt.Text   = "";
         _numMin.Value        = 0;
         _numMax.Value        = 0;
+        _numMaxTeams.Value   = 0;
         _btnDelete.Enabled   = false;
         _seasonsGrid.Rows.Clear();
     }
@@ -380,7 +393,7 @@ public class LeaguePanel : UserControl
                 .OrderByDescending(s => s.StartDate)
                 .Select(s => new
                 {
-                    s.Id, s.Name, s.StartDate, s.EndDate,
+                    s.Id, s.Name, s.StartDate, s.WeeksInSeason, s.IsCurrent,
                     Divisions = db.Divisions.Count(d => d.SeasonId == s.Id),
                     Teams     = db.Teams.Count(t => t.Division.SeasonId == s.Id),
                     s.IsActive
@@ -390,8 +403,9 @@ public class LeaguePanel : UserControl
                 _seasonsGrid.Rows.Add(
                     s.Id, s.Name,
                     s.StartDate?.ToString("yyyy-MM-dd") ?? "—",
-                    s.EndDate?.ToString("yyyy-MM-dd") ?? "—",
-                    s.Divisions, s.Teams, s.IsActive);
+                    s.WeeksInSeason > 0 ? s.WeeksInSeason.ToString() : "—",
+                    s.Divisions, s.Teams, s.IsCurrent, s.IsActive);
+            _seasonsGrid.ClearSelection();
         }
         catch { }
     }
@@ -440,6 +454,7 @@ public class LeaguePanel : UserControl
                 league.IsActive             = _chkActive.Checked;
                 league.PlayersPerTeamMinimum = newMin;
                 league.PlayersPerTeamMaximum = newMax;
+                league.MaxTeamsInDivision    = (int)_numMaxTeams.Value;
                 db.SaveChanges();
                 savedId = league.Id;
                 _lblCreatedAt.Text = league.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
@@ -453,7 +468,8 @@ public class LeaguePanel : UserControl
                     RulesText             = NullIfEmpty(_rtbRules.Text),
                     IsActive              = _chkActive.Checked,
                     PlayersPerTeamMinimum = newMin,
-                    PlayersPerTeamMaximum = newMax
+                    PlayersPerTeamMaximum = newMax,
+                    MaxTeamsInDivision    = (int)_numMaxTeams.Value
                 };
                 db.Leagues.Add(league);
                 db.SaveChanges();

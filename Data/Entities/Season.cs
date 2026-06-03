@@ -36,7 +36,14 @@ public class Season
     public string PlayoffScoringMode { get; set; } = "match_play";
     public bool PlayoffTiebreakerEnd { get; set; } = true;
 
+    public bool IsCurrent { get; set; } = false;
     public bool IsActive { get; set; } = true;
+    public int WeeksInSeason { get; set; } = 0;
+    public int  MaxTeamsInDivision    { get; set; } = 0;
+    // building | regular_season | playoffs | complete
+    public string Status { get; set; } = "building";
+    public DateOnly? PlayoffStartDate { get; set; }
+    public DateOnly? PlayoffEndDate { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public League League { get; set; } = null!;
