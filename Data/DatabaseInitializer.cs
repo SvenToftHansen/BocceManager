@@ -1,4 +1,6 @@
+using System.Data.Common;
 using BocceManager.Data.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace BocceManager.Data;
 
@@ -8,7 +10,62 @@ public static class DatabaseInitializer
     {
         using var db = new BocceDbContext();
         db.Database.EnsureCreated();
+        ApplySchemaPatches(db);
         SeedReferenceData(db);
+    }
+
+    // Adds columns that were introduced after the initial schema was created.
+    // Safe to run on every startup — AddColumnIfMissing is a no-op when the column exists.
+    private static void ApplySchemaPatches(BocceDbContext db)
+    {
+        var conn = db.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open)
+            conn.Open();
+
+        // Leagues
+        AddColumnIfMissing(conn, "Leagues", "RulesText",             "TEXT");
+        AddColumnIfMissing(conn, "Leagues", "PlayersPerTeamMinimum", "INTEGER");
+        AddColumnIfMissing(conn, "Leagues", "PlayersPerTeamMaximum", "INTEGER");
+
+        // Seasons
+        AddColumnIfMissing(conn, "Seasons", "PlayersPerTeamMinimum", "INTEGER");
+        AddColumnIfMissing(conn, "Seasons", "PlayersPerTeamMaximum", "INTEGER");
+        AddColumnIfMissing(conn, "Seasons", "GamesPerSeason",        "INTEGER NOT NULL DEFAULT 0");
+        AddColumnIfMissing(conn, "Seasons", "GameInterval",          "TEXT NOT NULL DEFAULT 'weekly'");
+        AddColumnIfMissing(conn, "Seasons", "TimeslotDriven",        "INTEGER NOT NULL DEFAULT 1");
+        AddColumnIfMissing(conn, "Seasons", "PointsForWin",          "INTEGER NOT NULL DEFAULT 2");
+        AddColumnIfMissing(conn, "Seasons", "PointsForTie",          "INTEGER NOT NULL DEFAULT 1");
+        AddColumnIfMissing(conn, "Seasons", "PointsForLoss",         "INTEGER NOT NULL DEFAULT 0");
+        AddColumnIfMissing(conn, "Seasons", "PointsForNoShow",       "INTEGER NOT NULL DEFAULT -1");
+        AddColumnIfMissing(conn, "Seasons", "PointsToWinGame",       "INTEGER NOT NULL DEFAULT 12");
+        AddColumnIfMissing(conn, "Seasons", "GamesPerMatch",         "INTEGER NOT NULL DEFAULT 2");
+        AddColumnIfMissing(conn, "Seasons", "ScoringMode",           "TEXT NOT NULL DEFAULT 'games_mode'");
+        AddColumnIfMissing(conn, "Seasons", "TeamsInPlayoffs",       "INTEGER NOT NULL DEFAULT 0");
+        AddColumnIfMissing(conn, "Seasons", "FirstPlaceGuaranteed",  "INTEGER NOT NULL DEFAULT 1");
+        AddColumnIfMissing(conn, "Seasons", "PlayoffType",           "TEXT NOT NULL DEFAULT 'ladder'");
+        AddColumnIfMissing(conn, "Seasons", "PlayoffGamesPerMatch",  "INTEGER NOT NULL DEFAULT 2");
+        AddColumnIfMissing(conn, "Seasons", "PlayoffScoringMode",    "TEXT NOT NULL DEFAULT 'match_play'");
+        AddColumnIfMissing(conn, "Seasons", "PlayoffTiebreakerEnd",  "INTEGER NOT NULL DEFAULT 1");
+
+        // Divisions
+        AddColumnIfMissing(conn, "Divisions", "PlayersPerTeamMinimum", "INTEGER");
+        AddColumnIfMissing(conn, "Divisions", "PlayersPerTeamMaximum", "INTEGER");
+    }
+
+    private static void AddColumnIfMissing(DbConnection conn, string table, string column, string sqlType)
+    {
+        using var pragma = conn.CreateCommand();
+        pragma.CommandText = $"PRAGMA table_info({table})";
+        using var reader = pragma.ExecuteReader();
+        while (reader.Read())
+        {
+            if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
+                return; // already exists
+        }
+
+        using var alter = conn.CreateCommand();
+        alter.CommandText = $"ALTER TABLE \"{table}\" ADD COLUMN \"{column}\" {sqlType}";
+        alter.ExecuteNonQuery();
     }
 
     private static void SeedReferenceData(BocceDbContext db)

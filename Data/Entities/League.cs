@@ -9,6 +9,9 @@ public class League
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    public int? PlayersPerTeamMinimum { get; set; }
+    public int? PlayersPerTeamMaximum { get; set; }
+
     public ICollection<Season> Seasons { get; set; } = [];
 }
 

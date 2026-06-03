@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="BocceManager.csproj" />
+  <Project Path="BocceManager.Tests/BocceManager.Tests.csproj" />
+</Solution>

@@ -9,6 +9,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="BocceManager.Tests\**" />
+    <EmbeddedResource Remove="BocceManager.Tests\**" />
+    <None Remove="BocceManager.Tests\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="FastReport.OpenSource" Version="2026.2.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

@@ -5,7 +5,8 @@ public class Division
     public int Id { get; set; }
     public int SeasonId { get; set; }
     public string Name { get; set; } = "";
-    public int? MaxPlayersPerTeam { get; set; }
+    public int? PlayersPerTeamMinimum { get; set; }
+    public int? PlayersPerTeamMaximum { get; set; }
     // Even numbers preferred (2-16); odd numbers supported (scheduler assigns one bye per round)
     public int TeamsInDivision { get; set; }
     // NULL when season.game_interval = 'schedule_determined'

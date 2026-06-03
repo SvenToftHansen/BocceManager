@@ -13,7 +13,8 @@ public class Season
     public string GameInterval { get; set; } = "weekly";
     public bool TimeslotDriven { get; set; } = true;
 
-    public int? MaxPlayersPerTeam { get; set; }
+    public int? PlayersPerTeamMinimum { get; set; }
+    public int? PlayersPerTeamMaximum { get; set; }
 
     public int PointsForWin { get; set; } = 2;
     public int PointsForTie { get; set; } = 1;
