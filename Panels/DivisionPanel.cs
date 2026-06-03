@@ -440,7 +440,13 @@ public class DivisionPanel : UserControl
     private void OnLeagueSelected(object? sender, EventArgs e)
     {
         if (_leagueCombo.SelectedItem is IntItem item)
-        { _selectedLeagueId = item.Id; LoadSeasonList(item.Id); }
+        {
+            _selectedLeagueId = item.Id;
+            LoadSeasonList(item.Id);
+            // Update default league when user selects
+            using var db = new BocceDbContext();
+            AppParameterService.SetDefaultLeagueId(db, item.Id);
+        }
         else ClearEditor();
     }
 
@@ -484,7 +490,13 @@ public class DivisionPanel : UserControl
     private void OnSeasonSelected(object? sender, EventArgs e)
     {
         if (_seasonCombo.SelectedItem is IntItem item)
-        { _selectedSeasonId = item.Id; LoadDivisionList(item.Id); }
+        {
+            _selectedSeasonId = item.Id;
+            LoadDivisionList(item.Id);
+            // Update default season when user selects
+            using var db = new BocceDbContext();
+            AppParameterService.SetDefaultSeasonId(db, item.Id);
+        }
         else ClearEditor();
     }
 

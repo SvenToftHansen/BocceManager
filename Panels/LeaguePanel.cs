@@ -366,7 +366,12 @@ public class LeaguePanel : UserControl
     private void OnLeagueSelected(object? sender, EventArgs e)
     {
         if (_leagueCombo.SelectedItem is ComboItem item)
+        {
             LoadLeague(item.Id);
+            // Update default league when user selects
+            using var db = new BocceDbContext();
+            AppParameterService.SetDefaultLeagueId(db, item.Id);
+        }
         else
             ClearEditorForm();
     }

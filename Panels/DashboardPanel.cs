@@ -1,4 +1,5 @@
 using BocceManager.Data;
+using BocceManager.Data.Entities;
 using BocceManager.Services;
 using BocceManager.UI.Theme;
 
@@ -310,14 +311,21 @@ public class DashboardPanel : UserControl
                 AppParameterService.SetDefaultSeasonId(_db, autoSeasonId);
             }
 
-            // Set combo selections
+            // Set combo selections by index (more reliable than SelectedValue)
             if (autoLeagueId.HasValue)
-                _leagueCombo!.SelectedValue = autoLeagueId;
+            {
+                int leagueIdx = allLeagues.FindIndex(l => l.Id == autoLeagueId);
+                _leagueCombo!.SelectedIndex = leagueIdx >= 0 ? leagueIdx : 0;
+            }
             else if (allLeagues.Count > 0)
                 _leagueCombo!.SelectedIndex = 0;
 
-            if (autoSeasonId.HasValue)
-                _seasonCombo!.SelectedValue = autoSeasonId;
+            if (autoSeasonId.HasValue && _seasonCombo!.Items.Count > 0)
+            {
+                int seasonIdx = _seasonCombo.Items.Cast<Season>().ToList().FindIndex(s => s.Id == autoSeasonId);
+                if (seasonIdx >= 0)
+                    _seasonCombo!.SelectedIndex = seasonIdx;
+            }
         }
         finally
         {
