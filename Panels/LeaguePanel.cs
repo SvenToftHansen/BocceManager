@@ -9,6 +9,7 @@ namespace BocceManager.Panels;
 public class LeaguePanel : UserControl
 {
     private int? _selectedLeagueId;
+    private int? _leagueIdToRestore;  // Preserve selection across reloads
     private bool _isLoadingData = false;
 
     // Header
@@ -35,18 +36,11 @@ public class LeaguePanel : UserControl
         Dock = DockStyle.Fill;
         BuildUI();
         LoadLeagueList();
-        AppParameterService.DefaultsChanged += OnDefaultsChanged;
-    }
-
-    private void OnDefaultsChanged(object? sender, DefaultsChangedEventArgs e)
-    {
-        LoadLeagueList();
     }
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
-            AppParameterService.DefaultsChanged -= OnDefaultsChanged;
+        if (disposing) { }
         base.Dispose(disposing);
     }
 
@@ -350,18 +344,14 @@ public class LeaguePanel : UserControl
 
             _leagueCombo.SelectedIndexChanged += OnLeagueSelected;
 
-            if (_leagueCombo.Items.Count > 0)
+            // Restore default from database
+            if (defaultLeagueId.HasValue)
             {
-                // Try to select default league; fall back to first
-                if (defaultLeagueId.HasValue)
-                {
-                    int idx = _leagueCombo.Items.Cast<ComboItem>().ToList().FindIndex(item => item.Id == defaultLeagueId);
-                    _leagueCombo.SelectedIndex = idx >= 0 ? idx : 0;
-                }
+                int idx = _leagueCombo.Items.Cast<ComboItem>().ToList().FindIndex(item => item.Id == defaultLeagueId);
+                if (idx >= 0)
+                    _leagueCombo.SelectedIndex = idx;
                 else
-                {
-                    _leagueCombo.SelectedIndex = 0;
-                }
+                    ClearEditorForm();
             }
             else
                 ClearEditorForm();
@@ -376,12 +366,20 @@ public class LeaguePanel : UserControl
     {
         if (_leagueCombo.SelectedItem is ComboItem item)
         {
+            _leagueIdToRestore = item.Id;  // Save for persistence across reloads
             LoadLeague(item.Id);
             // Update default league only if user selected (not during data load)
             if (!_isLoadingData)
             {
                 using var db = new BocceDbContext();
                 AppParameterService.SetDefaultLeagueId(db, item.Id);
+
+                // If this league has no seasons, clear the default season
+                var hasSeasons = db.Seasons.Any(s => s.LeagueId == item.Id && s.IsActive);
+                if (!hasSeasons)
+                {
+                    AppParameterService.SetDefaultSeasonId(db, null);
+                }
             }
         }
         else

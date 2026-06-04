@@ -71,10 +71,10 @@ public class LeagueServiceTests
         using var tdb = new TestDb();
         var league = tdb.AddLeague("League With Stuff");
 
-        tdb.Db.SpareLists.Add(new SpareList { LeagueId = league.Id, Name = "Spare List A" });
-        tdb.Db.SpareLists.Add(new SpareList { LeagueId = league.Id, Name = "Spare List B" });
-
         var player = tdb.AddPlayer("Captain", "Jack");
+        var player2 = tdb.AddPlayer("Second", "Spare");
+        tdb.Db.SpareLists.Add(new SpareList { LeagueId = league.Id, PlayerId = player.Id });
+        tdb.Db.SpareLists.Add(new SpareList { LeagueId = league.Id, PlayerId = player2.Id });
         tdb.Db.LeagueOfficials.Add(new LeagueOfficial
             { LeagueId = league.Id, PlayerId = player.Id, RoleTitle = "Director" });
 
@@ -233,12 +233,7 @@ public class LeagueServiceTests
         var league = tdb.AddLeague("League");
         var player = tdb.AddPlayer("Sam", "Lee");
 
-        var spareList = new SpareList { LeagueId = league.Id, Name = "SL" };
-        tdb.Db.SpareLists.Add(spareList);
-        tdb.Db.SaveChanges();
-
-        tdb.Db.SpareListPlayers.Add(new SpareListPlayer
-            { SpareListId = spareList.Id, PlayerId = player.Id });
+        tdb.Db.SpareLists.Add(new SpareList { LeagueId = league.Id, PlayerId = player.Id });
         tdb.Db.Announcements.Add(new Announcement
             { LeagueId = league.Id, Title = "Hi", Body = "." });
         tdb.Db.EmailLists.Add(new EmailList { LeagueId = league.Id, Name = "EL" });
@@ -251,7 +246,6 @@ public class LeagueServiceTests
         LeagueService.ExecuteCascadeDelete(tdb.Db, league.Id);
 
         Assert.Empty(tdb.Db.SpareLists);
-        Assert.Empty(tdb.Db.SpareListPlayers);
         Assert.Empty(tdb.Db.Announcements);
         Assert.Empty(tdb.Db.EmailLists);
         Assert.Empty(tdb.Db.LeagueOfficials);

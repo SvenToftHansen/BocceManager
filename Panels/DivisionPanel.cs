@@ -14,6 +14,8 @@ public class DivisionPanel : UserControl
     private int? _selectedLeagueId;
     private int? _selectedSeasonId;
     private int? _selectedDivisionId;
+    private int? _leagueIdToRestore;
+    private int? _seasonIdToRestore;
     private int? _currentTeamId;
 
     // ── Header ───────────────────────────────────────────────────────────────
@@ -57,18 +59,11 @@ public class DivisionPanel : UserControl
         Dock = DockStyle.Fill;
         BuildUI();
         LoadLeagueList();
-        AppParameterService.DefaultsChanged += OnDefaultsChanged;
-    }
-
-    private void OnDefaultsChanged(object? sender, DefaultsChangedEventArgs e)
-    {
-        LoadLeagueList();
     }
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
-            AppParameterService.DefaultsChanged -= OnDefaultsChanged;
+        if (disposing) { }
         base.Dispose(disposing);
     }
 
@@ -426,20 +421,18 @@ public class DivisionPanel : UserControl
             catch { }
 
             _leagueCombo.SelectedIndexChanged += OnLeagueSelected;
-            if (_leagueCombo.Items.Count > 0)
+
+            // Restore default from database
+            if (defaultLeagueId.HasValue)
             {
-                // Try to select default league; fall back to first
-                if (defaultLeagueId.HasValue)
-                {
-                    int idx = _leagueCombo.Items.Cast<IntItem>().ToList().FindIndex(item => item.Id == defaultLeagueId);
-                    _leagueCombo.SelectedIndex = idx >= 0 ? idx : 0;
-                }
+                int idx = _leagueCombo.Items.Cast<IntItem>().ToList().FindIndex(item => item.Id == defaultLeagueId);
+                if (idx >= 0)
+                    _leagueCombo.SelectedIndex = idx;
                 else
-                {
-                    _leagueCombo.SelectedIndex = 0;
-                }
+                    ClearEditor();
             }
-            else ClearEditor();
+            else
+                ClearEditor();
         }
         finally
         {
@@ -452,12 +445,20 @@ public class DivisionPanel : UserControl
         if (_leagueCombo.SelectedItem is IntItem item)
         {
             _selectedLeagueId = item.Id;
+            _leagueIdToRestore = item.Id;  // Save for persistence across reloads
             LoadSeasonList(item.Id);
             // Update default league only if user selected (not during data load)
             if (!_isLoadingData)
             {
                 using var db = new BocceDbContext();
                 AppParameterService.SetDefaultLeagueId(db, item.Id);
+
+                // If this league has no seasons, clear the default season
+                var hasSeasons = db.Seasons.Any(s => s.LeagueId == item.Id && s.IsActive);
+                if (!hasSeasons)
+                {
+                    AppParameterService.SetDefaultSeasonId(db, null);
+                }
             }
         }
         else ClearEditor();
@@ -500,7 +501,14 @@ public class DivisionPanel : UserControl
                     _seasonCombo.SelectedIndex = 0;
                 }
             }
-            else ClearEditor();
+            else
+            {
+                // No seasons: clear divisions too
+                _divisionCombo.SelectedIndexChanged -= OnDivisionSelected;
+                _divisionCombo.Items.Clear();
+                _divisionCombo.SelectedIndexChanged += OnDivisionSelected;
+                ClearEditor();
+            }
         }
         finally
         {

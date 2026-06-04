@@ -119,9 +119,50 @@ public static class DatabaseInitializer
             )
             """);
 
+        // SpareLists — migrate from old schema (Name/Description) to new (PlayerId/IsActive)
+        // If the old table exists (detected by presence of "Name" column), rename and recreate.
+        if (TableHasColumn(conn, "SpareLists", "Name"))
+        {
+            using var rename = conn.CreateCommand();
+            rename.CommandText = "ALTER TABLE \"SpareLists\" RENAME TO \"SpareLists_legacy\"";
+            rename.ExecuteNonQuery();
+        }
+        CreateTableIfMissing(conn, "SpareLists", """
+            CREATE TABLE "SpareLists" (
+                "Id"       INTEGER NOT NULL CONSTRAINT "PK_SpareLists" PRIMARY KEY AUTOINCREMENT,
+                "LeagueId" INTEGER NOT NULL,
+                "PlayerId" INTEGER NOT NULL,
+                "IsActive" INTEGER NOT NULL DEFAULT 1
+            )
+            """);
+
+        // LookingForTeam — one row per player seeking a team in a league
+        CreateTableIfMissing(conn, "LookingForTeams", """
+            CREATE TABLE "LookingForTeams" (
+                "Id"       INTEGER NOT NULL CONSTRAINT "PK_LookingForTeams" PRIMARY KEY AUTOINCREMENT,
+                "LeagueId" INTEGER NOT NULL,
+                "PlayerId" INTEGER NOT NULL
+            )
+            """);
+
         // Ensure Documents folder exists alongside the database
         Directory.CreateDirectory(
             Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Documents"));
+    }
+
+    private static bool TableHasColumn(DbConnection conn, string table, string column)
+    {
+        using var check = conn.CreateCommand();
+        check.CommandText = $"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{table}'";
+        if (Convert.ToInt32(check.ExecuteScalar()) == 0) return false;
+
+        using var pragma = conn.CreateCommand();
+        pragma.CommandText = $"PRAGMA table_info({table})";
+        using var reader = pragma.ExecuteReader();
+        while (reader.Read())
+            if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
     }
 
     private static void CreateTableIfMissing(DbConnection conn, string table, string createSql)

@@ -121,16 +121,14 @@ public static class LeagueService
         }
         db.Seasons.RemoveRange(db.Seasons.Where(s => s.LeagueId == leagueId));
 
-        // Spare requests via spare lists owned by this league
+        // SpareRequests reference SpareList entries — delete before removing spare list rows
         var spareListIds = db.SpareLists.Where(sl => sl.LeagueId == leagueId)
                                         .Select(sl => sl.Id).ToList();
-        foreach (var slId in spareListIds)
-        {
-            db.SpareRequests.RemoveRange(db.SpareRequests.Where(sr => sr.SpareListId == slId));
-            db.SpareListPlayers.RemoveRange(
-                db.SpareListPlayers.Where(slp => slp.SpareListId == slId));
-        }
+        if (spareListIds.Count > 0)
+            db.SpareRequests.RemoveRange(
+                db.SpareRequests.Where(sr => spareListIds.Contains(sr.SpareListId)));
         db.SpareLists.RemoveRange(db.SpareLists.Where(sl => sl.LeagueId == leagueId));
+        db.LookingForTeams.RemoveRange(db.LookingForTeams.Where(l => l.LeagueId == leagueId));
 
         db.LeagueOfficials.RemoveRange(db.LeagueOfficials.Where(o => o.LeagueId == leagueId));
         db.Announcements.RemoveRange(db.Announcements.Where(a => a.LeagueId == leagueId));

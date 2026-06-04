@@ -13,6 +13,8 @@ public class SeasonPanel : UserControl
     // ── State ────────────────────────────────────────────────────────────────
     private int? _selectedLeagueId;
     private int? _selectedSeasonId;
+    private int? _leagueIdToRestore;
+    private int? _seasonIdToRestore;
     private bool _isCopied;
     private int? _copySourceId;
 
@@ -73,18 +75,11 @@ public class SeasonPanel : UserControl
         Dock = DockStyle.Fill;
         BuildUI();
         LoadLeagueList();
-        AppParameterService.DefaultsChanged += OnDefaultsChanged;
-    }
-
-    private void OnDefaultsChanged(object? sender, DefaultsChangedEventArgs e)
-    {
-        LoadLeagueList();
     }
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
-            AppParameterService.DefaultsChanged -= OnDefaultsChanged;
+        if (disposing) { }
         base.Dispose(disposing);
     }
 
@@ -512,6 +507,7 @@ public class SeasonPanel : UserControl
         _leagueCombo.Items.Clear();
 
         int? defaultLeagueId = null;
+        int? defaultSeasonId = null;
         try
         {
             using var db = new BocceDbContext();
@@ -519,24 +515,65 @@ public class SeasonPanel : UserControl
                 _leagueCombo.Items.Add(new IntItem(l.Id, l.Name + (l.IsActive ? "" : " (inactive)")));
 
             defaultLeagueId = AppParameterService.GetDefaultLeagueId(db);
+            defaultSeasonId = AppParameterService.GetDefaultSeasonId(db);
+
+            // If default league has no seasons but we have a default season, find the league with that season
+            if (defaultLeagueId.HasValue && defaultSeasonId.HasValue)
+            {
+                var defaultLeagueHasSeasons = db.Seasons.Any(s => s.LeagueId == defaultLeagueId && s.IsActive);
+                if (!defaultLeagueHasSeasons)
+                {
+                    var leagueWithDefaultSeason = db.Seasons.FirstOrDefault(s => s.Id == defaultSeasonId)?.LeagueId;
+                    if (leagueWithDefaultSeason.HasValue)
+                        defaultLeagueId = leagueWithDefaultSeason;
+                }
+            }
         }
         catch { }
 
         _leagueCombo.SelectedIndexChanged += OnLeagueSelected;
-        if (_leagueCombo.Items.Count > 0)
+
+        // Restore default league
+        if (defaultLeagueId.HasValue)
         {
-            // Try to select default league; fall back to first
-            if (defaultLeagueId.HasValue)
-            {
-                int idx = _leagueCombo.Items.Cast<IntItem>().ToList().FindIndex(item => item.Id == defaultLeagueId);
-                _leagueCombo.SelectedIndex = idx >= 0 ? idx : 0;
-            }
+            int idx = _leagueCombo.Items.Cast<IntItem>().ToList().FindIndex(item => item.Id == defaultLeagueId);
+            if (idx >= 0)
+                _leagueCombo.SelectedIndex = idx;
             else
+                ClearEditor();
+        }
+        else
+            ClearEditor();
+    }
+
+    private int? GetSeasonListDefaultSeasonId()
+    {
+        try
+        {
+            using var db = new BocceDbContext();
+            var defaultSeasonId = AppParameterService.GetDefaultSeasonId(db);
+            if (defaultSeasonId.HasValue && _seasonCombo.Items.Cast<IntItem>().Any(item => item.Id == defaultSeasonId))
+                return defaultSeasonId;
+
+            // Fallback: if only 1 season, pick that one
+            if (_seasonCombo.Items.Count == 1)
+                return (_seasonCombo.Items[0] as IntItem)?.Id;
+
+            // Fallback: pick first current season if available
+            var seasonsInCombo = _seasonCombo.Items.Cast<IntItem>().ToList();
+            if (seasonsInCombo.Count > 0)
             {
-                _leagueCombo.SelectedIndex = 0;
+                using var checkDb = new BocceDbContext();
+                var currentSeason = seasonsInCombo.FirstOrDefault(item =>
+                    checkDb.Seasons.Any(s => s.Id == item.Id && s.IsCurrent));
+                if (currentSeason != null)
+                    return currentSeason.Id;
+
+                return seasonsInCombo.First().Id;
             }
         }
-        else ClearEditor();
+        catch { }
+        return null;
     }
 
     private void OnLeagueSelected(object? sender, EventArgs e)
@@ -544,12 +581,20 @@ public class SeasonPanel : UserControl
         if (_leagueCombo.SelectedItem is IntItem item)
         {
             _selectedLeagueId = item.Id;
+            _leagueIdToRestore = item.Id;  // Save for persistence across reloads
             LoadSeasonList(item.Id);
             // Update default league only if user selected (not during data load)
             if (!_isLoadingData)
             {
                 using var db = new BocceDbContext();
                 AppParameterService.SetDefaultLeagueId(db, item.Id);
+
+                // If this league has no seasons, clear the default season
+                var hasSeasons = db.Seasons.Any(s => s.LeagueId == item.Id && s.IsActive);
+                if (!hasSeasons)
+                {
+                    AppParameterService.SetDefaultSeasonId(db, null);
+                }
             }
         }
         else ClearEditor();
@@ -581,15 +626,13 @@ public class SeasonPanel : UserControl
             _seasonCombo.SelectedIndexChanged += OnSeasonSelected;
             if (_seasonCombo.Items.Count > 0)
             {
-                // Try to select default season; fall back to first
-                if (defaultSeasonId.HasValue)
+                // Auto-select: default, or current, or first season
+                var seasonToSelect = GetSeasonListDefaultSeasonId();
+                if (seasonToSelect.HasValue)
                 {
-                    int idx = _seasonCombo.Items.Cast<IntItem>().ToList().FindIndex(item => item.Id == defaultSeasonId);
-                    _seasonCombo.SelectedIndex = idx >= 0 ? idx : 0;
-                }
-                else
-                {
-                    _seasonCombo.SelectedIndex = 0;
+                    int idx = _seasonCombo.Items.Cast<IntItem>().ToList().FindIndex(item => item.Id == seasonToSelect);
+                    if (idx >= 0)
+                        _seasonCombo.SelectedIndex = idx;
                 }
             }
             else ClearEditor();
@@ -604,6 +647,8 @@ public class SeasonPanel : UserControl
     {
         if (_seasonCombo.SelectedItem is IntItem item)
         {
+            _selectedSeasonId = item.Id;
+            _seasonIdToRestore = item.Id;  // Save for persistence across reloads
             LoadSeason(item.Id);
             // Update default season only if user selected (not during data load)
             if (!_isLoadingData)

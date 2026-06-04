@@ -29,8 +29,8 @@ public class BocceDbContext : DbContext
 
     // Leagues
     public DbSet<League> Leagues => Set<League>();
-    public DbSet<SpareList> SpareLists => Set<SpareList>();
-    public DbSet<SpareListPlayer> SpareListPlayers => Set<SpareListPlayer>();
+    public DbSet<SpareList>      SpareLists      => Set<SpareList>();
+    public DbSet<LookingForTeam> LookingForTeams => Set<LookingForTeam>();
     public DbSet<LeagueOfficial> LeagueOfficials => Set<LeagueOfficial>();
 
     // Seasons
@@ -87,7 +87,8 @@ public class BocceDbContext : DbContext
         model.Entity<TeamParameter>().HasIndex(e => new { e.TeamId, e.Key }).IsUnique();
         model.Entity<PlayerParameter>().HasIndex(e => new { e.PlayerId, e.Key }).IsUnique();
         model.Entity<SeasonCourt>().HasIndex(e => new { e.SeasonId, e.CourtId }).IsUnique();
-        model.Entity<SpareListPlayer>().HasIndex(e => new { e.SpareListId, e.PlayerId }).IsUnique();
+        model.Entity<SpareList>().HasIndex(e => new { e.LeagueId, e.PlayerId }).IsUnique();
+        model.Entity<LookingForTeam>().HasIndex(e => new { e.LeagueId, e.PlayerId }).IsUnique();
         model.Entity<SeasonFee>().HasIndex(e => new { e.PlayerId, e.SeasonId }).IsUnique();
         model.Entity<Team>().HasIndex(e => new { e.DivisionId, e.TeamLetter }).IsUnique();
         model.Entity<TeamPlayer>().HasIndex(e => new { e.TeamId, e.PlayerId }).IsUnique();
@@ -119,7 +120,18 @@ public class BocceDbContext : DbContext
             .HasOne(e => e.Captain).WithMany()
             .HasForeignKey(e => e.CaptainPlayerId).OnDelete(DeleteBehavior.Restrict);
 
-        // SpareRequest: two FKs to Player
+        // SpareList / LookingForTeam: FK to Player
+        model.Entity<SpareList>()
+            .HasOne(e => e.Player).WithMany()
+            .HasForeignKey(e => e.PlayerId).OnDelete(DeleteBehavior.Restrict);
+        model.Entity<LookingForTeam>()
+            .HasOne(e => e.Player).WithMany()
+            .HasForeignKey(e => e.PlayerId).OnDelete(DeleteBehavior.Restrict);
+
+        // SpareRequest: three FKs (two to Player, one to SpareList)
+        model.Entity<SpareRequest>()
+            .HasOne(e => e.SpareList).WithMany()
+            .HasForeignKey(e => e.SpareListId).OnDelete(DeleteBehavior.Restrict);
         model.Entity<SpareRequest>()
             .HasOne(e => e.RequestingPlayer).WithMany()
             .HasForeignKey(e => e.RequestingPlayerId).OnDelete(DeleteBehavior.Restrict);
