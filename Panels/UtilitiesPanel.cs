@@ -242,10 +242,9 @@ public class UtilitiesPanel : UserControl
         LogLine("Navigation is locked until restore completes.",
                 Color.FromArgb(251, 191, 36));
 
-        // Disable the entire main form so nothing can navigate away and
-        // query the database while it is being dropped and restored.
-        var mainForm = this.FindForm();
-        if (mainForm != null) mainForm.Enabled = false;
+        // Lock only the nav sidebar — leaves the log panel live and readable.
+        var mainForm = this.FindForm() as MainForm;
+        mainForm?.LockNavigation();
 
         try
         {
@@ -270,8 +269,7 @@ public class UtilitiesPanel : UserControl
         finally
         {
             _stopwatch.Stop();
-            // Re-enable navigation — must happen even if restore failed.
-            if (mainForm != null) mainForm.Enabled = true;
+            mainForm?.UnlockNavigation();
             SetAllButtons(true);
         }
     }

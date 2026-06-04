@@ -233,6 +233,11 @@ public partial class MainForm : Form
         _ => new PlaceholderPanel(SectionTitle(section))
     };
 
+    // Disable navigation sidebar during long operations (e.g. restore) without
+    // graying out the content panel where progress is displayed.
+    public void LockNavigation()   => pnlNav.Enabled = false;
+    public void UnlockNavigation() => pnlNav.Enabled = true;
+
     // Called by panels that need to jump to the Seasons section with a pre-selected season.
     // seasonId will be used to pre-select once SeasonPanel is built.
     public void NavigateToDivision(int? divisionId = null)
