@@ -1111,17 +1111,28 @@ public class DivisionPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
+            int count = 0;
             foreach (var playerId in playerIds)
             {
-                db.TeamPlayers.Add(new TeamPlayer
+                // Check if player not already on team
+                var existing = db.TeamPlayers.Any(tp => tp.TeamId == teamId && tp.PlayerId == playerId);
+                if (!existing)
                 {
-                    TeamId    = teamId,
-                    PlayerId  = playerId,
-                    Role      = "player",
-                    JoinedDate = DateOnly.FromDateTime(DateTime.Today)
-                });
+                    db.TeamPlayers.Add(new TeamPlayer
+                    {
+                        TeamId    = teamId,
+                        PlayerId  = playerId,
+                        Role      = "player",
+                        JoinedDate = DateOnly.FromDateTime(DateTime.Today)
+                    });
+                    count++;
+                }
             }
-            db.SaveChanges();
+            if (count > 0)
+            {
+                db.SaveChanges();
+                MessageBox.Show($"Added {count} player(s) to team.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
         }
         catch (Exception ex)
         {
@@ -1496,24 +1507,44 @@ public class DivisionPanel : UserControl
 
         btnAdd.Click += (_, _) =>
         {
-            var toMove = new List<IntItem>();
-            for (int i = 0; i < cmbAvailable.CheckedItems.Count; i++)
-                toMove.Add((IntItem)cmbAvailable.CheckedItems[i]);
+            var toMove = new List<(int Index, IntItem Item)>();
+            for (int i = cmbAvailable.Items.Count - 1; i >= 0; i--)
+            {
+                if (cmbAvailable.GetItemChecked(i))
+                {
+                    var item = (IntItem)cmbAvailable.Items[i];
+                    toMove.Add((i, item));
+                }
+            }
 
-            foreach (var item in toMove)
+            foreach (var (_, item) in toMove)
                 cmbSelected.Items.Add(item);
+
+            // Clear checkboxes in available
+            for (int i = 0; i < cmbAvailable.Items.Count; i++)
+                cmbAvailable.SetItemChecked(i, false);
 
             RefreshAvailable(searchBox.Text);
         };
 
         btnRemove.Click += (_, _) =>
         {
-            var toRemove = new List<IntItem>();
-            for (int i = 0; i < cmbSelected.CheckedItems.Count; i++)
-                toRemove.Add((IntItem)cmbSelected.CheckedItems[i]);
+            var toRemove = new List<(int Index, IntItem Item)>();
+            for (int i = cmbSelected.Items.Count - 1; i >= 0; i--)
+            {
+                if (cmbSelected.GetItemChecked(i))
+                {
+                    var item = (IntItem)cmbSelected.Items[i];
+                    toRemove.Add((i, item));
+                }
+            }
 
-            foreach (var item in toRemove)
+            foreach (var (_, item) in toRemove)
                 cmbSelected.Items.Remove(item);
+
+            // Clear checkboxes in selected
+            for (int i = 0; i < cmbSelected.Items.Count; i++)
+                cmbSelected.SetItemChecked(i, false);
 
             RefreshAvailable(searchBox.Text);
         };
