@@ -143,7 +143,12 @@ public static class BackupService
 
         try
         {
-            progress?.Invoke("Step 1 of 4 — Closing active database connections...");
+            progress?.Invoke("Step 1 of 4 — Releasing application connections...");
+            // Clear the Npgsql connection pool so this app fully lets go of the
+            // database before we drop it. Without this, EF Core immediately
+            // re-opens connections and psql blocks waiting for locks.
+            Npgsql.NpgsqlConnection.ClearAllPools();
+
             RunPsqlCommand(pgHost, pgPort, pgUsername, pgPassword, "postgres",
                 $"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{pgDatabase}' AND pid <> pg_backend_pid();");
 
