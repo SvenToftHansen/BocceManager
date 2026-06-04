@@ -312,18 +312,24 @@ public class DashboardPanel : UserControl
             }
 
             // Set combo selections by index (more reliable than SelectedValue)
-            if (autoLeagueId.HasValue)
+            if (allLeagues.Count > 0)
             {
-                int leagueIdx = allLeagues.FindIndex(l => l.Id == autoLeagueId);
-                _leagueCombo!.SelectedIndex = leagueIdx >= 0 ? leagueIdx : 0;
+                int leagueIdx = -1;
+                if (autoLeagueId.HasValue)
+                {
+                    leagueIdx = allLeagues.FindIndex(l => l.Id == autoLeagueId);
+                }
+                if (leagueIdx < 0)
+                    leagueIdx = 0; // Fallback to first league
+
+                _leagueCombo!.SelectedIndex = leagueIdx;
             }
-            else if (allLeagues.Count > 0)
-                _leagueCombo!.SelectedIndex = 0;
 
             if (autoSeasonId.HasValue && _seasonCombo!.Items.Count > 0)
             {
-                int seasonIdx = _seasonCombo.Items.Cast<Season>().ToList().FindIndex(s => s.Id == autoSeasonId);
-                if (seasonIdx >= 0)
+                var seasonItems = _seasonCombo.Items.Cast<Season>().ToList();
+                int seasonIdx = seasonItems.FindIndex(s => s.Id == autoSeasonId);
+                if (seasonIdx >= 0 && seasonIdx < _seasonCombo!.Items.Count)
                     _seasonCombo!.SelectedIndex = seasonIdx;
             }
         }
