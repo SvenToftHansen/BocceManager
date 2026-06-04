@@ -839,9 +839,10 @@ public class DivisionPanel : UserControl
         _numPlayersMax.Enabled = isEditMode || isCreateMode;
 
         // Button visibility: Edit/Delete in view mode, Save/Cancel in edit/create mode
-        _btnEdit.Visible = !isEditMode && !isCreateMode && _selectedDivisionId.HasValue;
+        _btnEdit.Visible   = !isEditMode && !isCreateMode && _selectedDivisionId.HasValue;
         _btnDelete.Visible = !isEditMode && !isCreateMode && _selectedDivisionId.HasValue;
-        _btnSave.Visible = isEditMode || isCreateMode;
+        _btnDelete.Enabled = !isEditMode && !isCreateMode && _selectedDivisionId.HasValue;
+        _btnSave.Visible   = isEditMode || isCreateMode;
         _btnCancel.Visible = isEditMode || isCreateMode;
 
         // Teams/Players editing only in edit/create mode
@@ -986,6 +987,18 @@ public class DivisionPanel : UserControl
                 .FirstOrDefault(d => d.Id == divId);
             if (div != null)
             {
+                // Remove child records in dependency order
+                db.DivisionParameters.RemoveRange(db.DivisionParameters.Where(x => x.DivisionId == divId));
+                db.TeamStandings     .RemoveRange(db.TeamStandings     .Where(x => x.DivisionId == divId));
+
+                // Schedule: Games → MatchTeamResults → Matches → Weeks
+                var weekIds  = db.ScheduleWeeks.Where(w => w.DivisionId == divId).Select(w => w.Id).ToList();
+                var matchIds = db.Matches.Where(m => weekIds.Contains(m.ScheduleWeekId)).Select(m => m.Id).ToList();
+                db.Games            .RemoveRange(db.Games            .Where(g => matchIds.Contains(g.MatchId)));
+                db.MatchTeamResults .RemoveRange(db.MatchTeamResults .Where(r => matchIds.Contains(r.MatchId)));
+                db.Matches          .RemoveRange(db.Matches          .Where(m => weekIds .Contains(m.ScheduleWeekId)));
+                db.ScheduleWeeks    .RemoveRange(db.ScheduleWeeks    .Where(w => w.DivisionId == divId));
+
                 foreach (var team in div.Teams)
                     db.TeamPlayers.RemoveRange(team.TeamPlayers);
                 db.Teams.RemoveRange(div.Teams);

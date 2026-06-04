@@ -523,9 +523,10 @@ public class LeaguePanel : UserControl
         _numMaxTeams.Enabled = editMode;
 
         // Button visibility: Edit/Delete in view mode, Save/Cancel in edit mode
-        _btnEdit.Visible = !editMode && _selectedLeagueId.HasValue;
+        _btnEdit.Visible   = !editMode && _selectedLeagueId.HasValue;
         _btnDelete.Visible = !editMode && _selectedLeagueId.HasValue;
-        _btnSave.Visible = editMode;
+        _btnDelete.Enabled = !editMode && _selectedLeagueId.HasValue;
+        _btnSave.Visible   = editMode;
         _btnCancel.Visible = editMode;
     }
 
