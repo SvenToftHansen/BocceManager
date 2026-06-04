@@ -9,7 +9,19 @@ public static class DatabaseInitializer
     public static void Initialize()
     {
         using var db = new BocceDbContext();
-        db.Database.EnsureCreated();
+
+        // For PostgreSQL, use migrations to ensure schema is created
+        try
+        {
+            db.Database.Migrate();
+        }
+        catch (Exception ex)
+        {
+            // If migrations fail, try EnsureCreated as fallback
+            Console.WriteLine($"Migration failed ({ex.Message}), attempting EnsureCreated...");
+            db.Database.EnsureCreated();
+        }
+
         ApplySchemaPatches(db);
         SeedReferenceData(db);
     }
