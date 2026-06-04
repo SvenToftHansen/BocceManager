@@ -20,9 +20,12 @@ public static class DatabaseInitializer
             // If migrations fail, try EnsureCreated as fallback
             Console.WriteLine($"Migration failed ({ex.Message}), attempting EnsureCreated...");
             db.Database.EnsureCreated();
+
+            // Only apply schema patches if using EnsureCreated (not migrations)
+            ApplySchemaPatches(db);
         }
 
-        ApplySchemaPatches(db);
+        // Seed reference data (safe to run even if schema already exists)
         SeedReferenceData(db);
     }
 
