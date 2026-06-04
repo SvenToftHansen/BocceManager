@@ -13,7 +13,7 @@ public partial class MainForm : Form
         Players, Teams,
         ScoreEntry, Schedule,
         Standings, Playoffs,
-        SpareLists, Announcements, Fees, EmailLists, Documents, Parameters, Theme
+        SpareLists, Announcements, Fees, EmailLists, Documents, Parameters, Utilities, Theme
     }
 
     private NavSection _currentSection = NavSection.Dashboard;
@@ -155,6 +155,7 @@ public partial class MainForm : Form
             add("Email Lists",    NavSection.EmailLists);
             add("Documents",      NavSection.Documents);
             add("Parameters",     NavSection.Parameters);
+            add("Utilities",      NavSection.Utilities);
             add("Theme",          NavSection.Theme);
         });
     }
@@ -224,6 +225,7 @@ public partial class MainForm : Form
         NavSection.Divisions  => new DivisionPanel(),
         NavSection.Documents  => new DocumentsPanel(),
         NavSection.Parameters => new ParametersPanel(),
+        NavSection.Utilities  => new UtilitiesPanel(),
         NavSection.Theme      => new ThemePanel(),
         _ => new PlaceholderPanel(SectionTitle(section))
     };
