@@ -1027,7 +1027,7 @@ public class DivisionPanel : UserControl
             {
                 var captain = db.Players.Find(team.CaptainPlayerId.Value);
                 if (captain != null)
-                    team.DisplayName = $"{letter}{captain.LastName}";
+                    team.DisplayName = $"{letter}-{captain.LastName}";
             }
             letter++;
         }
@@ -1105,24 +1105,27 @@ public class DivisionPanel : UserControl
         }
         catch { }
 
-        int? playerId = PickPlayer(existing);
-        if (playerId == null) return;
+        var playerIds = PickPlayersMultiple(existing);
+        if (playerIds.Count == 0) return;
 
         try
         {
             using var db = new BocceDbContext();
-            db.TeamPlayers.Add(new TeamPlayer
+            foreach (var playerId in playerIds)
             {
-                TeamId    = teamId,
-                PlayerId  = playerId.Value,
-                Role      = "player",
-                JoinedDate = DateOnly.FromDateTime(DateTime.Today)
-            });
+                db.TeamPlayers.Add(new TeamPlayer
+                {
+                    TeamId    = teamId,
+                    PlayerId  = playerId,
+                    Role      = "player",
+                    JoinedDate = DateOnly.FromDateTime(DateTime.Today)
+                });
+            }
             db.SaveChanges();
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Could not add player:\n{ex.Message}", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show($"Could not add player(s):\n{ex.Message}", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
 
@@ -1195,7 +1198,7 @@ public class DivisionPanel : UserControl
                 team.CaptainPlayerId = playerId;
                 var captain = db.Players.Find(playerId);
                 if (captain != null)
-                    team.DisplayName = $"{team.TeamLetter}{captain.LastName}";
+                    team.DisplayName = $"{team.TeamLetter}-{captain.LastName}";
             }
             else
             {
@@ -1278,8 +1281,24 @@ public class DivisionPanel : UserControl
         {
             grid.Rows.Clear();
             foreach (var (id, name) in all)
-                if (string.IsNullOrWhiteSpace(q) || name.Contains(q, StringComparison.OrdinalIgnoreCase))
-                    grid.Rows.Add(id, name);
+            {
+                bool matches = false;
+                if (string.IsNullOrWhiteSpace(q))
+                    matches = true;
+                else if (q.Contains('|'))
+                {
+                    // Pipe-delimited OR search: "Hans|Hami|James" matches any term
+                    var terms = q.Split('|').Select(t => t.Trim()).Where(t => !string.IsNullOrWhiteSpace(t));
+                    matches = terms.Any(term => name.Contains(term, StringComparison.OrdinalIgnoreCase));
+                }
+                else
+                {
+                    // Single term: substring match
+                    matches = name.Contains(q, StringComparison.OrdinalIgnoreCase);
+                }
+
+                if (matches) grid.Rows.Add(id, name);
+            }
             grid.ClearSelection();
         }
         search.TextChanged += (_, _) => Filter(search.Text);
@@ -1367,6 +1386,113 @@ public class DivisionPanel : UserControl
         Text = text, Location = new Point(x, y), AutoSize = true,
         Font = AppTheme.FontSectionHeading, ForeColor = AppTheme.Accent
     };
+
+    // ── Multi-select player picker ────────────────────────────────────────────
+
+    private List<int> PickPlayersMultiple(HashSet<int> excludeIds)
+    {
+        var result = new List<int>();
+        using var form = new Form
+        {
+            Text = "Add Players to Team", Width = 700, Height = 500,
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false, MinimizeBox = false,
+            BackColor = AppTheme.ContentBackground
+        };
+
+        // Load all available players
+        List<(int Id, string Name)> available = [];
+        try
+        {
+            using var db = new BocceDbContext();
+            available = db.Players
+                .Where(p => p.IsActive && !excludeIds.Contains(p.Id))
+                .OrderBy(p => p.LastName).ThenBy(p => p.FirstName)
+                .ToList()
+                .Select(p => (p.Id, $"{p.LastName}, {p.FirstName}"))
+                .ToList();
+        }
+        catch { }
+
+        // Left side: Available players
+        var lblAvailable = new Label { Text = "Available Players", Font = AppTheme.FontDefaultBold, AutoSize = true, Location = new Point(10, 8) };
+        var cmbAvailable = new CheckedListBox
+        {
+            Location = new Point(10, 28), Width = 300, Height = 400,
+            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
+            CheckOnClick = true
+        };
+        foreach (var (id, name) in available)
+            cmbAvailable.Items.Add(new IntItem(id, name));
+
+        // Middle buttons
+        var btnAdd = new Button
+        {
+            Text = "Add  >>", Width = 80, Height = 30, Top = 180, Left = 320,
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White, Font = AppTheme.FontButton
+        };
+        var btnRemove = new Button
+        {
+            Text = "<< Remove", Width = 80, Height = 30, Top = 220, Left = 320,
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White, Font = AppTheme.FontButton
+        };
+
+        // Right side: Selected players
+        var lblSelected = new Label { Text = "Players to Add", Font = AppTheme.FontDefaultBold, AutoSize = true, Location = new Point(410, 8) };
+        var cmbSelected = new CheckedListBox
+        {
+            Location = new Point(410, 28), Width = 270, Height = 400,
+            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
+            CheckOnClick = true
+        };
+
+        // Button bar
+        var btnOk = new Button
+        {
+            Text = "Add Players", DialogResult = DialogResult.OK, Left = 410, Top = 440, Width = 100, Height = 30,
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White, Font = AppTheme.FontButton
+        };
+        var btnCancel = new Button
+        {
+            Text = "Cancel", DialogResult = DialogResult.Cancel, Left = 520, Top = 440, Width = 90, Height = 30,
+            FlatStyle = FlatStyle.Flat, Font = AppTheme.FontButton
+        };
+
+        btnAdd.Click += (_, _) =>
+        {
+            for (int i = 0; i < cmbAvailable.CheckedItems.Count; i++)
+            {
+                var item = (IntItem)cmbAvailable.CheckedItems[i];
+                if (!cmbSelected.Items.Cast<IntItem>().Any(x => x.Id == item.Id))
+                    cmbSelected.Items.Add(item);
+            }
+            for (int i = cmbAvailable.Items.Count - 1; i >= 0; i--)
+                if (cmbAvailable.GetItemChecked(i))
+                    cmbAvailable.Items.RemoveAt(i);
+        };
+
+        btnRemove.Click += (_, _) =>
+        {
+            for (int i = cmbSelected.Items.Count - 1; i >= 0; i--)
+                if (cmbSelected.GetItemChecked(i))
+                {
+                    var item = (IntItem)cmbSelected.Items[i];
+                    cmbAvailable.Items.Add(item);
+                    cmbSelected.Items.RemoveAt(i);
+                }
+            cmbAvailable.Sorted = true;
+        };
+
+        form.Controls.AddRange([lblAvailable, cmbAvailable, btnAdd, btnRemove, lblSelected, cmbSelected, btnOk, btnCancel]);
+        form.AcceptButton = btnOk;
+        form.CancelButton = btnCancel;
+
+        if (form.ShowDialog(this) == DialogResult.OK)
+            result = cmbSelected.Items.Cast<IntItem>().Select(x => x.Id).ToList();
+
+        return result;
+    }
 
     private sealed record IntItem(int Id, string Name)    { public override string ToString() => Name; }
     private sealed record SlotItem(int Id, string Display) { public override string ToString() => Display; }
