@@ -183,33 +183,45 @@ public static class BackupService
 
     private static void DropAndRecreateDatabase(string pgHost, string pgPort, string pgUsername, string pgPassword, string pgDatabase)
     {
+        // DROP DATABASE cannot run inside a transaction block, so each command
+        // must be a separate psql invocation (not joined with semicolons).
+        RunPsqlCommand(pgHost, pgPort, pgUsername, pgPassword, "postgres",
+            $"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{pgDatabase}' AND pid <> pg_backend_pid();");
+
+        RunPsqlCommand(pgHost, pgPort, pgUsername, pgPassword, "postgres",
+            $"DROP DATABASE IF EXISTS \"{pgDatabase}\";");
+
+        RunPsqlCommand(pgHost, pgPort, pgUsername, pgPassword, "postgres",
+            $"CREATE DATABASE \"{pgDatabase}\";");
+    }
+
+    private static void RunPsqlCommand(string pgHost, string pgPort, string pgUsername, string pgPassword, string dbName, string sql)
+    {
         var psqlPath = GetPsqlPath();
-        var process = new ProcessStartInfo
+        var psi = new ProcessStartInfo
         {
             FileName = psqlPath,
-            Arguments = $"--host={pgHost} --port={pgPort} --username={pgUsername} --dbname=postgres --command=\"DROP DATABASE IF EXISTS {pgDatabase} WITH (FORCE); CREATE DATABASE {pgDatabase};\"",
+            Arguments = $"--host={pgHost} --port={pgPort} --username={pgUsername} --dbname={dbName} --command={Quote(sql)}",
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+        psi.Environment["PGPASSWORD"] = pgPassword;
 
-        process.Environment["PGPASSWORD"] = pgPassword;
+        using var proc = Process.Start(psi)
+            ?? throw new Exception("Failed to start psql process");
 
-        using (var proc = Process.Start(process))
+        proc.WaitForExit();
+
+        if (proc.ExitCode != 0)
         {
-            if (proc == null)
-                throw new Exception("Failed to start psql process");
-
-            proc.WaitForExit();
-
-            if (proc.ExitCode != 0)
-            {
-                var error = proc.StandardError.ReadToEnd();
-                throw new Exception($"Failed to recreate database: {error}");
-            }
+            var error = proc.StandardError.ReadToEnd().Trim();
+            throw new Exception($"Failed to recreate database: {error}");
         }
     }
+
+    private static string Quote(string s) => $"\"{s.Replace("\"", "\\\"")}\"";
 
     public static BackupSummary PreviewBackup(string backupFilePath)
     {
