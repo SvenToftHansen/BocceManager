@@ -907,6 +907,21 @@ public class SeasonPanel : UserControl
         SelStr(_cmbPlayoffScoring, source.PlayoffScoringMode);
         _chkPlayoffTiebreaker.Checked = source.PlayoffTiebreakerEnd;
 
+        // Copy play days and play times from the source season
+        using (var db = new BocceDbContext())
+        {
+            var sourceDays  = db.SeasonDaySlots .Where(s => s.SeasonId == source.Id).Select(s => s.DaySlotId) .ToHashSet();
+            var sourceTimes = db.SeasonTimeSlots.Where(s => s.SeasonId == source.Id).Select(s => s.TimeSlotId).ToHashSet();
+
+            for (int i = 0; i < _daysList.Items.Count; i++)
+                if (_daysList.Items[i] is SlotItem di)
+                    _daysList.SetItemChecked(i, sourceDays.Contains(di.Id));
+
+            for (int i = 0; i < _timesList.Items.Count; i++)
+                if (_timesList.Items[i] is SlotItem ti)
+                    _timesList.SetItemChecked(i, sourceTimes.Contains(ti.Id));
+        }
+
         _isCopied     = true;
         _copySourceId = source.Id;
     }
