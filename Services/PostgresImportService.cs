@@ -22,7 +22,7 @@ public class PostgresImportService
 
                 // Get spare list players
                 var spareCmd = conn.CreateCommand();
-                spareCmd.CommandText = "SELECT playerid FROM public.spare_list_players";
+                spareCmd.CommandText = "SELECT \"playerId\" FROM public.spare_list_players";
                 using (var reader = await spareCmd.ExecuteReaderAsync())
                 {
                     while (await reader.ReadAsync())
@@ -33,7 +33,7 @@ public class PostgresImportService
 
                 // Get looking for team players
                 var lftCmd = conn.CreateCommand();
-                lftCmd.CommandText = "SELECT playerid FROM public.looking_for_team";
+                lftCmd.CommandText = "SELECT \"playerId\" FROM public.looking_for_team";
                 using (var reader = await lftCmd.ExecuteReaderAsync())
                 {
                     while (await reader.ReadAsync())
@@ -45,9 +45,9 @@ public class PostgresImportService
                 // Get all players
                 var playerCmd = conn.CreateCommand();
                 playerCmd.CommandText = @"
-                    SELECT id, firstName, lastName, email, phone, lotNumber, isActive
+                    SELECT id, ""firstName"", ""lastName"", email, phone, ""lotNumber"", ""isActive""
                     FROM public.players
-                    ORDER BY lastName, firstName";
+                    ORDER BY ""lastName"", ""firstName""";
 
                 using (var reader = await playerCmd.ExecuteReaderAsync())
                 {
