@@ -666,6 +666,9 @@ public class DivisionPanel : UserControl
         {
             _lblSystemName.Text = "";
             _lblSortKey.Text    = "";
+            // Clear name for new divisions if slots are cleared
+            if (!_selectedDivisionId.HasValue)
+                _txtName.Text = "";
             return;
         }
         try
@@ -676,6 +679,10 @@ public class DivisionPanel : UserControl
             if (day == null || time == null) return;
             _lblSystemName.Text = BuildShortName(day.DayAbbr, time.Timeslot24h);
             _lblSortKey.Text    = $"{day.DayNbr}-{time.Timeslot24h}";
+
+            // For new divisions, auto-generate the name from day and time
+            if (!_selectedDivisionId.HasValue)
+                _txtName.Text = $"{day.DayName} {time.Timeslot12h}";
         }
         catch { }
     }
@@ -705,11 +712,37 @@ public class DivisionPanel : UserControl
             MessageBox.Show("Select a season first.", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
-        var name = _txtName.Text.Trim();
+
+        // Get selected day and time
+        string dayName = _cmbDay.SelectedItem is SlotItem ds && ds.Id > 0 ? ds.Display : null;
+        string timeName = _cmbTime.SelectedItem is SlotItem ts && ts.Id > 0 ? ts.Display : null;
+
+        // For new divisions, day and time are required
+        if (!_selectedDivisionId.HasValue && (string.IsNullOrEmpty(dayName) || string.IsNullOrEmpty(timeName)))
+        {
+            MessageBox.Show("Select a Day and Time for the division.", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        // Auto-generate name from day and time for new divisions
+        string name;
+        if (!_selectedDivisionId.HasValue)
+        {
+            // New division: generate name
+            name = $"{dayName} {timeName}";
+        }
+        else
+        {
+            // Existing division: use entered name or auto-generate
+            name = _txtName.Text.Trim();
+            if (string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(dayName) && !string.IsNullOrEmpty(timeName))
+                name = $"{dayName} {timeName}";
+        }
+
         if (string.IsNullOrEmpty(name))
         {
             MessageBox.Show("Division name is required.", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            _txtName.Focus(); return;
+            return;
         }
 
         int savedId;
@@ -731,8 +764,8 @@ public class DivisionPanel : UserControl
             div.PlayersPerTeamMinimum = _numPlayersMin.Value > 0 ? (int)_numPlayersMin.Value : (int?)null;
             div.PlayersPerTeamMaximum = _numPlayersMax.Value > 0 ? (int)_numPlayersMax.Value : (int?)null;
 
-            int dayId  = _cmbDay.SelectedItem  is SlotItem ds ? ds.Id : 0;
-            int timeId = _cmbTime.SelectedItem is SlotItem ts ? ts.Id : 0;
+            int dayId  = _cmbDay.SelectedItem  is SlotItem dslot ? dslot.Id : 0;
+            int timeId = _cmbTime.SelectedItem is SlotItem tslot ? tslot.Id : 0;
             div.DaySlotId  = dayId  > 0 ? dayId  : (int?)null;
             div.TimeSlotId = timeId > 0 ? timeId : (int?)null;
             div.ShortName  = _lblSystemName.Text;
@@ -1115,8 +1148,8 @@ public class DivisionPanel : UserControl
             foreach (var playerId in playerIds)
             {
                 // Check if player not already on team
-                var existing = db.TeamPlayers.Any(tp => tp.TeamId == teamId && tp.PlayerId == playerId);
-                if (!existing)
+                var alreadyOnTeam = db.TeamPlayers.Any(tp => tp.TeamId == teamId && tp.PlayerId == playerId);
+                if (!alreadyOnTeam)
                 {
                     db.TeamPlayers.Add(new TeamPlayer
                     {
