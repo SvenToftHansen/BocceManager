@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using BocceManager.Services;
 using BocceManager.UI.Theme;
@@ -11,11 +12,12 @@ namespace BocceManager.Panels;
 
 public class UtilitiesPanel : UserControl
 {
-    private Button _btnBackup;
-    private Button _btnPreview;
-    private Button _btnRestore;
-    private Button _btnOpenFolder;
-    private Label  _lblStatus;
+    private Button      _btnBackup;
+    private Button      _btnPreview;
+    private Button      _btnRestore;
+    private Button      _btnOpenFolder;
+    private Label       _lblStatus;
+    private ProgressBar _progressBar;
 
     public UtilitiesPanel()
     {
@@ -28,20 +30,20 @@ public class UtilitiesPanel : UserControl
     {
         var toolbar = new Panel
         {
-            Dock = DockStyle.Top,
-            Height = 60,
+            Dock      = DockStyle.Top,
+            Height    = 60,
             BackColor = AppTheme.Surface,
-            Padding = new Padding(12, 8, 12, 8)
+            Padding   = new Padding(12, 8, 12, 8)
         };
 
-        _btnBackup     = MakeButton("Create Backup",        AppTheme.Accent);
-        _btnPreview    = MakeButton("Preview Backup",       Color.FromArgb(59, 130, 246));
-        _btnRestore    = MakeButton("Restore from Backup",  AppTheme.ButtonDanger);
-        _btnOpenFolder = MakeButton("Open Backups Folder",  Color.FromArgb(100, 116, 139));
+        _btnBackup     = MakeButton("Create Backup",       AppTheme.Accent);
+        _btnPreview    = MakeButton("Preview Backup",      Color.FromArgb(59, 130, 246));
+        _btnRestore    = MakeButton("Restore from Backup", AppTheme.ButtonDanger);
+        _btnOpenFolder = MakeButton("Open Backups Folder", Color.FromArgb(100, 116, 139));
 
         _btnBackup.Click     += OnBackup;
         _btnPreview.Click    += OnPreview;
-        _btnRestore.Click    += OnRestore;
+        _btnRestore.Click    += async (s, e) => await OnRestoreAsync();
         _btnOpenFolder.Click += OnOpenFolder;
 
         int x = 0;
@@ -51,6 +53,16 @@ public class UtilitiesPanel : UserControl
             toolbar.Controls.Add(btn);
             x += btn.Width + 8;
         }
+
+        // Progress bar — marquee style, hidden until restore is running
+        _progressBar = new ProgressBar
+        {
+            Dock    = DockStyle.Top,
+            Height  = 6,
+            Style   = ProgressBarStyle.Marquee,
+            MarqueeAnimationSpeed = 30,
+            Visible = false
+        };
 
         _lblStatus = new Label
         {
@@ -64,6 +76,7 @@ public class UtilitiesPanel : UserControl
         };
 
         Controls.Add(_lblStatus);
+        Controls.Add(_progressBar);
         Controls.Add(toolbar);
     }
 
@@ -84,7 +97,7 @@ public class UtilitiesPanel : UserControl
 
     private void OnBackup(object sender, EventArgs e)
     {
-        _btnBackup.Enabled = false;
+        SetAllButtons(false);
         SetStatus("Creating backup...", AppTheme.TextPrimary);
         Application.DoEvents();
 
@@ -105,7 +118,7 @@ public class UtilitiesPanel : UserControl
         }
         finally
         {
-            _btnBackup.Enabled = true;
+            SetAllButtons(true);
         }
     }
 
@@ -116,7 +129,7 @@ public class UtilitiesPanel : UserControl
         var file = PickBackupFile("Preview Backup");
         if (file == null) return;
 
-        _btnPreview.Enabled = false;
+        SetAllButtons(false);
         SetStatus("Reading backup...", AppTheme.TextPrimary);
         Application.DoEvents();
 
@@ -125,7 +138,7 @@ public class UtilitiesPanel : UserControl
             var summary = BackupService.PreviewBackup(file);
 
             var sb = new StringBuilder();
-            sb.AppendLine($"── Backup File ──────────────────────────────────────");
+            sb.AppendLine("── Backup File ──────────────────────────────────────");
             sb.AppendLine($"File:     {summary.FileName}");
             sb.AppendLine($"Size:     {summary.FileSizeKb:N0} KB");
             sb.AppendLine($"Created:  {summary.FileDate:yyyy-MM-dd HH:mm:ss}");
@@ -135,9 +148,8 @@ public class UtilitiesPanel : UserControl
                 sb.AppendLine($"Source:   {summary.PostgresVersion}");
 
             sb.AppendLine();
-            sb.AppendLine($"── Table Row Counts ─────────────────────────────────");
+            sb.AppendLine("── Table Row Counts ─────────────────────────────────");
 
-            // Show important tables first
             var priority = new[] { "Players", "Leagues", "Seasons", "Divisions", "Teams",
                                    "TeamPlayers", "LookingForTeams", "SpareLists",
                                    "Matches", "Games", "TeamStandings" };
@@ -145,7 +157,6 @@ public class UtilitiesPanel : UserControl
             foreach (var t in priority.Where(summary.TableCounts.ContainsKey))
                 sb.AppendLine($"  {t,-28} {summary.TableCounts[t],6:N0} rows");
 
-            // Then remaining tables that have data
             foreach (var kv in summary.TableCounts
                          .Where(kv => !priority.Contains(kv.Key) && kv.Value > 0)
                          .OrderBy(kv => kv.Key))
@@ -162,53 +173,55 @@ public class UtilitiesPanel : UserControl
         }
         finally
         {
-            _btnPreview.Enabled = true;
+            SetAllButtons(true);
         }
     }
 
-    // ── RESTORE ─────────────────────────────────────────────────────────────
+    // ── RESTORE (async so UI stays responsive) ───────────────────────────────
 
-    private void OnRestore(object sender, EventArgs e)
+    private async Task OnRestoreAsync()
     {
         var file = PickBackupFile("Select Backup to Restore");
         if (file == null) return;
 
-        // Show preview first, then confirm
+        // Show preview in confirm dialog
         BackupSummary summary = null;
-        try   { summary = BackupService.PreviewBackup(file); }
-        catch { /* preview is best-effort */ }
+        try { summary = BackupService.PreviewBackup(file); } catch { }
 
         var confirmMsg = new StringBuilder();
-        confirmMsg.AppendLine($"You are about to RESTORE the database from:");
+        confirmMsg.AppendLine("You are about to RESTORE the database from:");
         confirmMsg.AppendLine();
         confirmMsg.AppendLine($"  {Path.GetFileName(file)}");
         if (summary != null)
         {
             confirmMsg.AppendLine($"  Created:  {summary.FileDate:yyyy-MM-dd HH:mm}");
             confirmMsg.AppendLine($"  Size:     {summary.FileSizeKb:N0} KB");
-            if (summary.TableCounts.TryGetValue("Players", out var playerCount))
-                confirmMsg.AppendLine($"  Players:  {playerCount}");
+            if (summary.TableCounts.TryGetValue("Players", out var pc))
+                confirmMsg.AppendLine($"  Players:  {pc}");
         }
         confirmMsg.AppendLine();
         confirmMsg.AppendLine("⚠  This will REPLACE all current data. This cannot be undone.");
         confirmMsg.AppendLine();
         confirmMsg.AppendLine("Are you sure you want to continue?");
 
-        if (MessageBox.Show(
-                confirmMsg.ToString(),
-                "Confirm Restore",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning,
+        if (MessageBox.Show(confirmMsg.ToString(), "Confirm Restore",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
                 MessageBoxDefaultButton.Button2) != DialogResult.Yes)
             return;
 
-        _btnRestore.Enabled = false;
-        SetStatus("Restoring database — please wait...", AppTheme.TextPrimary);
-        Application.DoEvents();
+        SetAllButtons(false);
+        _progressBar.Visible = true;
+        SetStatus("Starting restore...", AppTheme.TextPrimary);
 
         try
         {
-            BackupService.RestoreBackup(file);
+            await Task.Run(() =>
+                BackupService.RestoreBackup(file, step =>
+                    this.Invoke(() => SetStatus(step, AppTheme.TextPrimary))
+                )
+            );
+
+            _progressBar.Visible = false;
             SetStatus(
                 $"✓ Restore complete!\n\n" +
                 $"Database restored from: {Path.GetFileName(file)}\n\n" +
@@ -217,11 +230,12 @@ public class UtilitiesPanel : UserControl
         }
         catch (Exception ex)
         {
+            _progressBar.Visible = false;
             SetStatus($"✗ Restore failed:\n{ex.Message}", Color.DarkRed);
         }
         finally
         {
-            _btnRestore.Enabled = true;
+            SetAllButtons(true);
         }
     }
 
@@ -256,10 +270,10 @@ public class UtilitiesPanel : UserControl
 
         var ofd = new OpenFileDialog
         {
-            Title          = title,
+            Title            = title,
             InitialDirectory = backupFolder,
-            Filter         = "SQL Backup Files (*.sql)|*.sql|All Files (*.*)|*.*",
-            DefaultExt     = "sql"
+            Filter           = "SQL Backup Files (*.sql)|*.sql|All Files (*.*)|*.*",
+            DefaultExt       = "sql"
         };
 
         return ofd.ShowDialog() == DialogResult.OK ? ofd.FileName : null;
@@ -269,5 +283,13 @@ public class UtilitiesPanel : UserControl
     {
         _lblStatus.ForeColor = color;
         _lblStatus.Text      = text;
+    }
+
+    private void SetAllButtons(bool enabled)
+    {
+        _btnBackup.Enabled     = enabled;
+        _btnPreview.Enabled    = enabled;
+        _btnRestore.Enabled    = enabled;
+        _btnOpenFolder.Enabled = enabled;
     }
 }

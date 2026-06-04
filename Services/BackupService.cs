@@ -130,26 +130,34 @@ public static class BackupService
 
     public static string GetBackupFolderPath() => BackupFolder;
 
-    public static void RestoreBackup(string backupFilePath)
+    public static void RestoreBackup(string backupFilePath, Action<string> progress = null)
     {
         if (!File.Exists(backupFilePath))
             throw new Exception($"Backup file not found: {backupFilePath}");
 
-        // PostgreSQL connection details (must match BocceDbContext)
-        var pgHost = "localhost";
-        var pgPort = "5432";
+        var pgHost     = "localhost";
+        var pgPort     = "5432";
         var pgDatabase = "bocce_league";
         var pgUsername = "postgres";
         var pgPassword = "7720";
 
         try
         {
-            // Drop and recreate the database
-            DropAndRecreateDatabase(pgHost, pgPort, pgUsername, pgPassword, pgDatabase);
+            progress?.Invoke("Step 1 of 4 — Closing active database connections...");
+            RunPsqlCommand(pgHost, pgPort, pgUsername, pgPassword, "postgres",
+                $"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{pgDatabase}' AND pid <> pg_backend_pid();");
 
-            // Restore from backup file using psql
+            progress?.Invoke("Step 2 of 4 — Dropping existing database...");
+            RunPsqlCommand(pgHost, pgPort, pgUsername, pgPassword, "postgres",
+                $"DROP DATABASE IF EXISTS \"{pgDatabase}\";");
+
+            progress?.Invoke("Step 3 of 4 — Creating fresh database...");
+            RunPsqlCommand(pgHost, pgPort, pgUsername, pgPassword, "postgres",
+                $"CREATE DATABASE \"{pgDatabase}\";");
+
+            progress?.Invoke("Step 4 of 4 — Restoring data (this may take a moment)...");
             var psqlPath = GetPsqlPath();
-            var process = new ProcessStartInfo
+            var psi = new ProcessStartInfo
             {
                 FileName = psqlPath,
                 Arguments = $"--host={pgHost} --port={pgPort} --username={pgUsername} --dbname={pgDatabase} --file=\"{backupFilePath}\"",
@@ -158,41 +166,22 @@ public static class BackupService
                 RedirectStandardError = true,
                 CreateNoWindow = true
             };
+            psi.Environment["PGPASSWORD"] = pgPassword;
 
-            process.Environment["PGPASSWORD"] = pgPassword;
+            using var proc = Process.Start(psi)
+                ?? throw new Exception("Failed to start psql process");
+            proc.WaitForExit();
 
-            using (var proc = Process.Start(process))
+            if (proc.ExitCode != 0)
             {
-                if (proc == null)
-                    throw new Exception("Failed to start psql process");
-
-                proc.WaitForExit();
-
-                if (proc.ExitCode != 0)
-                {
-                    var error = proc.StandardError.ReadToEnd();
-                    throw new Exception($"psql restore failed: {error}");
-                }
+                var error = proc.StandardError.ReadToEnd().Trim();
+                throw new Exception($"psql restore failed: {error}");
             }
         }
         catch (Exception ex)
         {
             throw new Exception($"Restore failed: {ex.Message}", ex);
         }
-    }
-
-    private static void DropAndRecreateDatabase(string pgHost, string pgPort, string pgUsername, string pgPassword, string pgDatabase)
-    {
-        // DROP DATABASE cannot run inside a transaction block, so each command
-        // must be a separate psql invocation (not joined with semicolons).
-        RunPsqlCommand(pgHost, pgPort, pgUsername, pgPassword, "postgres",
-            $"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{pgDatabase}' AND pid <> pg_backend_pid();");
-
-        RunPsqlCommand(pgHost, pgPort, pgUsername, pgPassword, "postgres",
-            $"DROP DATABASE IF EXISTS \"{pgDatabase}\";");
-
-        RunPsqlCommand(pgHost, pgPort, pgUsername, pgPassword, "postgres",
-            $"CREATE DATABASE \"{pgDatabase}\";");
     }
 
     private static void RunPsqlCommand(string pgHost, string pgPort, string pgUsername, string pgPassword, string dbName, string sql)
