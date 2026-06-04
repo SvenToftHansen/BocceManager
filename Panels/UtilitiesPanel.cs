@@ -1,126 +1,167 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Windows.Forms;
 using BocceManager.Services;
+using BocceManager.UI.Theme;
 
 namespace BocceManager.Panels;
 
-public partial class UtilitiesPanel : UserControl
+public class UtilitiesPanel : UserControl
 {
-    private Button _btnBackupDatabase;
-    private Button _btnOpenBackupFolder;
+    private Button _btnBackup;
+    private Button _btnRestore;
+    private Button _btnOpenFolder;
     private Label _lblStatus;
 
     public UtilitiesPanel()
     {
-        InitializeComponent();
+        BackColor = AppTheme.ContentBackground;
+        Dock = DockStyle.Fill;
+        BuildUI();
     }
 
-    private void InitializeComponent()
+    private void BuildUI()
     {
-        // Panel setup
-        this.Dock = DockStyle.Fill;
-        this.Padding = new Padding(12);
-        this.AutoScroll = true;
-
-        // Header
-        var lblHeader = new Label
+        // Toolbar
+        var toolbar = new Panel
         {
-            Text = "Database Utilities",
-            Font = new System.Drawing.Font("Segoe UI", 16, System.Drawing.FontStyle.Bold),
-            AutoSize = true,
-            Margin = new Padding(0, 0, 0, 12)
-        };
-
-        // Backup section
-        var gbBackup = new GroupBox
-        {
-            Text = "Database Backup",
-            Padding = new Padding(12),
-            Size = new System.Drawing.Size(400, 200),
-            Margin = new Padding(0, 0, 0, 12)
-        };
-
-        var lblBackupDesc = new Label
-        {
-            Text = "Create a complete backup of the PostgreSQL database.\nBackups are stored in the Backups folder and can be used to restore data if needed.",
             Dock = DockStyle.Top,
-            AutoSize = true,
-            Height = 50,
-            Margin = new Padding(0, 0, 0, 12)
+            Height = 60,
+            BackColor = AppTheme.Surface,
+            Padding = new Padding(12, 8, 12, 8)
         };
 
-        _btnBackupDatabase = new Button
+        _btnBackup = MakeButton("Create Backup", AppTheme.Accent);
+        _btnRestore = MakeButton("Restore from Backup", AppTheme.Accent);
+        _btnOpenFolder = MakeButton("Open Backups Folder", Color.FromArgb(100, 116, 139));
+
+        _btnBackup.Click += OnBackup;
+        _btnRestore.Click += OnRestore;
+        _btnOpenFolder.Click += OnOpenFolder;
+
+        int x = 0;
+        foreach (var btn in new[] { _btnBackup, _btnRestore, _btnOpenFolder })
         {
-            Text = "Create Backup Now",
-            Size = new System.Drawing.Size(150, 36),
-            Margin = new Padding(0, 0, 6, 0)
-        };
-        _btnBackupDatabase.Click += OnBackupDatabase;
+            btn.Location = new Point(x, 8);
+            toolbar.Controls.Add(btn);
+            x += btn.Width + 8;
+        }
 
-        _btnOpenBackupFolder = new Button
-        {
-            Text = "Open Backup Folder",
-            Size = new System.Drawing.Size(150, 36)
-        };
-        _btnOpenBackupFolder.Click += OnOpenBackupFolder;
-
-        var pnlButtons = new Panel
-        {
-            Height = 40,
-            Dock = DockStyle.Top,
-            Margin = new Padding(0, 0, 0, 12)
-        };
-        pnlButtons.Controls.Add(_btnOpenBackupFolder);
-        pnlButtons.Controls.Add(_btnBackupDatabase);
-
+        // Status panel
         _lblStatus = new Label
         {
-            Text = "",
-            Dock = DockStyle.Top,
-            Height = 80,
+            Dock = DockStyle.Fill,
+            BackColor = AppTheme.ContentBackground,
+            ForeColor = AppTheme.TextPrimary,
+            Font = AppTheme.FontDefault,
+            Padding = new Padding(12),
             AutoSize = false,
-            Margin = new Padding(0, 12, 0, 0)
+            Text = "Ready to backup or restore your database"
         };
 
-        gbBackup.Controls.Add(_lblStatus);
-        gbBackup.Controls.Add(pnlButtons);
-        gbBackup.Controls.Add(lblBackupDesc);
-
-        this.Controls.Add(gbBackup);
-        this.Controls.Add(lblHeader);
+        Controls.Add(_lblStatus);
+        Controls.Add(toolbar);
     }
 
-    private void OnBackupDatabase(object sender, EventArgs e)
+    private static Button MakeButton(string text, Color back) => new()
     {
-        _btnBackupDatabase.Enabled = false;
+        Text = text,
+        AutoSize = true,
+        Padding = new Padding(12, 0, 12, 0),
+        Height = 36,
+        FlatStyle = FlatStyle.Flat,
+        BackColor = back,
+        ForeColor = Color.White,
+        Font = AppTheme.FontButton,
+        Cursor = Cursors.Hand
+    };
+
+    private void OnBackup(object sender, EventArgs e)
+    {
+        _btnBackup.Enabled = false;
         _lblStatus.Text = "Creating backup...";
         Application.DoEvents();
 
         try
         {
             var backupFile = BackupService.CreateBackup();
-            var fileInfo = new System.IO.FileInfo(backupFile);
-            _lblStatus.Text = $"✓ Backup successful!\n\nFile: {System.IO.Path.GetFileName(backupFile)}\nSize: {fileInfo.Length / 1024} KB\nLocation: Backups folder";
-            _lblStatus.ForeColor = System.Drawing.Color.DarkGreen;
+            var fileInfo = new FileInfo(backupFile);
+            _lblStatus.ForeColor = Color.DarkGreen;
+            _lblStatus.Text = $"✓ Backup successful!\n\nFile: {Path.GetFileName(backupFile)}\nSize: {fileInfo.Length / 1024} KB\nLocation: Backups folder";
         }
         catch (Exception ex)
         {
-            _lblStatus.Text = $"✗ Backup failed:\n\n{ex.Message}";
-            _lblStatus.ForeColor = System.Drawing.Color.DarkRed;
+            _lblStatus.ForeColor = Color.DarkRed;
+            _lblStatus.Text = $"✗ Backup failed:\n{ex.Message}";
         }
         finally
         {
-            _btnBackupDatabase.Enabled = true;
+            _btnBackup.Enabled = true;
         }
     }
 
-    private void OnOpenBackupFolder(object sender, EventArgs e)
+    private void OnRestore(object sender, EventArgs e)
+    {
+        var backupFolder = BackupService.GetBackupFolderPath();
+        if (!Directory.Exists(backupFolder))
+        {
+            MessageBox.Show("No backups folder found. Create a backup first.", "No Backups", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var files = Directory.GetFiles(backupFolder, "*.sql");
+        if (files.Length == 0)
+        {
+            MessageBox.Show("No backup files found in the Backups folder.", "No Backups", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var ofd = new OpenFileDialog
+        {
+            Title = "Select Backup to Restore",
+            InitialDirectory = backupFolder,
+            Filter = "SQL Backup Files (*.sql)|*.sql|All Files (*.*)|*.*",
+            DefaultExt = "sql"
+        };
+
+        if (ofd.ShowDialog() != DialogResult.OK)
+            return;
+
+        if (MessageBox.Show(
+            $"This will restore the database from:\n\n{Path.GetFileName(ofd.FileName)}\n\nThis action cannot be undone. Continue?",
+            "Restore Database",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning) != DialogResult.Yes)
+            return;
+
+        _btnRestore.Enabled = false;
+        _lblStatus.Text = "Restoring database...";
+        Application.DoEvents();
+
+        try
+        {
+            BackupService.RestoreBackup(ofd.FileName);
+            _lblStatus.ForeColor = Color.DarkGreen;
+            _lblStatus.Text = $"✓ Restore successful!\n\nDatabase restored from: {Path.GetFileName(ofd.FileName)}\n\nPlease restart the application for changes to take effect.";
+        }
+        catch (Exception ex)
+        {
+            _lblStatus.ForeColor = Color.DarkRed;
+            _lblStatus.Text = $"✗ Restore failed:\n{ex.Message}";
+        }
+        finally
+        {
+            _btnRestore.Enabled = true;
+        }
+    }
+
+    private void OnOpenFolder(object sender, EventArgs e)
     {
         try
         {
             var backupFolder = BackupService.GetBackupFolderPath();
-            System.IO.Directory.CreateDirectory(backupFolder);
+            Directory.CreateDirectory(backupFolder);
             Process.Start(new ProcessStartInfo
             {
                 FileName = backupFolder,

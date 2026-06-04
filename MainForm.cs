@@ -155,8 +155,11 @@ public partial class MainForm : Form
             add("Email Lists",    NavSection.EmailLists);
             add("Documents",      NavSection.Documents);
             add("Parameters",     NavSection.Parameters);
-            add("Utilities",      NavSection.Utilities);
             add("Theme",          NavSection.Theme);
+        });
+
+        AddGroup("UTILITIES", add => {
+            add("Backup",         NavSection.Utilities);
         });
     }
 

@@ -78,4 +78,83 @@ public static class BackupService
     }
 
     public static string GetBackupFolderPath() => BackupFolder;
+
+    public static void RestoreBackup(string backupFilePath)
+    {
+        if (!File.Exists(backupFilePath))
+            throw new Exception($"Backup file not found: {backupFilePath}");
+
+        // PostgreSQL connection details (must match BocceDbContext)
+        var pgHost = "localhost";
+        var pgPort = "5432";
+        var pgDatabase = "bocce_league";
+        var pgUsername = "postgres";
+        var pgPassword = "7720";
+
+        try
+        {
+            // Drop and recreate the database
+            DropAndRecreateDatabase(pgHost, pgPort, pgUsername, pgPassword, pgDatabase);
+
+            // Restore from backup file using psql
+            var process = new ProcessStartInfo
+            {
+                FileName = "psql",
+                Arguments = $"--host={pgHost} --port={pgPort} --username={pgUsername} --dbname={pgDatabase} --file=\"{backupFilePath}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            process.Environment["PGPASSWORD"] = pgPassword;
+
+            using (var proc = Process.Start(process))
+            {
+                if (proc == null)
+                    throw new Exception("Failed to start psql process");
+
+                proc.WaitForExit();
+
+                if (proc.ExitCode != 0)
+                {
+                    var error = proc.StandardError.ReadToEnd();
+                    throw new Exception($"psql restore failed: {error}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new Exception($"Restore failed: {ex.Message}", ex);
+        }
+    }
+
+    private static void DropAndRecreateDatabase(string pgHost, string pgPort, string pgUsername, string pgPassword, string pgDatabase)
+    {
+        var process = new ProcessStartInfo
+        {
+            FileName = "psql",
+            Arguments = $"--host={pgHost} --port={pgPort} --username={pgUsername} --dbname=postgres --command=\"DROP DATABASE IF EXISTS {pgDatabase} WITH (FORCE); CREATE DATABASE {pgDatabase};\"",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+
+        process.Environment["PGPASSWORD"] = pgPassword;
+
+        using (var proc = Process.Start(process))
+        {
+            if (proc == null)
+                throw new Exception("Failed to start psql process");
+
+            proc.WaitForExit();
+
+            if (proc.ExitCode != 0)
+            {
+                var error = proc.StandardError.ReadToEnd();
+                throw new Exception($"Failed to recreate database: {error}");
+            }
+        }
+    }
 }
