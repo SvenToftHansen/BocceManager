@@ -99,7 +99,7 @@ public class DashboardPanel : UserControl
         });
         dbRow.Controls.Add(new Label
         {
-            Text = "  " + BocceDbContext.DbPath,
+            Text = "  PostgreSQL (localhost:5432 / bocce_league)",
             Font = AppTheme.FontSmall,
             ForeColor = AppTheme.TextMuted,
             AutoSize = true

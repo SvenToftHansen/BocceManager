@@ -70,9 +70,9 @@ public static class DatabaseInitializer
         using (var fix = conn.CreateCommand())
         {
             fix.CommandText = """
-                UPDATE Divisions
-                SET ShortName = SUBSTR(ShortName, 1, LENGTH(ShortName) - 4) || '-' || SUBSTR(ShortName, -4)
-                WHERE LENGTH(ShortName) > 4 AND ShortName NOT LIKE '%-%'
+                UPDATE "Divisions"
+                SET "ShortName" = SUBSTRING("ShortName", 1, LENGTH("ShortName") - 4) || '-' || SUBSTRING("ShortName", LENGTH("ShortName") - 3)
+                WHERE LENGTH("ShortName") > 4 AND "ShortName" NOT LIKE '%-%'
                 """;
             fix.ExecuteNonQuery();
         };
@@ -153,43 +153,80 @@ public static class DatabaseInitializer
     private static bool TableHasColumn(DbConnection conn, string table, string column)
     {
         using var check = conn.CreateCommand();
-        check.CommandText = $"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{table}'";
+        // PostgreSQL query to check if table exists
+        check.CommandText = $"SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '{table.ToLower()}'";
         if (Convert.ToInt32(check.ExecuteScalar()) == 0) return false;
 
         using var pragma = conn.CreateCommand();
-        pragma.CommandText = $"PRAGMA table_info({table})";
-        using var reader = pragma.ExecuteReader();
-        while (reader.Read())
-            if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
-                return true;
-        return false;
+        // PostgreSQL query to check if column exists
+        pragma.CommandText = $"SELECT COUNT(*) FROM information_schema.columns WHERE table_name = '{table.ToLower()}' AND column_name = '{column.ToLower()}'";
+        return Convert.ToInt32(pragma.ExecuteScalar()) > 0;
     }
 
     private static void CreateTableIfMissing(DbConnection conn, string table, string createSql)
     {
         using var check = conn.CreateCommand();
-        check.CommandText = $"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{table}'";
+        // PostgreSQL query to check if table exists
+        check.CommandText = $"SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '{table.ToLower()}'";
         if (Convert.ToInt32(check.ExecuteScalar()) > 0) return;
 
+        // Convert SQLite CREATE TABLE syntax to PostgreSQL syntax
+        string postgresSql = ConvertSqliteToPostgresSql(createSql);
         using var create = conn.CreateCommand();
-        create.CommandText = createSql;
+        create.CommandText = postgresSql;
         create.ExecuteNonQuery();
     }
 
     private static void AddColumnIfMissing(DbConnection conn, string table, string column, string sqlType)
     {
-        using var pragma = conn.CreateCommand();
-        pragma.CommandText = $"PRAGMA table_info({table})";
-        using var reader = pragma.ExecuteReader();
-        while (reader.Read())
+        using var check = conn.CreateCommand();
+        // PostgreSQL query to check if column exists
+        check.CommandText = $"SELECT COUNT(*) FROM information_schema.columns WHERE table_name = '{table.ToLower()}' AND column_name = '{column.ToLower()}'";
+        if (Convert.ToInt32(check.ExecuteScalar()) > 0)
+            return; // already exists
+
+        // Convert SQLite types to PostgreSQL types
+        string pgType = ConvertSqliteTypeToPostgresType(sqlType);
+        using var alter = conn.CreateCommand();
+        alter.CommandText = $"ALTER TABLE \"{table}\" ADD COLUMN \"{column}\" {pgType}";
+        alter.ExecuteNonQuery();
+    }
+
+    private static string ConvertSqliteTypeToPostgresType(string sqliteType)
+    {
+        // Map SQLite types to PostgreSQL equivalents
+        return sqliteType.ToUpper() switch
         {
-            if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
-                return; // already exists
+            "TEXT" => "TEXT",
+            "INTEGER" => "INTEGER",
+            "INTEGER NOT NULL DEFAULT 0" => "INTEGER NOT NULL DEFAULT 0",
+            "INTEGER NOT NULL DEFAULT 1" => "INTEGER NOT NULL DEFAULT 1",
+            _ when sqliteType.ToUpper().StartsWith("INTEGER NOT NULL DEFAULT") => sqliteType.ToUpper(),
+            _ when sqliteType.ToUpper().StartsWith("TEXT NOT NULL DEFAULT") => sqliteType.ToUpper(),
+            _ => sqliteType
+        };
+    }
+
+    private static string ConvertSqliteToPostgresSql(string sqliteSql)
+    {
+        // Replace SQLite-specific syntax with PostgreSQL equivalents
+        string result = sqliteSql
+            .Replace("AUTOINCREMENT", "")
+            .Replace("CONSTRAINT \"PK_", "CONSTRAINT PK_")
+            .Replace("PRIMARY KEY AUTOINCREMENT", "PRIMARY KEY GENERATED ALWAYS AS IDENTITY")
+            .Replace("PRIMARY KEY", "PRIMARY KEY GENERATED ALWAYS AS IDENTITY");
+
+        // Replace INTEGER with SERIAL for auto-increment IDs (but only if they had AUTOINCREMENT)
+        if (result.Contains("GENERATED ALWAYS AS IDENTITY"))
+        {
+            result = System.Text.RegularExpressions.Regex.Replace(
+                result,
+                @"""Id""\s+INTEGER\s+NOT NULL\s+CONSTRAINT",
+                "\"Id\" SERIAL NOT NULL CONSTRAINT"
+            );
         }
 
-        using var alter = conn.CreateCommand();
-        alter.CommandText = $"ALTER TABLE \"{table}\" ADD COLUMN \"{column}\" {sqlType}";
-        alter.ExecuteNonQuery();
+        return result;
     }
 
     private static void SeedReferenceData(BocceDbContext db)

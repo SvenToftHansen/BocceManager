@@ -268,6 +268,6 @@ public partial class MainForm : Form
 
     private void UpdateStatusBar()
     {
-        lblDbPath.Text = $"DB: {Data.BocceDbContext.DbPath}";
+        lblDbPath.Text = "DB: PostgreSQL (localhost:5432)";
     }
 }
