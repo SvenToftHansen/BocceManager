@@ -1092,8 +1092,10 @@ public class SeasonPanel : UserControl
         {
             if (_isCopied && _copySourceId.HasValue)
             {
-                int n = CopyDivisions(_copySourceId.Value, savedId);
-                divMsg = n > 0 ? $"\n\n{n} division(s) copied from previous season." : "";
+                var (divs, teams, players, lft) = CopySeasonData(_copySourceId.Value, savedId);
+                if (divs > 0)
+                    divMsg = $"\n\n{divs} division(s), {teams} team(s), {players} player assignment(s) copied from previous season."
+                           + (lft > 0 ? $"\n{lft} Looking For Team entry(s) updated to new teams." : "");
                 _isCopied = false; _copySourceId = null;
             }
             else
@@ -1145,26 +1147,105 @@ public class SeasonPanel : UserControl
 
     // ── Division helpers ──────────────────────────────────────────────────────
 
-    private int CopyDivisions(int sourceSeasonId, int newSeasonId)
+    private (int divs, int teams, int players, int lft) CopySeasonData(int sourceSeasonId, int newSeasonId)
     {
         try
         {
             using var db = new BocceDbContext();
-            var sources = db.Divisions.Where(d => d.SeasonId == sourceSeasonId).ToList();
-            foreach (var src in sources)
-                db.Divisions.Add(new Division
+
+            // Load source divisions with their teams and players
+            var sourceDivs = db.Divisions
+                .Where(d => d.SeasonId == sourceSeasonId)
+                .ToList();
+
+            var sourceTeams = db.Teams
+                .Include(t => t.TeamPlayers)
+                .Where(t => sourceDivs.Select(d => d.Id).Contains(t.DivisionId))
+                .ToList();
+
+            // Maps old IDs → new IDs so we can rewire LookingForTeam
+            var divMap  = new Dictionary<int, int>();
+            var teamMap = new Dictionary<int, int>();
+
+            // Copy divisions
+            foreach (var src in sourceDivs)
+            {
+                var newDiv = new Division
                 {
-                    SeasonId = newSeasonId,
-                    Name = src.Name, ShortName = src.ShortName, SortName = src.SortName,
-                    DaySlotId = src.DaySlotId, TimeSlotId = src.TimeSlotId,
+                    SeasonId              = newSeasonId,
+                    Name                  = src.Name,
+                    ShortName             = src.ShortName,
+                    SortName              = src.SortName,
+                    DaySlotId             = src.DaySlotId,
+                    TimeSlotId            = src.TimeSlotId,
                     PlayersPerTeamMinimum = src.PlayersPerTeamMinimum,
                     PlayersPerTeamMaximum = src.PlayersPerTeamMaximum,
-                    TeamsInDivision = 0, IsActive = true
-                });
+                    TeamsInDivision       = 0,
+                    IsActive              = true
+                };
+                db.Divisions.Add(newDiv);
+                db.SaveChanges(); // flush to get newDiv.Id
+                divMap[src.Id] = newDiv.Id;
+            }
+
+            // Copy teams into the new divisions
+            int playerCount = 0;
+            foreach (var srcTeam in sourceTeams)
+            {
+                if (!divMap.TryGetValue(srcTeam.DivisionId, out int newDivId)) continue;
+
+                var newTeam = new Team
+                {
+                    DivisionId  = newDivId,
+                    TeamLetter  = srcTeam.TeamLetter,
+                    SystemName  = srcTeam.SystemName,
+                    DisplayName = srcTeam.DisplayName,
+                    IsActive    = srcTeam.IsActive
+                };
+                db.Teams.Add(newTeam);
+                db.SaveChanges(); // flush to get newTeam.Id
+                teamMap[srcTeam.Id] = newTeam.Id;
+
+                // Copy player assignments
+                foreach (var tp in srcTeam.TeamPlayers)
+                {
+                    db.TeamPlayers.Add(new TeamPlayer
+                    {
+                        TeamId      = newTeam.Id,
+                        PlayerId    = tp.PlayerId,
+                        Role        = tp.Role,
+                        IsActive    = tp.IsActive,
+                        JoinedDate  = DateOnly.FromDateTime(DateTime.Today)
+                    });
+                    playerCount++;
+                }
+
+                // Copy captain reference
+                if (srcTeam.CaptainPlayerId.HasValue)
+                    newTeam.CaptainPlayerId = srcTeam.CaptainPlayerId;
+            }
             db.SaveChanges();
-            return sources.Count;
+
+            // Update LookingForTeam entries that were placed on old teams
+            // so they point to the equivalent new teams.
+            // Entries with TeamId == null (still unplaced) already carry forward as-is.
+            int lftUpdated = 0;
+            var lftEntries = db.LookingForTeams
+                .Where(l => l.TeamId.HasValue && teamMap.Keys.Contains(l.TeamId.Value))
+                .ToList();
+            foreach (var lft in lftEntries)
+            {
+                if (teamMap.TryGetValue(lft.TeamId!.Value, out int newTeamId))
+                {
+                    lft.TeamId = newTeamId;
+                    lftUpdated++;
+                }
+            }
+            if (lftUpdated > 0) db.SaveChanges();
+
+            return (sourceDivs.Count, sourceTeams.Count, playerCount, lftUpdated);
         }
-        catch { return 0; }
+        catch { return (0, 0, 0, 0); }
     }
 
     private int BuildDivisionsFromSlots(int seasonId)
