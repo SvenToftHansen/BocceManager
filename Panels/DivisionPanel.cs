@@ -689,16 +689,14 @@ public class DivisionPanel : UserControl
 
     private void OnSlotChanged(object? sender, EventArgs e)
     {
-        // Recompute system name and sort key from the selected slots
+        // Recompute system name, sort key, and division name from the selected slots
         int dayId  = _cmbDay.SelectedItem  is SlotItem ds ? ds.Id : 0;
         int timeId = _cmbTime.SelectedItem is SlotItem ts ? ts.Id : 0;
         if (dayId == 0 || timeId == 0)
         {
             _lblSystemName.Text = "";
             _lblSortKey.Text    = "";
-            // Clear name for new divisions if slots are cleared
-            if (!_selectedDivisionId.HasValue)
-                _txtName.Text = "";
+            _txtName.Text = "";
             return;
         }
         try
@@ -710,9 +708,8 @@ public class DivisionPanel : UserControl
             _lblSystemName.Text = BuildShortName(day.DayAbbr, time.Timeslot24h);
             _lblSortKey.Text    = $"{day.DayNbr}-{time.Timeslot24h}";
 
-            // For new divisions, auto-generate the name from day and time
-            if (!_selectedDivisionId.HasValue)
-                _txtName.Text = $"{day.DayName} {time.Timeslot12h}";
+            // Auto-generate the division name from day and time (for both new and existing divisions)
+            _txtName.Text = $"{day.DayName} {time.Timeslot12h}";
         }
         catch { }
     }
