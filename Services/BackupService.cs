@@ -210,4 +210,89 @@ public static class BackupService
             }
         }
     }
+
+    public static BackupSummary PreviewBackup(string backupFilePath)
+    {
+        if (!File.Exists(backupFilePath))
+            throw new Exception($"Backup file not found: {backupFilePath}");
+
+        var fileInfo = new FileInfo(backupFilePath);
+        var summary = new BackupSummary
+        {
+            FileName   = fileInfo.Name,
+            FileSizeKb = fileInfo.Length / 1024,
+            FileDate   = fileInfo.LastWriteTime,
+            TableCounts = new System.Collections.Generic.Dictionary<string, int>()
+        };
+
+        // Scan the SQL file, counting COPY or INSERT rows per table
+        string currentTable = null;
+        bool inCopyBlock = false;
+
+        foreach (var line in File.ReadLines(backupFilePath))
+        {
+            if (line.StartsWith("-- Dumped on"))
+            {
+                // e.g. "-- Dumped on: 2026-06-04 14:32:45"
+                var dateStr = line.Substring("-- Dumped on".Length).Trim().TrimStart(':').Trim();
+                if (DateTime.TryParse(dateStr, out var dt))
+                    summary.DumpedOn = dt;
+            }
+            else if (line.StartsWith("-- PostgreSQL database version"))
+            {
+                summary.PostgresVersion = line.Replace("--", "").Trim();
+            }
+            else if (line.StartsWith("COPY "))
+            {
+                // COPY public."Players" (col1, col2, ...) FROM stdin;
+                var tableName = ExtractTableName(line);
+                if (tableName != null)
+                {
+                    currentTable = tableName;
+                    inCopyBlock = true;
+                    if (!summary.TableCounts.ContainsKey(currentTable))
+                        summary.TableCounts[currentTable] = 0;
+                }
+            }
+            else if (inCopyBlock && line == "\\.")
+            {
+                inCopyBlock = false;
+                currentTable = null;
+            }
+            else if (inCopyBlock && currentTable != null && line.Length > 0)
+            {
+                summary.TableCounts[currentTable]++;
+            }
+        }
+
+        return summary;
+    }
+
+    private static string ExtractTableName(string copyLine)
+    {
+        // COPY public."TableName" (...) FROM stdin;
+        var start = copyLine.IndexOf('"');
+        var end   = copyLine.IndexOf('"', start + 1);
+        if (start >= 0 && end > start)
+            return copyLine.Substring(start + 1, end - start - 1);
+        // Fallback: COPY public.TableName (...) FROM stdin;
+        var parts = copyLine.Split(' ');
+        if (parts.Length >= 2)
+        {
+            var tbl = parts[1];
+            if (tbl.Contains('.')) tbl = tbl.Split('.')[1];
+            return tbl.Trim('"');
+        }
+        return null;
+    }
+}
+
+public class BackupSummary
+{
+    public string   FileName    { get; set; }
+    public long     FileSizeKb  { get; set; }
+    public DateTime FileDate    { get; set; }
+    public DateTime? DumpedOn   { get; set; }
+    public string   PostgresVersion { get; set; }
+    public System.Collections.Generic.Dictionary<string, int> TableCounts { get; set; }
 }
