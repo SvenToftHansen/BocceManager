@@ -122,13 +122,14 @@ public class ImportPostgresData
     /// <summary>
     /// Parses the players INSERT statement from SQL and imports all players.
     /// Returns a mapping of PostgreSQL player ID -> SQLite Player object.
+    /// Handles SQL-escaped quotes ('' for apostrophes in names).
     /// </summary>
     private Dictionary<int, Player> ParseAndImportPlayers(string sqlContent)
     {
         var playerMap = new Dictionary<int, Player>();
 
         // Find the players INSERT statement
-        var playerPattern = @"INSERT INTO public\.players\s*\([^)]+\)\s*VALUES\s*([\s\S]+?)(?:;|\n\n)";
+        var playerPattern = @"INSERT INTO public\.players\s*\([^)]+\)\s*VALUES\s*([\s\S]+?)(?:;)";
         var match = Regex.Match(sqlContent, playerPattern, RegexOptions.IgnoreCase);
 
         if (!match.Success)
@@ -139,22 +140,32 @@ public class ImportPostgresData
 
         var valuesBlock = match.Groups[1].Value;
 
-        // Parse individual player records: (id, parkId, firstName, lastName, email, phone, lotNumber, isActive, createdAt)
-        var recordPattern = @"\(\s*(\d+),\s*(\d+),\s*'([^']*)',\s*'([^']*)',\s*(NULL|'[^']*'),\s*(NULL|'[^']*'),\s*(NULL|'[^']*'),\s*(true|false),\s*'([^']+)'\s*\)";
-        var recordMatches = Regex.Matches(valuesBlock, recordPattern);
+        // Split by ),\n\t( to get each record (handles the formatting with tabs)
+        var records = Regex.Split(valuesBlock, @"\),\s*\(");
 
         int importedCount = 0;
 
-        foreach (Match recordMatch in recordMatches)
+        foreach (var record in records)
         {
             try
             {
-                int postgresId = int.Parse(recordMatch.Groups[1].Value);
-                string firstName = UnquoteSql(recordMatch.Groups[3].Value);
-                string lastName = UnquoteSql(recordMatch.Groups[4].Value);
-                string email = UnquoteSql(recordMatch.Groups[5].Value);
-                string phone = UnquoteSql(recordMatch.Groups[6].Value);
-                string lotNumber = UnquoteSql(recordMatch.Groups[7].Value);
+                // Clean up the record (remove leading/trailing parens if still there)
+                var cleanRecord = record.Trim('(', ')').Trim();
+                if (string.IsNullOrWhiteSpace(cleanRecord))
+                    continue;
+
+                // Split by comma, but we need to be smart about commas inside quoted strings
+                var fields = SplitSqlFields(cleanRecord);
+
+                if (fields.Count < 9)
+                    continue;
+
+                int postgresId = int.Parse(fields[0].Trim());
+                string firstName = UnquoteSql(fields[2].Trim());
+                string lastName = UnquoteSql(fields[3].Trim());
+                string email = UnquoteSql(fields[4].Trim());
+                string phone = UnquoteSql(fields[5].Trim());
+                string lotNumber = UnquoteSql(fields[6].Trim());
 
                 // Skip if already exists
                 if (_db.Players.Any(p => p.FirstName == firstName && p.LastName == lastName))
@@ -187,12 +198,54 @@ public class ImportPostgresData
     }
 
     /// <summary>
+    /// Splits a SQL record line by commas while respecting quoted strings.
+    /// Handles SQL-escaped quotes ('') inside string values.
+    /// </summary>
+    private List<string> SplitSqlFields(string record)
+    {
+        var fields = new List<string>();
+        var currentField = new System.Text.StringBuilder();
+        bool inQuotes = false;
+
+        for (int i = 0; i < record.Length; i++)
+        {
+            char c = record[i];
+
+            if (c == '\'' && i + 1 < record.Length && record[i + 1] == '\'')
+            {
+                // SQL-escaped quote: ''
+                currentField.Append("''");
+                i++;
+            }
+            else if (c == '\'')
+            {
+                inQuotes = !inQuotes;
+                currentField.Append(c);
+            }
+            else if (c == ',' && !inQuotes)
+            {
+                fields.Add(currentField.ToString());
+                currentField.Clear();
+            }
+            else
+            {
+                currentField.Append(c);
+            }
+        }
+
+        if (currentField.Length > 0)
+            fields.Add(currentField.ToString());
+
+        return fields;
+    }
+
+    /// <summary>
     /// Parses the looking_for_team table from SQL and creates LookingForTeams entries.
     /// </summary>
     private int ParseAndPopulateLookingForTeams(string sqlContent, League league, Season season, Dictionary<int, Player> playerMap)
     {
         // Find the looking_for_team INSERT statement
-        var pattern = @"INSERT INTO public\.looking_for_team\s*\([^)]+\)\s*VALUES\s*([\s\S]+?)(?:;|\n\n)";
+        var pattern = @"INSERT INTO public\.looking_for_team\s*\([^)]+\)\s*VALUES\s*([\s\S]+?)(?:;)";
         var match = Regex.Match(sqlContent, pattern, RegexOptions.IgnoreCase);
 
         if (!match.Success)
@@ -204,15 +257,22 @@ public class ImportPostgresData
         var valuesBlock = match.Groups[1].Value;
         int createdCount = 0;
 
-        // Parse individual records: (id, playerId, leagueId, seasonId, addedAt, notes)
-        var recordPattern = @"\(\s*\d+,\s*(\d+),\s*\d+,\s*NULL,\s*'[^']+',\s*(NULL|'[^']*')\s*\)";
-        var recordMatches = Regex.Matches(valuesBlock, recordPattern);
+        // Split by ),\n\t( to get each record
+        var records = Regex.Split(valuesBlock, @"\),\s*\(");
 
-        foreach (Match recordMatch in recordMatches)
+        foreach (var record in records)
         {
             try
             {
-                int postgresPlayerId = int.Parse(recordMatch.Groups[1].Value);
+                var cleanRecord = record.Trim('(', ')').Trim();
+                if (string.IsNullOrWhiteSpace(cleanRecord))
+                    continue;
+
+                var fields = SplitSqlFields(cleanRecord);
+                if (fields.Count < 2)
+                    continue;
+
+                int postgresPlayerId = int.Parse(fields[1].Trim());
 
                 if (!playerMap.TryGetValue(postgresPlayerId, out var player))
                     continue;
@@ -247,7 +307,7 @@ public class ImportPostgresData
     private int ParseAndPopulateSpareLists(string sqlContent, League league, Dictionary<int, Player> playerMap)
     {
         // Find the spare_list_players INSERT statement
-        var pattern = @"INSERT INTO public\.spare_list_players\s*\([^)]+\)\s*VALUES\s*([\s\S]+?)(?:;|\n\n)";
+        var pattern = @"INSERT INTO public\.spare_list_players\s*\([^)]+\)\s*VALUES\s*([\s\S]+?)(?:;)";
         var match = Regex.Match(sqlContent, pattern, RegexOptions.IgnoreCase);
 
         if (!match.Success)
@@ -259,15 +319,22 @@ public class ImportPostgresData
         var valuesBlock = match.Groups[1].Value;
         int addedCount = 0;
 
-        // Parse individual records: (id, spareListId, playerId, isActive, addedDate, notes)
-        var recordPattern = @"\(\s*\d+,\s*\d+,\s*(\d+),\s*(true|false),\s*'[^']+',\s*(NULL|'[^']*')\s*\)";
-        var recordMatches = Regex.Matches(valuesBlock, recordPattern);
+        // Split by ),\n\t( to get each record
+        var records = Regex.Split(valuesBlock, @"\),\s*\(");
 
-        foreach (Match recordMatch in recordMatches)
+        foreach (var record in records)
         {
             try
             {
-                int postgresPlayerId = int.Parse(recordMatch.Groups[1].Value);
+                var cleanRecord = record.Trim('(', ')').Trim();
+                if (string.IsNullOrWhiteSpace(cleanRecord))
+                    continue;
+
+                var fields = SplitSqlFields(cleanRecord);
+                if (fields.Count < 3)
+                    continue;
+
+                int postgresPlayerId = int.Parse(fields[2].Trim());
 
                 if (!playerMap.TryGetValue(postgresPlayerId, out var player))
                     continue;
@@ -298,6 +365,7 @@ public class ImportPostgresData
 
     /// <summary>
     /// Removes SQL quotes and handles NULL values.
+    /// Also unescapes SQL-escaped quotes ('').
     /// </summary>
     private string UnquoteSql(string value)
     {
@@ -305,7 +373,11 @@ public class ImportPostgresData
             return null;
 
         if (value.StartsWith("'") && value.EndsWith("'"))
-            return value.Substring(1, value.Length - 2);
+        {
+            var unquoted = value.Substring(1, value.Length - 2);
+            // Unescape SQL-escaped quotes: '' -> '
+            return unquoted.Replace("''", "'");
+        }
 
         return value;
     }
