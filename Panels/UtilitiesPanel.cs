@@ -16,8 +16,9 @@ public class UtilitiesPanel : UserControl
     private Button      _btnPreview;
     private Button      _btnRestore;
     private Button      _btnOpenFolder;
-    private Label       _lblStatus;
+    private RichTextBox _log;
     private ProgressBar _progressBar;
+    private Stopwatch   _stopwatch = new();
 
     public UtilitiesPanel()
     {
@@ -54,28 +55,32 @@ public class UtilitiesPanel : UserControl
             x += btn.Width + 8;
         }
 
-        // Progress bar — marquee style, hidden until restore is running
         _progressBar = new ProgressBar
         {
-            Dock    = DockStyle.Top,
-            Height  = 6,
-            Style   = ProgressBarStyle.Marquee,
+            Dock                  = DockStyle.Top,
+            Height                = 6,
+            Style                 = ProgressBarStyle.Marquee,
             MarqueeAnimationSpeed = 30,
-            Visible = false
+            Visible               = false
         };
 
-        _lblStatus = new Label
+        _log = new RichTextBox
         {
             Dock      = DockStyle.Fill,
-            BackColor = AppTheme.ContentBackground,
-            ForeColor = AppTheme.TextPrimary,
-            Font      = AppTheme.FontDefault,
-            Padding   = new Padding(12),
-            AutoSize  = false,
-            Text      = "Create a backup at any time.\nUse Preview to inspect a backup file before restoring it."
+            BackColor = Color.FromArgb(15, 23, 42),
+            ForeColor = Color.FromArgb(203, 213, 225),
+            Font      = new System.Drawing.Font("Consolas", 10f),
+            ReadOnly  = true,
+            BorderStyle = BorderStyle.None,
+            ScrollBars = RichTextBoxScrollBars.Vertical,
+            Padding   = new Padding(8)
         };
 
-        Controls.Add(_lblStatus);
+        LogLine("Ready.", Color.FromArgb(100, 116, 139));
+        LogLine("Tip: close pgAdmin and any other database tools before restoring.",
+                Color.FromArgb(234, 179, 8));
+
+        Controls.Add(_log);
         Controls.Add(_progressBar);
         Controls.Add(toolbar);
     }
@@ -93,31 +98,56 @@ public class UtilitiesPanel : UserControl
         Cursor    = Cursors.Hand
     };
 
+    // ── LOG HELPERS ─────────────────────────────────────────────────────────
+
+    private void LogLine(string text, Color? color = null)
+    {
+        var ts    = DateTime.Now.ToString("HH:mm:ss");
+        var line  = $"[{ts}]  {text}\n";
+        var col   = color ?? Color.FromArgb(203, 213, 225);
+
+        _log.SelectionStart  = _log.TextLength;
+        _log.SelectionLength = 0;
+        _log.SelectionColor  = col;
+        _log.AppendText(line);
+        _log.ScrollToCaret();
+    }
+
+    private void LogElapsed(string label, Color? color = null)
+    {
+        LogLine($"{label}  (+{_stopwatch.Elapsed.TotalSeconds:0.0}s)", color);
+    }
+
+    private void LogSeparator() => LogLine("─────────────────────────────────────────────",
+                                            Color.FromArgb(51, 65, 85));
+
     // ── BACKUP ──────────────────────────────────────────────────────────────
 
     private void OnBackup(object sender, EventArgs e)
     {
         SetAllButtons(false);
-        SetStatus("Creating backup...", AppTheme.TextPrimary);
+        LogSeparator();
+        LogLine("Starting backup...");
+        _stopwatch.Restart();
         Application.DoEvents();
 
         try
         {
             var backupFile = BackupService.CreateBackup();
             var kb = new FileInfo(backupFile).Length / 1024;
-            SetStatus(
-                $"✓ Backup successful!\n\n" +
-                $"File:  {Path.GetFileName(backupFile)}\n" +
-                $"Size:  {kb:N0} KB\n" +
-                $"Saved: {BackupService.GetBackupFolderPath()}",
-                Color.DarkGreen);
+            LogElapsed($"✓ Backup complete — {Path.GetFileName(backupFile)}  ({kb:N0} KB)",
+                        Color.FromArgb(34, 197, 94));
+            LogLine($"  Saved to: {BackupService.GetBackupFolderPath()}",
+                    Color.FromArgb(100, 116, 139));
         }
         catch (Exception ex)
         {
-            SetStatus($"✗ Backup failed:\n{ex.Message}", Color.DarkRed);
+            LogElapsed($"✗ Backup failed:", Color.FromArgb(239, 68, 68));
+            LogLine($"  {ex.Message}", Color.FromArgb(239, 68, 68));
         }
         finally
         {
+            _stopwatch.Stop();
             SetAllButtons(true);
         }
     }
@@ -130,46 +160,39 @@ public class UtilitiesPanel : UserControl
         if (file == null) return;
 
         SetAllButtons(false);
-        SetStatus("Reading backup...", AppTheme.TextPrimary);
+        LogSeparator();
+        LogLine($"Previewing: {Path.GetFileName(file)}");
         Application.DoEvents();
 
         try
         {
             var summary = BackupService.PreviewBackup(file);
 
-            var sb = new StringBuilder();
-            sb.AppendLine("── Backup File ──────────────────────────────────────");
-            sb.AppendLine($"File:     {summary.FileName}");
-            sb.AppendLine($"Size:     {summary.FileSizeKb:N0} KB");
-            sb.AppendLine($"Created:  {summary.FileDate:yyyy-MM-dd HH:mm:ss}");
+            LogLine($"  File:     {summary.FileName}",    Color.FromArgb(148, 163, 184));
+            LogLine($"  Size:     {summary.FileSizeKb:N0} KB",  Color.FromArgb(148, 163, 184));
+            LogLine($"  Created:  {summary.FileDate:yyyy-MM-dd HH:mm:ss}", Color.FromArgb(148, 163, 184));
             if (summary.DumpedOn.HasValue)
-                sb.AppendLine($"Dumped:   {summary.DumpedOn.Value:yyyy-MM-dd HH:mm:ss}");
-            if (!string.IsNullOrEmpty(summary.PostgresVersion))
-                sb.AppendLine($"Source:   {summary.PostgresVersion}");
+                LogLine($"  Dumped:   {summary.DumpedOn.Value:yyyy-MM-dd HH:mm:ss}", Color.FromArgb(148, 163, 184));
 
-            sb.AppendLine();
-            sb.AppendLine("── Table Row Counts ─────────────────────────────────");
+            LogLine("  Table row counts:", Color.FromArgb(148, 163, 184));
 
             var priority = new[] { "Players", "Leagues", "Seasons", "Divisions", "Teams",
                                    "TeamPlayers", "LookingForTeams", "SpareLists",
                                    "Matches", "Games", "TeamStandings" };
-
             foreach (var t in priority.Where(summary.TableCounts.ContainsKey))
-                sb.AppendLine($"  {t,-28} {summary.TableCounts[t],6:N0} rows");
+                LogLine($"    {t,-28} {summary.TableCounts[t],5:N0} rows", Color.FromArgb(99, 202, 183));
 
             foreach (var kv in summary.TableCounts
                          .Where(kv => !priority.Contains(kv.Key) && kv.Value > 0)
                          .OrderBy(kv => kv.Key))
-                sb.AppendLine($"  {kv.Key,-28} {kv.Value,6:N0} rows");
+                LogLine($"    {kv.Key,-28} {kv.Value,5:N0} rows", Color.FromArgb(99, 202, 183));
 
-            sb.AppendLine();
-            sb.AppendLine($"Total tables with data: {summary.TableCounts.Count(kv => kv.Value > 0)}");
-
-            SetStatus(sb.ToString(), AppTheme.TextPrimary);
+            LogLine($"  Total tables with data: {summary.TableCounts.Count(kv => kv.Value > 0)}",
+                    Color.FromArgb(148, 163, 184));
         }
         catch (Exception ex)
         {
-            SetStatus($"✗ Could not read backup:\n{ex.Message}", Color.DarkRed);
+            LogLine($"✗ Could not read backup: {ex.Message}", Color.FromArgb(239, 68, 68));
         }
         finally
         {
@@ -177,14 +200,13 @@ public class UtilitiesPanel : UserControl
         }
     }
 
-    // ── RESTORE (async so UI stays responsive) ───────────────────────────────
+    // ── RESTORE ─────────────────────────────────────────────────────────────
 
     private async Task OnRestoreAsync()
     {
         var file = PickBackupFile("Select Backup to Restore");
         if (file == null) return;
 
-        // Show preview in confirm dialog
         BackupSummary summary = null;
         try { summary = BackupService.PreviewBackup(file); } catch { }
 
@@ -200,9 +222,11 @@ public class UtilitiesPanel : UserControl
                 confirmMsg.AppendLine($"  Players:  {pc}");
         }
         confirmMsg.AppendLine();
-        confirmMsg.AppendLine("⚠  This will REPLACE all current data. This cannot be undone.");
+        confirmMsg.AppendLine("⚠  IMPORTANT: Close pgAdmin and any other database");
+        confirmMsg.AppendLine("   tools BEFORE clicking Yes. Open connections will");
+        confirmMsg.AppendLine("   block the restore.");
         confirmMsg.AppendLine();
-        confirmMsg.AppendLine("Are you sure you want to continue?");
+        confirmMsg.AppendLine("This will REPLACE all current data. Cannot be undone.");
 
         if (MessageBox.Show(confirmMsg.ToString(), "Confirm Restore",
                 MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
@@ -211,30 +235,33 @@ public class UtilitiesPanel : UserControl
 
         SetAllButtons(false);
         _progressBar.Visible = true;
-        SetStatus("Starting restore...", AppTheme.TextPrimary);
+        _stopwatch.Restart();
+        LogSeparator();
+        LogLine($"Starting restore from: {Path.GetFileName(file)}",
+                Color.FromArgb(251, 191, 36));
 
         try
         {
             await Task.Run(() =>
                 BackupService.RestoreBackup(file, step =>
-                    this.Invoke(() => SetStatus(step, AppTheme.TextPrimary))
+                    this.Invoke(() => LogElapsed(step))
                 )
             );
 
             _progressBar.Visible = false;
-            SetStatus(
-                $"✓ Restore complete!\n\n" +
-                $"Database restored from: {Path.GetFileName(file)}\n\n" +
-                "Please restart the application for all changes to take effect.",
-                Color.DarkGreen);
+            LogElapsed("✓ Restore complete!", Color.FromArgb(34, 197, 94));
+            LogLine("  Restart the application for changes to take effect.",
+                    Color.FromArgb(100, 116, 139));
         }
         catch (Exception ex)
         {
             _progressBar.Visible = false;
-            SetStatus($"✗ Restore failed:\n{ex.Message}", Color.DarkRed);
+            LogElapsed("✗ Restore failed:", Color.FromArgb(239, 68, 68));
+            LogLine($"  {ex.Message}", Color.FromArgb(239, 68, 68));
         }
         finally
         {
+            _stopwatch.Stop();
             SetAllButtons(true);
         }
     }
@@ -275,14 +302,7 @@ public class UtilitiesPanel : UserControl
             Filter           = "SQL Backup Files (*.sql)|*.sql|All Files (*.*)|*.*",
             DefaultExt       = "sql"
         };
-
         return ofd.ShowDialog() == DialogResult.OK ? ofd.FileName : null;
-    }
-
-    private void SetStatus(string text, Color color)
-    {
-        _lblStatus.ForeColor = color;
-        _lblStatus.Text      = text;
     }
 
     private void SetAllButtons(bool enabled)

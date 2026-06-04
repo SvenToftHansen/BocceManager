@@ -143,35 +143,50 @@ public static class BackupService
 
         try
         {
-            progress?.Invoke("Step 1 of 4 — Releasing application connections...");
-            // Clear the Npgsql connection pool so this app fully lets go of the
-            // database before we drop it. Without this, EF Core immediately
-            // re-opens connections and psql blocks waiting for locks.
+            progress?.Invoke("Clearing application connection pool...");
             Npgsql.NpgsqlConnection.ClearAllPools();
+            System.Threading.Thread.Sleep(500);
 
+            progress?.Invoke("Terminating all active connections to the database...");
             RunPsqlCommand(pgHost, pgPort, pgUsername, pgPassword, "postgres",
                 $"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{pgDatabase}' AND pid <> pg_backend_pid();");
 
-            progress?.Invoke("Step 2 of 4 — Dropping existing database...");
+            // Retry until all external connections are gone.
+            // pgAdmin and other tools reconnect immediately — we report what's still open.
+            for (int attempt = 1; attempt <= 15; attempt++)
+            {
+                System.Threading.Thread.Sleep(800);
+                var blockers = GetActiveConnections(pgHost, pgPort, pgUsername, pgPassword, pgDatabase);
+                if (blockers.Count == 0)
+                {
+                    progress?.Invoke("  Database is free — no active connections.");
+                    break;
+                }
+                progress?.Invoke($"  Database still open ({blockers.Count} connection(s)): {string.Join(", ", blockers)} — attempt {attempt}/15");
+                RunPsqlCommand(pgHost, pgPort, pgUsername, pgPassword, "postgres",
+                    $"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{pgDatabase}' AND pid <> pg_backend_pid();");
+                if (attempt == 15)
+                    progress?.Invoke("  WARNING: Could not clear all connections — restore may still work.");
+            }
+
+            progress?.Invoke("Dropping existing database...");
             RunPsqlCommand(pgHost, pgPort, pgUsername, pgPassword, "postgres",
                 $"DROP DATABASE IF EXISTS \"{pgDatabase}\";");
 
-            progress?.Invoke("Step 3 of 4 — Creating fresh database...");
+            progress?.Invoke("Creating fresh database...");
             RunPsqlCommand(pgHost, pgPort, pgUsername, pgPassword, "postgres",
                 $"CREATE DATABASE \"{pgDatabase}\";");
 
-            progress?.Invoke("Step 4 of 4 — Restoring data (this may take a moment)...");
+            progress?.Invoke("Restoring data from backup file...");
             var psqlPath = GetPsqlPath();
             var psi = new ProcessStartInfo
             {
-                FileName = psqlPath,
-                // --single-transaction wraps the entire restore in one commit instead of
-                // committing every INSERT separately — makes restore ~10-50x faster.
+                FileName  = psqlPath,
                 Arguments = $"--host={pgHost} --port={pgPort} --username={pgUsername} --dbname={pgDatabase} --single-transaction --file=\"{backupFilePath}\"",
-                UseShellExecute = false,
+                UseShellExecute        = false,
                 RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
+                RedirectStandardError  = true,
+                CreateNoWindow         = true
             };
             psi.Environment["PGPASSWORD"] = pgPassword;
 
@@ -217,7 +232,37 @@ public static class BackupService
         }
     }
 
-    private static string Quote(string s) => $"\"{s.Replace("\"", "\\\"")}\"";
+    private static string Quote(string s) => "\"" + s.Replace("\"", "\\\"") + "\"";
+
+    private static List<string> GetActiveConnections(string pgHost, string pgPort,
+        string pgUsername, string pgPassword, string pgDatabase)
+    {
+        var results = new List<string>();
+        try
+        {
+            var connStr = $"Host={pgHost};Port={pgPort};Username={pgUsername};Password={pgPassword};Database=postgres";
+            using var conn = new Npgsql.NpgsqlConnection(connStr);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"""
+                SELECT application_name, client_addr::text, state
+                FROM pg_stat_activity
+                WHERE datname = '{pgDatabase}'
+                  AND pid <> pg_backend_pid()
+                  AND state IS NOT NULL
+                """;
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var app   = reader.IsDBNull(0) ? "unknown" : reader.GetString(0);
+                var addr  = reader.IsDBNull(1) ? ""        : reader.GetString(1);
+                var state = reader.IsDBNull(2) ? ""        : reader.GetString(2);
+                results.Add(string.IsNullOrEmpty(app) ? $"{addr}({state})" : $"{app}({state})");
+            }
+        }
+        catch { /* best-effort */ }
+        return results;
+    }
 
     public static BackupSummary PreviewBackup(string backupFilePath)
     {
