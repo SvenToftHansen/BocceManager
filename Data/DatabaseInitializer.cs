@@ -10,22 +10,20 @@ public static class DatabaseInitializer
     {
         using var db = new BocceDbContext();
 
-        // For PostgreSQL, use migrations to ensure schema is created
+        // Apply any pending EF Core migrations (no-op if already up to date).
+        // If the schema already exists (e.g. after a restore) and the migration
+        // history table is missing, EnsureCreated is a safe no-op fallback.
+        // ApplySchemaPatches is NOT called — that was SQLite-only legacy code;
+        // EF Core migrations own all schema changes on PostgreSQL.
         try
         {
             db.Database.Migrate();
         }
-        catch (Exception ex)
+        catch
         {
-            // If migrations fail, try EnsureCreated as fallback
-            Console.WriteLine($"Migration failed ({ex.Message}), attempting EnsureCreated...");
             db.Database.EnsureCreated();
-
-            // Only apply schema patches if using EnsureCreated (not migrations)
-            ApplySchemaPatches(db);
         }
 
-        // Seed reference data (safe to run even if schema already exists)
         SeedReferenceData(db);
     }
 

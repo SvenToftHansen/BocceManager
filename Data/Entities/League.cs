@@ -28,15 +28,18 @@ public class SpareList
     public Player Player { get; set; } = null!;
 }
 
-// One row per player who is looking for a team in a league
+// One row per player who is looking for a team in a league.
+// TeamId is set when they are placed on a team; they stay in the list until explicitly removed.
 public class LookingForTeam
 {
     public int Id { get; set; }
     public int LeagueId { get; set; }
     public int PlayerId { get; set; }
+    public int? TeamId { get; set; }
 
     public League League { get; set; } = null!;
     public Player Player { get; set; } = null!;
+    public Team? Team { get; set; }
 }
 
 public class LeagueOfficial

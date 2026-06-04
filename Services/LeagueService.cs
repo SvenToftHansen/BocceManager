@@ -118,6 +118,22 @@ public static class LeagueService
             db.SeasonCourts.RemoveRange(db.SeasonCourts.Where(sc => sc.SeasonId == seasonId));
             db.SeasonParameters.RemoveRange(
                 db.SeasonParameters.Where(p => p.SeasonId == seasonId));
+            db.SeasonDaySlots.RemoveRange(db.SeasonDaySlots.Where(s => s.SeasonId == seasonId));
+            db.SeasonTimeSlots.RemoveRange(db.SeasonTimeSlots.Where(s => s.SeasonId == seasonId));
+
+            // Team applicants for this season
+            var applicantIds = db.TeamApplicants.Where(ta => ta.SeasonId == seasonId)
+                                                .Select(ta => ta.Id).ToList();
+            if (applicantIds.Count > 0)
+            {
+                db.TeamApplicantPlayers.RemoveRange(
+                    db.TeamApplicantPlayers.Where(p => applicantIds.Contains(p.TeamApplicantId)));
+                db.TeamApplicantDaySlots.RemoveRange(
+                    db.TeamApplicantDaySlots.Where(d => applicantIds.Contains(d.TeamApplicantId)));
+                db.TeamApplicantTimeSlots.RemoveRange(
+                    db.TeamApplicantTimeSlots.Where(t => applicantIds.Contains(t.TeamApplicantId)));
+                db.TeamApplicants.RemoveRange(db.TeamApplicants.Where(ta => ta.SeasonId == seasonId));
+            }
         }
         db.Seasons.RemoveRange(db.Seasons.Where(s => s.LeagueId == leagueId));
 

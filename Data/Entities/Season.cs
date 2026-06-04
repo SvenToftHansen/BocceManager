@@ -60,3 +60,25 @@ public class SeasonCourt
     public Season Season { get; set; } = null!;
     public Court Court { get; set; } = null!;
 }
+
+// Default day slots configured for a season — used to filter Division Editor dropdowns
+public class SeasonDaySlot
+{
+    public int Id { get; set; }
+    public int SeasonId { get; set; }
+    public int DaySlotId { get; set; }
+
+    public Season Season { get; set; } = null!;
+    public DaySlot DaySlot { get; set; } = null!;
+}
+
+// Default time slots configured for a season — used to filter Division Editor dropdowns
+public class SeasonTimeSlot
+{
+    public int Id { get; set; }
+    public int SeasonId { get; set; }
+    public int TimeSlotId { get; set; }
+
+    public Season Season { get; set; } = null!;
+    public TimeSlot TimeSlot { get; set; } = null!;
+}

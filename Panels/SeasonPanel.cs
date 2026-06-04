@@ -14,6 +14,7 @@ public class SeasonPanel : UserControl
     // ── State ────────────────────────────────────────────────────────────────
     private int? _selectedLeagueId;
     private int? _selectedSeasonId;
+    private int? _previousSeasonId;  // Track season before starting new season
     private int? _leagueIdToRestore;
     private int? _seasonIdToRestore;
     private bool _isCopied;
@@ -732,7 +733,7 @@ public class SeasonPanel : UserControl
         catch { }
 
         LoadDivisions(seasonId);
-        LoadSlotsFromDivisions(seasonId);
+        LoadSeasonSlots(seasonId);
         SetEditModeUI(false);  // Start in read-only mode
     }
 
@@ -763,7 +764,7 @@ public class SeasonPanel : UserControl
 
         _btnDelete.Enabled = false;
         _divisionsGrid.Rows.Clear();
-        LoadSlotsFromDivisions(null);
+        LoadSeasonSlots(null);
     }
 
     private void LoadDivisions(int seasonId)
@@ -806,25 +807,24 @@ public class SeasonPanel : UserControl
         catch { }
     }
 
-    private void LoadSlotsFromDivisions(int? seasonId)
+    private void LoadSeasonSlots(int? seasonId)
     {
-        var usedDays  = new HashSet<int>();
-        var usedTimes = new HashSet<int>();
+        var configuredDays  = new HashSet<int>();
+        var configuredTimes = new HashSet<int>();
         if (seasonId.HasValue)
         {
             try
             {
                 using var db = new BocceDbContext();
-                var divs = db.Divisions.Where(d => d.SeasonId == seasonId.Value).ToList();
-                usedDays  = divs.Where(d => d.DaySlotId.HasValue).Select(d => d.DaySlotId!.Value).ToHashSet();
-                usedTimes = divs.Where(d => d.TimeSlotId.HasValue).Select(d => d.TimeSlotId!.Value).ToHashSet();
+                configuredDays  = db.SeasonDaySlots.Where(s => s.SeasonId == seasonId.Value).Select(s => s.DaySlotId).ToHashSet();
+                configuredTimes = db.SeasonTimeSlots.Where(s => s.SeasonId == seasonId.Value).Select(s => s.TimeSlotId).ToHashSet();
             }
             catch { }
         }
         for (int i = 0; i < _daysList.Items.Count; i++)
-            if (_daysList.Items[i] is SlotItem di) _daysList.SetItemChecked(i, usedDays.Contains(di.Id));
+            if (_daysList.Items[i] is SlotItem di) _daysList.SetItemChecked(i, configuredDays.Contains(di.Id));
         for (int i = 0; i < _timesList.Items.Count; i++)
-            if (_timesList.Items[i] is SlotItem ti) _timesList.SetItemChecked(i, usedTimes.Contains(ti.Id));
+            if (_timesList.Items[i] is SlotItem ti) _timesList.SetItemChecked(i, configuredTimes.Contains(ti.Id));
     }
 
     // ── New Season ────────────────────────────────────────────────────────────
@@ -837,10 +837,13 @@ public class SeasonPanel : UserControl
             return;
         }
 
+        _previousSeasonId = _selectedSeasonId;  // Save current season before creating new one
         _seasonCombo.SelectedIndexChanged -= OnSeasonSelected;
         _seasonCombo.SelectedIndex = -1;
         _seasonCombo.SelectedIndexChanged += OnSeasonSelected;
         ClearEditor();
+        _isEditMode = true;
+        SetEditModeUI(true);
 
         try
         {
@@ -922,6 +925,25 @@ public class SeasonPanel : UserControl
     private void ExitEditMode()
     {
         _isEditMode = false;
+
+        // If canceling from new season creation, restore previous season
+        if (!_selectedSeasonId.HasValue && _previousSeasonId.HasValue)
+        {
+            _selectedSeasonId = _previousSeasonId;
+            _seasonCombo.SelectedIndexChanged -= OnSeasonSelected;
+            // Find and select the previous season in the combo
+            for (int i = 0; i < _seasonCombo.Items.Count; i++)
+            {
+                if (_seasonCombo.Items[i] is IntItem ii && ii.Id == _previousSeasonId.Value)
+                {
+                    _seasonCombo.SelectedIndex = i;
+                    break;
+                }
+            }
+            _seasonCombo.SelectedIndexChanged += OnSeasonSelected;
+            _previousSeasonId = null;
+        }
+
         SetEditModeUI(false);
         // Reload to discard changes
         if (_selectedSeasonId.HasValue)
@@ -933,23 +955,39 @@ public class SeasonPanel : UserControl
         // Controls editable in edit mode
         _txtName.ReadOnly = !editMode;
         _dtpStartDate.Enabled = editMode;
-        _numWeeks.ReadOnly = !editMode;
-        _numGamesPerSeason.ReadOnly = !editMode;
+        _numWeeks.Enabled = editMode;
+        _numGamesPerSeason.Enabled = editMode;
         _dtpPlayoffStart.Enabled = editMode;
         _chkIsCurrent.Enabled = editMode;
         _chkActive.Enabled = editMode;
-        _numMaxTeamsDiv.ReadOnly = !editMode;
+        _numMaxTeamsDiv.Enabled = editMode;
         _cmbGameInterval.Enabled = editMode;
         _chkTimeslotDriven.Enabled = editMode;
-        _numPlayersMin.ReadOnly = !editMode;
-        _numPlayersMax.ReadOnly = !editMode;
-        _numPtsWin.ReadOnly = !editMode;
-        _numPtsTie.ReadOnly = !editMode;
-        _numPtsLoss.ReadOnly = !editMode;
-        _numPtsNoShow.ReadOnly = !editMode;
-        _numPtsToWin.ReadOnly = !editMode;
-        _numGamesPerMatch.ReadOnly = !editMode;
+        _numPlayersMin.Enabled = editMode;
+        _numPlayersMax.Enabled = editMode;
+        _numPtsWin.Enabled = editMode;
+        _numPtsTie.Enabled = editMode;
+        _numPtsLoss.Enabled = editMode;
+        _numPtsNoShow.Enabled = editMode;
+        _numPtsToWin.Enabled = editMode;
+        _numGamesPerMatch.Enabled = editMode;
         _cmbScoringMode.Enabled = editMode;
+
+        // Playoff settings editable in edit mode
+        _numTeamsPlayoffs.Enabled = editMode;
+        _chkFirstPlace.Enabled = editMode;
+        _cmbPlayoffType.Enabled = editMode;
+        _numPlayoffGames.Enabled = editMode;
+        _cmbPlayoffScoring.Enabled = editMode;
+        _chkPlayoffTiebreaker.Enabled = editMode;
+
+        // Day/Time slots editable in edit mode
+        _daysList.Enabled = editMode;
+        _timesList.Enabled = editMode;
+        _btnBuild.Enabled = !editMode && _selectedSeasonId.HasValue;
+
+        // Divisions grid Active column and build button
+        _divisionsGrid.Columns["DivAct"].ReadOnly = editMode;
 
         // Button visibility: Edit/Delete in view mode, Save/Cancel in edit mode
         _btnEdit.Visible = !editMode && _selectedSeasonId.HasValue;
@@ -993,6 +1031,17 @@ public class SeasonPanel : UserControl
             ApplyEditorToSeason(season);
             db.SaveChanges();
             savedId = season.Id;
+
+            // Persist day/time slot configuration for this season
+            var selDayIds  = _daysList.CheckedItems.Cast<SlotItem>().Select(s => s.Id).ToHashSet();
+            var selTimeIds = _timesList.CheckedItems.Cast<SlotItem>().Select(s => s.Id).ToHashSet();
+            db.SeasonDaySlots.RemoveRange(db.SeasonDaySlots.Where(s => s.SeasonId == savedId));
+            db.SeasonTimeSlots.RemoveRange(db.SeasonTimeSlots.Where(s => s.SeasonId == savedId));
+            foreach (var id in selDayIds)
+                db.SeasonDaySlots.Add(new SeasonDaySlot { SeasonId = savedId, DaySlotId = id });
+            foreach (var id in selTimeIds)
+                db.SeasonTimeSlots.Add(new SeasonTimeSlot { SeasonId = savedId, TimeSlotId = id });
+            db.SaveChanges();
 
             // Enforce one-current-per-league
             if (season.IsCurrent)
@@ -1046,7 +1095,7 @@ public class SeasonPanel : UserControl
         LoadSeasonList(_selectedLeagueId!.Value);
         SelectSeasonInCombo(savedId);
         LoadDivisions(savedId);
-        LoadSlotsFromDivisions(savedId);
+        LoadSeasonSlots(savedId);
     }
 
     private void ApplyEditorToSeason(Season s)
@@ -1266,7 +1315,7 @@ public class SeasonPanel : UserControl
 
         MessageBox.Show(msg, "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Information);
         LoadDivisions(seasonId);
-        LoadSlotsFromDivisions(seasonId);
+        LoadSeasonSlots(seasonId);
     }
 
     private void OnDeleteDivision(object? sender, EventArgs e)

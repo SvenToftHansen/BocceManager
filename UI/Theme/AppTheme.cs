@@ -34,9 +34,14 @@ public static class AppTheme
     public static Color ButtonSuccess { get; private set; }
     public static Color ButtonDanger  { get; private set; }
 
+    // ── Edit Mode ─────────────────────────────────────────────────────────────
+    public static Color EditModeBackground { get; private set; }
+    public static Color CreateModeBackground { get; private set; }
+
     // ── Fonts ─────────────────────────────────────────────────────────────────
     public static Font FontDefault        { get; private set; } = null!;
     public static Font FontDefaultBold    { get; private set; } = null!;
+    public static Font FontCategoryLabel  { get; private set; } = null!;
     public static Font FontSmall          { get; private set; } = null!;
     public static Font FontSmallBold      { get; private set; } = null!;
     public static Font FontButton         { get; private set; } = null!;
@@ -99,6 +104,8 @@ public static class AppTheme
                 GridLines            = C(55,  55,  62);
                 ButtonSuccess        = C(39,  174, 96);
                 ButtonDanger         = C(192, 57,  43);
+                EditModeBackground   = C(70,  60,  35);
+                CreateModeBackground = C(50,  70,  45);
                 break;
 
             case ThemePreset.Classic:
@@ -121,6 +128,8 @@ public static class AppTheme
                 GridLines            = C(200, 200, 200);
                 ButtonSuccess        = C(0,   128, 0);
                 ButtonDanger         = C(180, 0,   0);
+                EditModeBackground   = C(255, 253, 220);
+                CreateModeBackground = C(220, 255, 220);
                 break;
 
             case ThemePreset.BocceGreen:
@@ -143,6 +152,8 @@ public static class AppTheme
                 GridLines            = C(195, 225, 205);
                 ButtonSuccess        = C(39,  174, 96);
                 ButtonDanger         = C(192, 57,  43);
+                EditModeBackground   = C(255, 253, 235);
+                CreateModeBackground = C(230, 255, 240);
                 break;
 
             case ThemePreset.MidnightBlue:
@@ -165,6 +176,8 @@ public static class AppTheme
                 GridLines            = C(38,  65,  120);
                 ButtonSuccess        = C(0,   180, 160);
                 ButtonDanger         = C(180, 50,  80);
+                EditModeBackground   = C(45,  55,  95);
+                CreateModeBackground = C(35,  65,  50);
                 break;
 
             case ThemePreset.Slate:
@@ -187,6 +200,8 @@ public static class AppTheme
                 GridLines            = C(210, 215, 225);
                 ButtonSuccess        = C(70,  170, 100);
                 ButtonDanger         = C(192, 57,  43);
+                EditModeBackground   = C(255, 250, 215);
+                CreateModeBackground = C(230, 255, 235);
                 break;
 
             case ThemePreset.HighContrast:
@@ -209,6 +224,8 @@ public static class AppTheme
                 GridLines            = C(100, 100, 100);
                 ButtonSuccess        = C(0,   200, 0);
                 ButtonDanger         = C(255, 0,   0);
+                EditModeBackground   = C(255, 255, 0);
+                CreateModeBackground = C(0,   255, 0);
                 break;
 
             default: // Light
@@ -231,6 +248,8 @@ public static class AppTheme
                 GridLines            = C(220, 230, 240);
                 ButtonSuccess        = C(46,  204, 113);
                 ButtonDanger         = C(231, 76,  60);
+                EditModeBackground   = C(255, 254, 230);
+                CreateModeBackground = C(230, 255, 235);
                 break;
         }
 
@@ -239,8 +258,8 @@ public static class AppTheme
         FontSmall          = new Font(family, 9f);
         FontSmallBold      = new Font(family, 9.5f, FontStyle.Bold);
         FontButton         = new Font(family, 9.5f);
-        FontNavItem        = new Font(family, 10f);
-        FontNavHeader      = new Font(family, 7.5f, FontStyle.Bold);
+        FontNavHeader      = new Font(family, 12f, FontStyle.Bold);
+        FontNavItem        = new Font(family, 10.5f);
         FontNavTitle       = new Font(family, 13f,  FontStyle.Bold);
         FontPageTitle      = new Font(family, 28f,  FontStyle.Bold);
         FontPageSubtitle   = new Font(family, 13f);

@@ -8,8 +8,9 @@ namespace BocceManager.Panels;
 
 public class DivisionPanel : UserControl
 {
+    private enum DivisionMode { View, Edit, Create }
+    private DivisionMode _divisionMode = DivisionMode.View;
     private bool _isLoadingData = false;
-    private bool _isEditMode = false;
 
     // ── State ────────────────────────────────────────────────────────────────
     private int? _selectedLeagueId;
@@ -23,6 +24,7 @@ public class DivisionPanel : UserControl
     private ComboBox _leagueCombo   = null!;
     private ComboBox _seasonCombo   = null!;
     private ComboBox _divisionCombo = null!;
+    private TabControl _tabs = null!;
 
     // ── Editor tab ───────────────────────────────────────────────────────────
     private TextBox       _txtName       = null!;
@@ -44,9 +46,12 @@ public class DivisionPanel : UserControl
     private Label        _lblTeamTitle   = null!;
     private ComboBox     _cmbCaptain     = null!;
     private Button       _btnAddTeam     = null!;
+    private Button       _btnBuildTeams  = null!;
     private Button       _btnDeleteTeam  = null!;
+    private Button       _btnDeleteAllTeams = null!;
     private Button       _btnAddPlayer   = null!;
     private Button       _btnRemovePlayer = null!;
+    private Button       _btnDeleteAllPlayers = null!;
 
     // ── Shared toolbar ───────────────────────────────────────────────────────
     private Button _btnEdit   = null!;
@@ -137,11 +142,11 @@ public class DivisionPanel : UserControl
 
     private TabControl BuildTabs()
     {
-        var tabs = new TabControl { Dock = DockStyle.Fill, Font = AppTheme.FontDefault, Padding = new Point(16, 6) };
-        tabs.TabPages.Add(BuildEditorTab());
-        tabs.TabPages.Add(BuildParametersTab());
-        tabs.TabPages.Add(BuildTeamsTab());
-        return tabs;
+        _tabs = new TabControl { Dock = DockStyle.Fill, Font = AppTheme.FontDefault, Padding = new Point(16, 6) };
+        _tabs.TabPages.Add(BuildEditorTab());
+        _tabs.TabPages.Add(BuildParametersTab());
+        _tabs.TabPages.Add(BuildTeamsTab());
+        return _tabs;
     }
 
     // ── Editor Tab ───────────────────────────────────────────────────────────
@@ -321,7 +326,15 @@ public class DivisionPanel : UserControl
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
         };
         _btnRemovePlayer.Click += (_, _) => RemovePlayerFromTeam();
-        playerBtns.Controls.AddRange([_btnAddPlayer, _btnRemovePlayer]);
+
+        _btnDeleteAllPlayers = new Button
+        {
+            Text = "Delete All Players", Location = new Point(8, 76), Size = new Size(132, 30),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
+        };
+        _btnDeleteAllPlayers.Click += (_, _) => DeleteAllPlayersFromTeam();
+        playerBtns.Controls.AddRange([_btnAddPlayer, _btnRemovePlayer, _btnDeleteAllPlayers]);
 
         _lblTeamTitle = new Label { Dock = DockStyle.Top, Height = 28, Font = AppTheme.FontSectionHeading, ForeColor = AppTheme.Accent, Text = "Players  —  select a team above", Padding = new Padding(2, 4, 0, 0) };
 
@@ -343,21 +356,37 @@ public class DivisionPanel : UserControl
         };
         _btnAddTeam.Click += (_, _) => AddTeam();
 
+        _btnBuildTeams = new Button
+        {
+            Text = "Create All Teams", Location = new Point(144, 8), Size = new Size(130, 30),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
+        };
+        _btnBuildTeams.Click += (_, _) => CreateAllTeams();
+
         _btnDeleteTeam = new Button
         {
-            Text = "Delete Team", Location = new Point(144, 8), Size = new Size(120, 30),
+            Text = "Delete Team", Location = new Point(286, 8), Size = new Size(120, 30),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
         };
         _btnDeleteTeam.Click += (_, _) => DeleteTeam();
 
+        _btnDeleteAllTeams = new Button
+        {
+            Text = "Delete All Teams", Location = new Point(418, 8), Size = new Size(130, 30),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
+        };
+        _btnDeleteAllTeams.Click += (_, _) => DeleteAllTeams();
+
         var teamHint = new Label
         {
             Text = "Teams are lettered A, B, C… automatically. Deleting re-sequences the remaining teams.",
-            Location = new Point(278, 16), AutoSize = true,
+            Location = new Point(562, 16), AutoSize = true,
             Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted
         };
-        teamToolbar.Controls.AddRange([_btnAddTeam, _btnDeleteTeam, teamHint]);
+        teamToolbar.Controls.AddRange([_btnAddTeam, _btnBuildTeams, _btnDeleteTeam, _btnDeleteAllTeams, teamHint]);
 
         // Build the tab content: grid + player panel + splitter + toolbar (all bottom-docked except grid)
         // Dock order: Fill first, then bottom items in reverse visual order
@@ -544,6 +573,7 @@ public class DivisionPanel : UserControl
         if (_seasonCombo.SelectedItem is IntItem item)
         {
             _selectedSeasonId = item.Id;
+            LoadSlotCombos();
             LoadDivisionList(item.Id);
             // Update default season only if user selected (not during data load)
             if (!_isLoadingData)
@@ -592,9 +622,22 @@ public class DivisionPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
-            foreach (var d in db.DaySlots.Where(d => d.IsActive).OrderBy(d => d.DayNbr).ToList())
+            IQueryable<DaySlot>  daysQuery  = db.DaySlots.Where(d => d.IsActive);
+            IQueryable<TimeSlot> timesQuery = db.TimeSlots.Where(t => t.IsActive);
+
+            if (_selectedSeasonId.HasValue)
+            {
+                var dayIds  = db.SeasonDaySlots.Where(s => s.SeasonId == _selectedSeasonId.Value)
+                                               .Select(s => s.DaySlotId).ToList();
+                var timeIds = db.SeasonTimeSlots.Where(s => s.SeasonId == _selectedSeasonId.Value)
+                                                .Select(s => s.TimeSlotId).ToList();
+                if (dayIds.Count  > 0) daysQuery  = daysQuery.Where(d => dayIds.Contains(d.Id));
+                if (timeIds.Count > 0) timesQuery = timesQuery.Where(t => timeIds.Contains(t.Id));
+            }
+
+            foreach (var d in daysQuery.OrderBy(d => d.DayNbr).ToList())
                 _cmbDay.Items.Add(new SlotItem(d.Id, d.DayName));
-            foreach (var t in db.TimeSlots.Where(t => t.IsActive).OrderBy(t => t.SortOrder).ToList())
+            foreach (var t in timesQuery.OrderBy(t => t.SortOrder).ToList())
                 _cmbTime.Items.Add(new SlotItem(t.Id, t.Timeslot12h));
         }
         catch { }
@@ -607,7 +650,6 @@ public class DivisionPanel : UserControl
     private void LoadDivision(int divisionId)
     {
         _selectedDivisionId = divisionId;
-        _isEditMode = false;
 
         try
         {
@@ -661,7 +703,8 @@ public class DivisionPanel : UserControl
         _currentTeamId = null;
         LoadTeams(divisionId);
         ClearPlayersPanel();
-        SetEditModeUI(false);  // Start in read-only mode
+        _divisionMode = DivisionMode.View;
+        SetEditModeUI();  // Start in read-only mode
     }
 
     private void ClearEditor()
@@ -727,6 +770,8 @@ public class DivisionPanel : UserControl
         _divisionCombo.SelectedIndex = -1;
         _divisionCombo.SelectedIndexChanged += OnDivisionSelected;
         ClearEditor();
+        _divisionMode = DivisionMode.Create;
+        SetEditModeUI();
         _txtName.Focus();
     }
 
@@ -735,43 +780,82 @@ public class DivisionPanel : UserControl
     private void EnterEditMode()
     {
         if (_selectedDivisionId == null) return;
-        _isEditMode = true;
-        SetEditModeUI(true);
+        _divisionMode = DivisionMode.Edit;
+        SetEditModeUI();
     }
 
     private void ExitEditMode()
     {
-        _isEditMode = false;
-        SetEditModeUI(false);
+        _divisionMode = DivisionMode.View;
+        SetEditModeUI();
         // Reload to discard changes
         if (_selectedDivisionId.HasValue)
             LoadDivision(_selectedDivisionId.Value);
     }
 
-    private void SetEditModeUI(bool editMode)
+    private void SetControlBackgroundRecursive(Control parent, Color bgColor)
     {
+        foreach (Control ctrl in parent.Controls)
+        {
+            // Set background for panels and groupboxes
+            if (ctrl is Panel or GroupBox)
+            {
+                ctrl.BackColor = bgColor;
+                SetControlBackgroundRecursive(ctrl, bgColor);
+            }
+            else if (ctrl.HasChildren)
+            {
+                SetControlBackgroundRecursive(ctrl, bgColor);
+            }
+        }
+    }
+
+    private void SetEditModeUI()
+    {
+        bool isEditMode = _divisionMode == DivisionMode.Edit;
+        bool isCreateMode = _divisionMode == DivisionMode.Create;
+
+        // Change tab container and pages background color based on mode
+        Color bgColor = isCreateMode ? AppTheme.CreateModeBackground
+                      : isEditMode ? AppTheme.EditModeBackground
+                      : AppTheme.ContentBackground;
+
+        _tabs.BackColor = bgColor;
+        foreach (TabPage page in _tabs.TabPages)
+        {
+            page.BackColor = bgColor;
+            SetControlBackgroundRecursive(page, bgColor);
+        }
+
         // Division name is always read-only (calculated from Day + Time)
         _txtName.ReadOnly = true;
 
-        // Other controls editable in edit mode
-        _cmbDay.Enabled = editMode;
-        _cmbTime.Enabled = editMode;
-        _chkActive.Enabled = editMode;
-        _numTeamsInDiv.ReadOnly = !editMode;
-        _numPlayersMin.ReadOnly = !editMode;
-        _numPlayersMax.ReadOnly = !editMode;
+        // Other controls editable in edit/create mode
+        _cmbDay.Enabled = isEditMode || isCreateMode;
+        _cmbTime.Enabled = isEditMode || isCreateMode;
+        _chkActive.Enabled = isEditMode || isCreateMode;
+        _numTeamsInDiv.Enabled = isEditMode || isCreateMode;
+        _numPlayersMin.Enabled = isEditMode || isCreateMode;
+        _numPlayersMax.Enabled = isEditMode || isCreateMode;
 
-        // Button visibility: Edit/Delete in view mode, Save/Cancel in edit mode
-        _btnEdit.Visible = !editMode && _selectedDivisionId.HasValue;
-        _btnDelete.Visible = !editMode && _selectedDivisionId.HasValue;
-        _btnSave.Visible = editMode;
-        _btnCancel.Visible = editMode;
+        // Button visibility: Edit/Delete in view mode, Save/Cancel in edit/create mode
+        _btnEdit.Visible = !isEditMode && !isCreateMode && _selectedDivisionId.HasValue;
+        _btnDelete.Visible = !isEditMode && !isCreateMode && _selectedDivisionId.HasValue;
+        _btnSave.Visible = isEditMode || isCreateMode;
+        _btnCancel.Visible = isEditMode || isCreateMode;
 
-        // Teams/Players editing only in view mode
-        _btnAddTeam.Enabled = !editMode && _selectedDivisionId.HasValue;
-        _btnDeleteTeam.Enabled = !editMode && _currentTeamId.HasValue;
-        _btnAddPlayer.Enabled = !editMode && _currentTeamId.HasValue;
-        _btnRemovePlayer.Enabled = !editMode && _playersGrid.SelectedRows.Count > 0;
+        // Teams/Players editing only in edit/create mode
+        _btnAddTeam.Enabled = (isEditMode || isCreateMode) && _selectedDivisionId.HasValue;
+        _btnBuildTeams.Enabled = (isEditMode || isCreateMode) && _selectedDivisionId.HasValue;
+        _btnDeleteTeam.Enabled = (isEditMode || isCreateMode) && _currentTeamId.HasValue;
+        _btnDeleteAllTeams.Enabled = (isEditMode || isCreateMode) && _selectedDivisionId.HasValue;
+        _btnAddPlayer.Enabled = (isEditMode || isCreateMode) && _currentTeamId.HasValue;
+        _btnRemovePlayer.Enabled = (isEditMode || isCreateMode) && _playersGrid.SelectedRows.Count > 0;
+        _btnDeleteAllPlayers.Enabled = (isEditMode || isCreateMode) && _currentTeamId.HasValue;
+
+        // Teams grid Active column and captain dropdown read-only in view mode
+        _teamsGrid.Columns["TmActive"].ReadOnly = !isEditMode && !isCreateMode;
+        _cmbCaptain.Enabled = (isEditMode || isCreateMode) && _currentTeamId.HasValue;
     }
 
     // ── Save ──────────────────────────────────────────────────────────────────
@@ -930,6 +1014,8 @@ public class DivisionPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
+            var (minPlayers, maxPlayers) = ResolvePlayerLimits();
+
             var teams = db.Teams
                 .Where(t => t.DivisionId == divisionId)
                 .OrderBy(t => t.TeamLetter)
@@ -938,12 +1024,23 @@ public class DivisionPanel : UserControl
                     t.Id, t.TeamLetter, t.SystemName,
                     Display  = t.DisplayName ?? t.SystemName,
                     Captain  = t.Captain != null ? t.Captain.LastName + ", " + t.Captain.FirstName : "",
-                    Players  = db.TeamPlayers.Count(tp => tp.TeamId == t.Id),
+                    PlayerCount = db.TeamPlayers.Count(tp => tp.TeamId == t.Id),
                     t.IsActive
                 }).ToList();
 
             foreach (var t in teams)
-                _teamsGrid.Rows.Add(t.Id, t.TeamLetter, t.SystemName, t.Display, t.Captain, t.Players, t.IsActive);
+            {
+                // Show players as "current/max" or just count if max not set
+                string playerDisplay = maxPlayers > 0
+                    ? $"{t.PlayerCount}/{maxPlayers}"
+                    : t.PlayerCount.ToString();
+
+                // If below minimum, add indicator
+                if (minPlayers > 0 && t.PlayerCount < minPlayers)
+                    playerDisplay += " ⚠";
+
+                _teamsGrid.Rows.Add(t.Id, t.TeamLetter, t.SystemName, t.Display, t.Captain, playerDisplay, t.IsActive);
+            }
             _teamsGrid.ClearSelection();
         }
         catch { }
@@ -956,21 +1053,18 @@ public class DivisionPanel : UserControl
         if (_teamsGrid.SelectedRows.Count == 0)
         {
             _currentTeamId = null;
-            _btnDeleteTeam.Enabled   = false;
-            _btnAddPlayer.Enabled    = false;
-            _btnRemovePlayer.Enabled = false;
             ClearPlayersPanel();
+            SetEditModeUI();
             return;
         }
         var row = _teamsGrid.SelectedRows[0];
         if (row.Cells["TmId"].Value == null) return;
         _currentTeamId = Convert.ToInt32(row.Cells["TmId"].Value);
-        _btnDeleteTeam.Enabled   = true;
-        _btnAddPlayer.Enabled    = _selectedDivisionId.HasValue;
         _btnRemovePlayer.Enabled = false;
         string displayName = row.Cells["TmDisplay"].Value?.ToString() ?? "";
         _lblTeamTitle.Text = $"Players  —  Team {displayName}";
         LoadPlayersForTeam(_currentTeamId.Value);
+        SetEditModeUI();
     }
 
     private void OnTeamCellClick(object? sender, DataGridViewCellEventArgs e)
@@ -1012,6 +1106,28 @@ public class DivisionPanel : UserControl
             return league?.MaxTeamsInDivision ?? 0;
         }
         catch { return 0; }
+    }
+
+    private (int min, int max) ResolvePlayerLimits()
+    {
+        if (!_selectedDivisionId.HasValue) return (0, 0);
+        try
+        {
+            using var db = new BocceDbContext();
+            var div = db.Divisions.Include(d => d.Season).FirstOrDefault(d => d.Id == _selectedDivisionId.Value);
+            if (div == null) return (0, 0);
+
+            int min = (div.PlayersPerTeamMinimum ?? 0) > 0
+                ? div.PlayersPerTeamMinimum.Value
+                : (div.Season?.PlayersPerTeamMinimum ?? 0);
+
+            int max = (div.PlayersPerTeamMaximum ?? 0) > 0
+                ? div.PlayersPerTeamMaximum.Value
+                : (div.Season?.PlayersPerTeamMaximum ?? 0);
+
+            return (min, max);
+        }
+        catch { return (0, 0); }
     }
 
     private void AddTeam()
@@ -1063,6 +1179,71 @@ public class DivisionPanel : UserControl
         LoadTeams(divId);
     }
 
+    private void CreateAllTeams()
+    {
+        if (!_selectedDivisionId.HasValue) return;
+        int divId = _selectedDivisionId.Value;
+
+        try
+        {
+            using var db = new BocceDbContext();
+            var div = db.Divisions.Find(divId);
+            if (div == null) return;
+
+            int maxTeams = ResolveMaxTeams();
+            if (maxTeams == 0)
+            {
+                MessageBox.Show(
+                    "Cannot create teams: Max teams is not configured.\n\n" +
+                    "Set \"Teams in Division\" on the Parameters tab or configure season/league defaults.",
+                    "Configuration Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            int currentCount = db.Teams.Count(t => t.DivisionId == divId && !t.IsByeTeam);
+            if (currentCount >= maxTeams)
+            {
+                MessageBox.Show(
+                    $"Division already has {maxTeams} team(s) (maximum reached).",
+                    "Already at Maximum", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var existing = db.Teams.Where(t => t.DivisionId == divId && !t.IsByeTeam)
+                .OrderBy(t => t.TeamLetter).ToList();
+            char nextLetter = existing.Count > 0
+                ? (char)(existing.Max(t => string.IsNullOrEmpty(t.TeamLetter) ? 'A' - 1 : t.TeamLetter[0]) + 1)
+                : 'A';
+
+            int toCreate = maxTeams - currentCount;
+            for (int i = 0; i < toCreate; i++)
+            {
+                db.Teams.Add(new Team
+                {
+                    DivisionId  = divId,
+                    TeamLetter  = nextLetter.ToString(),
+                    SystemName  = $"{nextLetter}-{div.ShortName}",
+                    DisplayName = null,
+                    IsActive    = true
+                });
+                nextLetter++;
+            }
+            db.SaveChanges();
+
+            MessageBox.Show(
+                $"Created {toCreate} new team(s).\n\n" +
+                $"Division now has {maxTeams} team(s) ready for captain assignment and player additions.",
+                "Teams Created", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not create teams:\n{ex.Message}", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        LoadTeams(divId);
+    }
+
     private void DeleteTeam()
     {
         if (_currentTeamId == null || !_selectedDivisionId.HasValue) return;
@@ -1073,23 +1254,40 @@ public class DivisionPanel : UserControl
             : "";
 
         int playerCount = 0;
-        try { using var db = new BocceDbContext(); playerCount = db.TeamPlayers.Count(tp => tp.TeamId == teamId); }
+        bool hasCaptain = false;
+        try
+        {
+            using var db = new BocceDbContext();
+            playerCount = db.TeamPlayers.Count(tp => tp.TeamId == teamId);
+            var team = db.Teams.Find(teamId);
+            hasCaptain = team?.CaptainPlayerId.HasValue ?? false;
+        }
         catch { }
 
+        // First confirmation: simple yes/no
+        if (MessageBox.Show(
+            $"Are you sure you want to delete team \"{teamName}\"?\n\n" +
+            "This action CANNOT be undone.",
+            "Confirm Delete Team",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+
+        // Second confirmation: show cascade impact details
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"Delete team \"{teamName}\"?");
+        sb.AppendLine("You are about to permanently delete the following:");
+        sb.AppendLine();
         if (playerCount > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine($"  Player assignments removed: {playerCount}");
-            sb.AppendLine();
-            sb.AppendLine("Players are NOT deleted — only their team assignments.");
-        }
+            sb.AppendLine($"  Player assignments removed .......... {playerCount}");
+        if (hasCaptain)
+            sb.AppendLine($"  Captains cleared .................... 1");
+        sb.AppendLine();
+        sb.AppendLine("⚠ Players will NOT be deleted — only their team assignment.");
         sb.AppendLine();
         sb.AppendLine("Remaining teams will be re-lettered (A, B, C…).");
+        sb.AppendLine();
         sb.AppendLine("This cannot be undone. Continue?");
 
-        if (MessageBox.Show(sb.ToString(), "Confirm Delete",
+        if (MessageBox.Show(sb.ToString(), "Confirm Cascade Impact",
             MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
             MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
 
@@ -1113,6 +1311,153 @@ public class DivisionPanel : UserControl
 
         _currentTeamId = null;
         LoadTeams(divId);
+    }
+
+    private void DeleteAllTeams()
+    {
+        if (!_selectedDivisionId.HasValue) return;
+        int divId = _selectedDivisionId.Value;
+
+        int teamCount = 0, playerCount = 0, captainCount = 0;
+        try
+        {
+            using var db = new BocceDbContext();
+            teamCount = db.Teams.Count(t => t.DivisionId == divId && !t.IsByeTeam);
+            playerCount = db.TeamPlayers.Count(tp => tp.Team.DivisionId == divId);
+            captainCount = db.Teams.Count(t => t.DivisionId == divId && t.CaptainPlayerId.HasValue && !t.IsByeTeam);
+        }
+        catch { }
+
+        if (teamCount == 0)
+        {
+            MessageBox.Show("No teams to delete.", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        // First confirmation: simple yes/no
+        if (MessageBox.Show(
+            $"Are you sure you want to permanently delete ALL {teamCount} team(s) in this division?\n\n" +
+            "This action CANNOT be undone.",
+            "Confirm Delete All Teams",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+
+        // Second confirmation: show cascade impact details
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("You are about to permanently delete the following:");
+        sb.AppendLine();
+        sb.AppendLine($"  Teams to be deleted ................. {teamCount}");
+        sb.AppendLine($"  Player assignments removed .......... {playerCount}");
+        sb.AppendLine($"  Captains cleared .................... {captainCount}");
+        sb.AppendLine();
+        sb.AppendLine("⚠ Players will NOT be deleted — only their team assignments.");
+        sb.AppendLine();
+        sb.AppendLine("This cannot be undone. Continue?");
+
+        if (MessageBox.Show(sb.ToString(), "Confirm Cascade Impact",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+
+        try
+        {
+            using var db = new BocceDbContext();
+            var teams = db.Teams
+                .Include(t => t.TeamPlayers)
+                .Where(t => t.DivisionId == divId && !t.IsByeTeam)
+                .ToList();
+
+            foreach (var team in teams)
+                db.TeamPlayers.RemoveRange(team.TeamPlayers);
+
+            db.Teams.RemoveRange(teams);
+            db.SaveChanges();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Delete failed:\n{ex.Message}", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        MessageBox.Show($"Deleted {teamCount} team(s).", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        _currentTeamId = null;
+        LoadTeams(divId);
+    }
+
+    private void DeleteAllPlayersFromTeam()
+    {
+        if (_currentTeamId == null) return;
+        int teamId = _currentTeamId.Value;
+
+        int playerCount = 0;
+        bool hasCaptain = false;
+        try
+        {
+            using var db = new BocceDbContext();
+            playerCount = db.TeamPlayers.Count(tp => tp.TeamId == teamId);
+            var team = db.Teams.Find(teamId);
+            hasCaptain = team?.CaptainPlayerId.HasValue ?? false;
+        }
+        catch { }
+
+        if (playerCount == 0)
+        {
+            MessageBox.Show("No players on this team.", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var teamName = _teamsGrid.SelectedRows.Count > 0
+            ? (_teamsGrid.SelectedRows[0].Cells["TmDisplay"].Value?.ToString() ?? "")
+            : "";
+
+        // First confirmation: simple yes/no
+        if (MessageBox.Show(
+            $"Are you sure you want to remove all {playerCount} player(s) from {teamName}?\n\n" +
+            "This action CANNOT be undone.",
+            "Confirm Remove All Players",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+
+        // Second confirmation: show cascade impact details
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("You are about to permanently remove the following:");
+        sb.AppendLine();
+        sb.AppendLine($"  Player assignments removed .......... {playerCount}");
+        if (hasCaptain)
+            sb.AppendLine($"  Captains cleared .................... 1");
+        sb.AppendLine();
+        sb.AppendLine("⚠ Players will NOT be deleted — only their team assignment.");
+        sb.AppendLine();
+        sb.AppendLine("This cannot be undone. Continue?");
+
+        if (MessageBox.Show(sb.ToString(), "Confirm Cascade Impact",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+
+        try
+        {
+            using var db = new BocceDbContext();
+            var players = db.TeamPlayers.Where(tp => tp.TeamId == teamId).ToList();
+            db.TeamPlayers.RemoveRange(players);
+
+            // Clear captain assignment
+            var team = db.Teams.Find(teamId);
+            if (team != null)
+            {
+                team.CaptainPlayerId = null;
+                team.DisplayName = null;
+            }
+
+            db.SaveChanges();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Remove failed:\n{ex.Message}", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        MessageBox.Show($"Removed all players from {teamName}.", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        LoadPlayersForTeam(teamId);
+        if (_selectedDivisionId.HasValue) LoadTeams(_selectedDivisionId.Value);
     }
 
     private void ResequenceTeams(int divisionId, BocceDbContext db)
@@ -1174,7 +1519,6 @@ public class DivisionPanel : UserControl
         _cmbCaptain.SelectedIndexChanged -= OnCaptainChanged;
         _cmbCaptain.Items.Clear();
         foreach (var item in playerItems) _cmbCaptain.Items.Add(item);
-        _cmbCaptain.Enabled = playerItems.Count > 1;
         _cmbCaptain.SelectedIndex = 0;
         if (captainId.HasValue)
             for (int i = 0; i < _cmbCaptain.Items.Count; i++)
@@ -1199,30 +1543,114 @@ public class DivisionPanel : UserControl
 
     private void AddPlayerToTeam()
     {
-        if (_currentTeamId == null) return;
+        if (_currentTeamId == null || !_selectedDivisionId.HasValue) return;
         int teamId = _currentTeamId.Value;
+        int divisionId = _selectedDivisionId.Value;
 
-        var existing = new HashSet<int>();
-        try
-        {
-            using var db = new BocceDbContext();
-            existing = db.TeamPlayers.Where(tp => tp.TeamId == teamId).Select(tp => tp.PlayerId).ToHashSet();
-        }
-        catch { }
-
-        var playerIds = PickPlayersMultiple(existing);
-        if (playerIds.Count == 0) return;
+        // Get max players limit upfront
+        int currentPlayerCount = 0;
+        int maxPlayersPerTeam = 0;
 
         try
         {
             using var db = new BocceDbContext();
-            int count = 0;
-            foreach (var playerId in playerIds)
+            var team = db.Teams.Find(teamId);
+            var division = db.Divisions.Include(d => d.Season).FirstOrDefault(d => d.Id == divisionId);
+            if (team == null || division == null) return;
+
+            currentPlayerCount = db.TeamPlayers.Count(tp => tp.TeamId == teamId);
+            maxPlayersPerTeam = (division.PlayersPerTeamMaximum ?? 0) > 0
+                ? division.PlayersPerTeamMaximum.Value
+                : (division.Season?.PlayersPerTeamMaximum ?? 0);
+
+            if (maxPlayersPerTeam == 0)
             {
-                // Check if player not already on team
-                var alreadyOnTeam = db.TeamPlayers.Any(tp => tp.TeamId == teamId && tp.PlayerId == playerId);
-                if (!alreadyOnTeam)
+                MessageBox.Show(
+                    "Cannot add players: Max players per team is not configured.\n\n" +
+                    "Set a value in Division Parameters or Season Parameters.",
+                    "Configuration Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            int availableSlots = maxPlayersPerTeam - currentPlayerCount;
+            if (availableSlots <= 0)
+            {
+                MessageBox.Show(
+                    $"This team is at maximum capacity ({maxPlayersPerTeam} players).\n\n" +
+                    "Remove players before adding new ones.",
+                    "Team at Capacity", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+        }
+        catch { return; }
+
+        // Loop picker until valid selection is made
+        while (true)
+        {
+            var excludeIds = new HashSet<int>();
+            try
+            {
+                using var db = new BocceDbContext();
+                // Exclude players already on ANY team in this division
+                excludeIds = db.TeamPlayers
+                    .Where(tp => tp.Team.DivisionId == divisionId)
+                    .Select(tp => tp.PlayerId)
+                    .ToHashSet();
+            }
+            catch { }
+
+            var playerIds = PickPlayersMultiple(excludeIds);
+            if (playerIds.Count == 0) return;
+
+            int availableSlots = maxPlayersPerTeam - currentPlayerCount;
+
+            // Validate selection
+            if (playerIds.Count > availableSlots)
+            {
+                MessageBox.Show(
+                    $"You selected {playerIds.Count} player(s) but only {availableSlots} slot(s) are available.\n\n" +
+                    $"Team max: {maxPlayersPerTeam}  |  Current: {currentPlayerCount}  |  Available: {availableSlots}\n\n" +
+                    $"Please deselect {playerIds.Count - availableSlots} player(s) and try again.",
+                    "Selection Exceeds Capacity", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                continue; // Loop back to picker
+            }
+
+            // Valid selection - proceed with adding players
+            try
+            {
+                using var db = new BocceDbContext();
+                int count = 0;
+                var skipped = new List<string>();
+
+                foreach (var playerId in playerIds)
                 {
+                    // Check if player already on this team
+                    var alreadyOnThisTeam = db.TeamPlayers.Any(tp => tp.TeamId == teamId && tp.PlayerId == playerId);
+                    if (alreadyOnThisTeam) continue;
+
+                    // Check if player already on another team in this division (should not happen due to picker, but validate)
+                    var alreadyInDivision = db.TeamPlayers
+                        .Any(tp => tp.Team.DivisionId == divisionId && tp.PlayerId == playerId);
+                    if (alreadyInDivision)
+                    {
+                        var player = db.Players.Find(playerId);
+                        skipped.Add(player?.FullName ?? $"Player {playerId}");
+                        continue;
+                    }
+
+                    // Check if player would exceed team limit (3 teams max in league)
+                    var teamCountInLeague = db.TeamPlayers
+                        .Where(tp => tp.PlayerId == playerId && tp.Team.Division.Season.LeagueId == _selectedLeagueId)
+                        .Select(tp => tp.TeamId)
+                        .Distinct()
+                        .Count();
+                    if (teamCountInLeague >= 3)
+                    {
+                        var player = db.Players.Find(playerId);
+                        skipped.Add($"{player?.FullName ?? $"Player {playerId}"} (already on 3 teams)");
+                        continue;
+                    }
+
                     db.TeamPlayers.Add(new TeamPlayer
                     {
                         TeamId    = teamId,
@@ -1232,18 +1660,23 @@ public class DivisionPanel : UserControl
                     });
                     count++;
                 }
+
+                if (count > 0) db.SaveChanges();
+
+                var msg2 = $"Added {count} player(s) to team.\n\nTeam now has {currentPlayerCount + count}/{maxPlayersPerTeam} players.";
+                if (skipped.Count > 0)
+                    msg2 += $"\n\nSkipped {skipped.Count}:\n  • " + string.Join("\n  • ", skipped);
+
+                MessageBox.Show(msg2, count > 0 ? "Success" : "Info", MessageBoxButtons.OK,
+                    count > 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+                break; // Exit loop after successful add
             }
-            if (count > 0)
+            catch (Exception ex)
             {
-                db.SaveChanges();
-                MessageBox.Show($"Added {count} player(s) to team.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show($"Could not add player(s):\n{ex.Message}", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
             }
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Could not add player(s):\n{ex.Message}", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return;
-        }
+        } // Close while loop
 
         LoadPlayersForTeam(teamId);
         if (_selectedDivisionId.HasValue) LoadTeams(_selectedDivisionId.Value);
@@ -1297,6 +1730,34 @@ public class DivisionPanel : UserControl
         if (_currentTeamId == null) return;
         int teamId   = _currentTeamId.Value;
         int playerId = _cmbCaptain.SelectedItem is IntItem ci ? ci.Id : 0;
+
+        if (playerId > 0)
+        {
+            // Check if player is already captain of another team in this league
+            try
+            {
+                using var db = new BocceDbContext();
+                var team = db.Teams.Find(teamId);
+                if (team == null) return;
+
+                var otherCaptaincy = db.Teams
+                    .Where(t => t.Division.Season.LeagueId == team.Division.Season.LeagueId
+                             && t.Id != teamId
+                             && t.CaptainPlayerId == playerId)
+                    .Select(t => t.DisplayName ?? t.SystemName)
+                    .FirstOrDefault();
+
+                if (otherCaptaincy != null)
+                {
+                    MessageBox.Show(
+                        $"This player is already captain of: {otherCaptaincy}\n\nA player can only be captain of one team.",
+                        "Captain Already Assigned", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _cmbCaptain.SelectedIndex = 0; // Reset to "(none)"
+                    return;
+                }
+            }
+            catch { }
+        }
 
         try
         {
