@@ -9,6 +9,7 @@ namespace BocceManager.Panels;
 public class DivisionPanel : UserControl
 {
     private bool _isLoadingData = false;
+    private bool _isEditMode = false;
 
     // ── State ────────────────────────────────────────────────────────────────
     private int? _selectedLeagueId;
@@ -48,8 +49,10 @@ public class DivisionPanel : UserControl
     private Button       _btnRemovePlayer = null!;
 
     // ── Shared toolbar ───────────────────────────────────────────────────────
+    private Button _btnEdit   = null!;
     private Button _btnSave   = null!;
     private Button _btnDelete = null!;
+    private Button _btnCancel = null!;
 
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -378,13 +381,33 @@ public class DivisionPanel : UserControl
             BackColor = AppTheme.Surface, Padding = new Padding(12, 10, 12, 10)
         };
 
+        _btnEdit = new Button
+        {
+            Text = "✎ Edit", Location = new Point(12, 10), Size = new Size(100, 32),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
+            Visible = false
+        };
+        _btnEdit.Click += (_, _) => EnterEditMode();
+
         _btnSave = new Button
         {
             Text = "Save Division", Location = new Point(12, 10), Size = new Size(130, 32),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
+            Visible = false
         };
         _btnSave.Click += (_, _) => SaveDivision();
+
+        _btnCancel = new Button
+        {
+            Text = "Cancel", Location = new Point(150, 10), Size = new Size(100, 32),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand,
+            FlatAppearance = { BorderSize = 1, BorderColor = AppTheme.Separator },
+            Visible = false
+        };
+        _btnCancel.Click += (_, _) => ExitEditMode();
 
         _btnDelete = new Button
         {
@@ -395,7 +418,7 @@ public class DivisionPanel : UserControl
         };
         _btnDelete.Click += (_, _) => DeleteDivision();
 
-        toolbar.Controls.AddRange([_btnSave, _btnDelete]);
+        toolbar.Controls.AddRange([_btnEdit, _btnSave, _btnCancel, _btnDelete]);
         return toolbar;
     }
 
@@ -584,6 +607,8 @@ public class DivisionPanel : UserControl
     private void LoadDivision(int divisionId)
     {
         _selectedDivisionId = divisionId;
+        _isEditMode = false;
+
         try
         {
             using var db = new BocceDbContext();
@@ -592,6 +617,10 @@ public class DivisionPanel : UserControl
                 .Include(x => x.TimeSlot)
                 .FirstOrDefault(x => x.Id == divisionId);
             if (d == null) return;
+
+            var season = db.Seasons
+                .Include(x => x.League)
+                .FirstOrDefault(x => x.Id == d.SeasonId);
 
             _txtName.Text    = d.Name;
             _chkActive.Checked = d.IsActive;
@@ -618,20 +647,21 @@ public class DivisionPanel : UserControl
             _lblSystemName.Text = d.ShortName;
             _lblSortKey.Text    = d.SortName;
 
-            _numTeamsInDiv.Value = d.TeamsInDivision;
-            _numPlayersMin.Value = d.PlayersPerTeamMinimum ?? 0;
-            _numPlayersMax.Value = d.PlayersPerTeamMaximum ?? 0;
+            // Handle parameter inheritance: Division inherits from Season
+            int teamsInDiv = d.TeamsInDivision > 0 ? d.TeamsInDivision : (season?.MaxTeamsInDivision ?? 0);
+            int playersMin = (d.PlayersPerTeamMinimum ?? 0) > 0 ? (d.PlayersPerTeamMinimum ?? 0) : (season?.PlayersPerTeamMinimum ?? 0);
+            int playersMax = (d.PlayersPerTeamMaximum ?? 0) > 0 ? (d.PlayersPerTeamMaximum ?? 0) : (season?.PlayersPerTeamMaximum ?? 0);
+
+            _numTeamsInDiv.Value = teamsInDiv;
+            _numPlayersMin.Value = playersMin;
+            _numPlayersMax.Value = playersMax;
         }
         catch { }
 
-        _btnDelete.Enabled  = true;
-        _btnAddTeam.Enabled = true;
         _currentTeamId = null;
-        _btnDeleteTeam.Enabled   = false;
-        _btnAddPlayer.Enabled    = false;
-        _btnRemovePlayer.Enabled = false;
         LoadTeams(divisionId);
         ClearPlayersPanel();
+        SetEditModeUI(false);  // Start in read-only mode
     }
 
     private void ClearEditor()
@@ -703,6 +733,48 @@ public class DivisionPanel : UserControl
         _txtName.Focus();
     }
 
+    // ── Edit Mode ─────────────────────────────────────────────────────────────
+
+    private void EnterEditMode()
+    {
+        if (_selectedDivisionId == null) return;
+        _isEditMode = true;
+        SetEditModeUI(true);
+    }
+
+    private void ExitEditMode()
+    {
+        _isEditMode = false;
+        SetEditModeUI(false);
+        // Reload to discard changes
+        if (_selectedDivisionId.HasValue)
+            LoadDivision(_selectedDivisionId.Value);
+    }
+
+    private void SetEditModeUI(bool editMode)
+    {
+        // Controls editable in edit mode
+        _txtName.ReadOnly = !editMode;
+        _cmbDay.Enabled = editMode;
+        _cmbTime.Enabled = editMode;
+        _chkActive.Enabled = editMode;
+        _numTeamsInDiv.ReadOnly = !editMode;
+        _numPlayersMin.ReadOnly = !editMode;
+        _numPlayersMax.ReadOnly = !editMode;
+
+        // Button visibility
+        _btnEdit.Visible = !editMode && _selectedDivisionId.HasValue;
+        _btnSave.Visible = editMode;
+        _btnCancel.Visible = editMode;
+        _btnDelete.Enabled = !editMode && _selectedDivisionId.HasValue;
+
+        // Teams/Players editing only in view mode
+        _btnAddTeam.Enabled = !editMode && _selectedDivisionId.HasValue;
+        _btnDeleteTeam.Enabled = !editMode && _currentTeamId.HasValue;
+        _btnAddPlayer.Enabled = !editMode && _currentTeamId.HasValue;
+        _btnRemovePlayer.Enabled = !editMode && _playersGrid.SelectedRows.Count > 0;
+    }
+
     // ── Save ──────────────────────────────────────────────────────────────────
 
     private void SaveDivision()
@@ -760,9 +832,10 @@ public class DivisionPanel : UserControl
 
             div.Name     = name;
             div.IsActive = _chkActive.Checked;
+            // Save displayed values (which might be inherited from parent)
             div.TeamsInDivision       = (int)_numTeamsInDiv.Value;
-            div.PlayersPerTeamMinimum = _numPlayersMin.Value > 0 ? (int)_numPlayersMin.Value : (int?)null;
-            div.PlayersPerTeamMaximum = _numPlayersMax.Value > 0 ? (int)_numPlayersMax.Value : (int?)null;
+            div.PlayersPerTeamMinimum = (int)_numPlayersMin.Value > 0 ? (int)_numPlayersMin.Value : null;
+            div.PlayersPerTeamMaximum = (int)_numPlayersMax.Value > 0 ? (int)_numPlayersMax.Value : null;
 
             int dayId  = _cmbDay.SelectedItem  is SlotItem dslot ? dslot.Id : 0;
             int timeId = _cmbTime.SelectedItem is SlotItem tslot ? tslot.Id : 0;
