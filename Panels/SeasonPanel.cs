@@ -9,6 +9,7 @@ namespace BocceManager.Panels;
 public class SeasonPanel : UserControl
 {
     private bool _isLoadingData = false;
+    private bool _isEditMode = false;
 
     // ── State ────────────────────────────────────────────────────────────────
     private int? _selectedLeagueId;
@@ -56,8 +57,10 @@ public class SeasonPanel : UserControl
     private ComboBox      _cmbPlayoffScoring    = null!;
     private CheckBox      _chkPlayoffTiebreaker = null!;
 
+    private Button _btnEdit   = null!;
     private Button _btnSave   = null!;
     private Button _btnDelete = null!;
+    private Button _btnCancel = null!;
 
     // ── Divisions tab ─────────────────────────────────────────────────────────
     private DataGridView _divisionsGrid = null!;
@@ -349,24 +352,44 @@ public class SeasonPanel : UserControl
             BackColor = AppTheme.Surface, Padding = new Padding(12, 10, 12, 10)
         };
 
+        _btnEdit = new Button
+        {
+            Text = "Edit Season", Location = new Point(12, 10), Size = new Size(130, 32),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
+            Visible = false
+        };
+        _btnEdit.Click += (_, _) => EnterEditMode();
+
+        _btnDelete = new Button
+        {
+            Text = "Delete Season", Location = new Point(150, 10), Size = new Size(140, 32),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand,
+            FlatAppearance = { BorderSize = 0 }, Enabled = false, Visible = false
+        };
+        _btnDelete.Click += (_, _) => DeleteSeason();
+
         _btnSave = new Button
         {
             Text = "Save Season", Location = new Point(12, 10), Size = new Size(130, 32),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
+            Visible = false
         };
         _btnSave.Click += (_, _) => SaveSeason();
 
-        _btnDelete = new Button
+        _btnCancel = new Button
         {
-            Text = "Delete Season", Location = new Point(160, 10), Size = new Size(130, 32),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
+            Text = "Cancel", Location = new Point(150, 10), Size = new Size(140, 32),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 0 }, Enabled = false
+            FlatAppearance = { BorderSize = 1, BorderColor = AppTheme.Separator },
+            Visible = false
         };
-        _btnDelete.Click += (_, _) => DeleteSeason();
+        _btnCancel.Click += (_, _) => ExitEditMode();
 
-        toolbar.Controls.AddRange([_btnSave, _btnDelete]);
+        toolbar.Controls.AddRange([_btnEdit, _btnDelete, _btnSave, _btnCancel]);
         return toolbar;
     }
 
@@ -664,6 +687,8 @@ public class SeasonPanel : UserControl
     {
         _selectedSeasonId = seasonId;
         _isCopied = false; _copySourceId = null;
+        _isEditMode = false;
+
         try
         {
             using var db = new BocceDbContext();
@@ -706,9 +731,9 @@ public class SeasonPanel : UserControl
         }
         catch { }
 
-        _btnDelete.Enabled = true;
         LoadDivisions(seasonId);
         LoadSlotsFromDivisions(seasonId);
+        SetEditModeUI(false);  // Start in read-only mode
     }
 
     private void ClearEditor()
@@ -885,6 +910,56 @@ public class SeasonPanel : UserControl
 
     // ── Save ──────────────────────────────────────────────────────────────────
 
+    // ── Edit Mode ─────────────────────────────────────────────────────────────
+
+    private void EnterEditMode()
+    {
+        if (_selectedSeasonId == null) return;
+        _isEditMode = true;
+        SetEditModeUI(true);
+    }
+
+    private void ExitEditMode()
+    {
+        _isEditMode = false;
+        SetEditModeUI(false);
+        // Reload to discard changes
+        if (_selectedSeasonId.HasValue)
+            LoadSeason(_selectedSeasonId.Value);
+    }
+
+    private void SetEditModeUI(bool editMode)
+    {
+        // Controls editable in edit mode
+        _txtName.ReadOnly = !editMode;
+        _dtpStartDate.Enabled = editMode;
+        _numWeeks.ReadOnly = !editMode;
+        _numGamesPerSeason.ReadOnly = !editMode;
+        _dtpPlayoffStart.Enabled = editMode;
+        _chkIsCurrent.Enabled = editMode;
+        _chkActive.Enabled = editMode;
+        _numMaxTeamsDiv.ReadOnly = !editMode;
+        _cmbGameInterval.Enabled = editMode;
+        _chkTimeslotDriven.Enabled = editMode;
+        _numPlayersMin.ReadOnly = !editMode;
+        _numPlayersMax.ReadOnly = !editMode;
+        _numPtsWin.ReadOnly = !editMode;
+        _numPtsTie.ReadOnly = !editMode;
+        _numPtsLoss.ReadOnly = !editMode;
+        _numPtsNoShow.ReadOnly = !editMode;
+        _numPtsToWin.ReadOnly = !editMode;
+        _numGamesPerMatch.ReadOnly = !editMode;
+        _cmbScoringMode.Enabled = editMode;
+
+        // Button visibility: Edit/Delete in view mode, Save/Cancel in edit mode
+        _btnEdit.Visible = !editMode && _selectedSeasonId.HasValue;
+        _btnDelete.Visible = !editMode && _selectedSeasonId.HasValue;
+        _btnSave.Visible = editMode;
+        _btnCancel.Visible = editMode;
+    }
+
+    // ── Save ──────────────────────────────────────────────────────────────────
+
     private void SaveSeason()
     {
         var name = _txtName.Text.Trim();
@@ -946,7 +1021,6 @@ public class SeasonPanel : UserControl
         }
 
         _selectedSeasonId  = savedId;
-        _btnDelete.Enabled = true;
 
         string divMsg = "";
         if (isNew)
@@ -965,6 +1039,10 @@ public class SeasonPanel : UserControl
         }
 
         MessageBox.Show("Season saved." + divMsg, "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+        // Exit edit mode and return to view
+        ExitEditMode();
+
         LoadSeasonList(_selectedLeagueId!.Value);
         SelectSeasonInCombo(savedId);
         LoadDivisions(savedId);

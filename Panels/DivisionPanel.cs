@@ -383,12 +383,21 @@ public class DivisionPanel : UserControl
 
         _btnEdit = new Button
         {
-            Text = "✎ Edit", Location = new Point(12, 10), Size = new Size(100, 32),
+            Text = "Edit Division", Location = new Point(12, 10), Size = new Size(130, 32),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
             Visible = false
         };
         _btnEdit.Click += (_, _) => EnterEditMode();
+
+        _btnDelete = new Button
+        {
+            Text = "Delete Division", Location = new Point(150, 10), Size = new Size(140, 32),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand,
+            FlatAppearance = { BorderSize = 0 }, Enabled = false, Visible = false
+        };
+        _btnDelete.Click += (_, _) => DeleteDivision();
 
         _btnSave = new Button
         {
@@ -401,7 +410,7 @@ public class DivisionPanel : UserControl
 
         _btnCancel = new Button
         {
-            Text = "Cancel", Location = new Point(150, 10), Size = new Size(100, 32),
+            Text = "Cancel", Location = new Point(150, 10), Size = new Size(140, 32),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand,
             FlatAppearance = { BorderSize = 1, BorderColor = AppTheme.Separator },
@@ -409,16 +418,7 @@ public class DivisionPanel : UserControl
         };
         _btnCancel.Click += (_, _) => ExitEditMode();
 
-        _btnDelete = new Button
-        {
-            Text = "Delete Division", Location = new Point(160, 10), Size = new Size(140, 32),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 0 }, Enabled = false
-        };
-        _btnDelete.Click += (_, _) => DeleteDivision();
-
-        toolbar.Controls.AddRange([_btnEdit, _btnSave, _btnCancel, _btnDelete]);
+        toolbar.Controls.AddRange([_btnEdit, _btnDelete, _btnSave, _btnCancel]);
         return toolbar;
     }
 
@@ -753,8 +753,10 @@ public class DivisionPanel : UserControl
 
     private void SetEditModeUI(bool editMode)
     {
-        // Controls editable in edit mode
-        _txtName.ReadOnly = !editMode;
+        // Division name is always read-only (calculated from Day + Time)
+        _txtName.ReadOnly = true;
+
+        // Other controls editable in edit mode
         _cmbDay.Enabled = editMode;
         _cmbTime.Enabled = editMode;
         _chkActive.Enabled = editMode;
@@ -762,11 +764,11 @@ public class DivisionPanel : UserControl
         _numPlayersMin.ReadOnly = !editMode;
         _numPlayersMax.ReadOnly = !editMode;
 
-        // Button visibility
+        // Button visibility: Edit/Delete in view mode, Save/Cancel in edit mode
         _btnEdit.Visible = !editMode && _selectedDivisionId.HasValue;
+        _btnDelete.Visible = !editMode && _selectedDivisionId.HasValue;
         _btnSave.Visible = editMode;
         _btnCancel.Visible = editMode;
-        _btnDelete.Enabled = !editMode && _selectedDivisionId.HasValue;
 
         // Teams/Players editing only in view mode
         _btnAddTeam.Enabled = !editMode && _selectedDivisionId.HasValue;

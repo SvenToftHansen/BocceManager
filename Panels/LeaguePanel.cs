@@ -11,6 +11,7 @@ public class LeaguePanel : UserControl
     private int? _selectedLeagueId;
     private int? _leagueIdToRestore;  // Preserve selection across reloads
     private bool _isLoadingData = false;
+    private bool _isEditMode = false;
 
     // Header
     private ComboBox _leagueCombo = null!;
@@ -24,8 +25,10 @@ public class LeaguePanel : UserControl
     private NumericUpDown _numMin        = null!;
     private NumericUpDown _numMax        = null!;
     private NumericUpDown _numMaxTeams   = null!;
+    private Button       _btnEdit        = null!;
     private Button       _btnSave        = null!;
     private Button       _btnDelete      = null!;
+    private Button       _btnCancel      = null!;
 
     // Seasons tab
     private DataGridView _seasonsGrid = null!;
@@ -212,24 +215,44 @@ public class LeaguePanel : UserControl
             Height = 54, BackColor = AppTheme.Surface, Padding = new Padding(12, 10, 12, 10)
         };
 
-        _btnSave = new Button
+        _btnEdit = new Button
         {
-            Text = "Save Changes", Location = new Point(12, 10), Size = new Size(130, 32),
+            Text = "Edit League", Location = new Point(12, 10), Size = new Size(130, 32),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
+            Visible = false
         };
-        _btnSave.Click += (_, _) => SaveLeague();
+        _btnEdit.Click += (_, _) => EnterEditMode();
 
         _btnDelete = new Button
         {
-            Text = "Delete League", Location = new Point(160, 10), Size = new Size(130, 32),
+            Text = "Delete League", Location = new Point(150, 10), Size = new Size(140, 32),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 0 }, Enabled = false
+            FlatAppearance = { BorderSize = 0 }, Enabled = false, Visible = false
         };
         _btnDelete.Click += (_, _) => DeleteLeague();
 
-        toolbar.Controls.AddRange([_btnSave, _btnDelete]);
+        _btnSave = new Button
+        {
+            Text = "Save League", Location = new Point(12, 10), Size = new Size(130, 32),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
+            Visible = false
+        };
+        _btnSave.Click += (_, _) => SaveLeague();
+
+        _btnCancel = new Button
+        {
+            Text = "Cancel", Location = new Point(150, 10), Size = new Size(140, 32),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand,
+            FlatAppearance = { BorderSize = 1, BorderColor = AppTheme.Separator },
+            Visible = false
+        };
+        _btnCancel.Click += (_, _) => ExitEditMode();
+
+        toolbar.Controls.AddRange([_btnEdit, _btnDelete, _btnSave, _btnCancel]);
         page.Controls.Add(MakeLayout(scroll, toolbar));
         return page;
     }
@@ -389,6 +412,8 @@ public class LeaguePanel : UserControl
     private void LoadLeague(int leagueId)
     {
         _selectedLeagueId = leagueId;
+        _isEditMode = false;
+
         try
         {
             using var db = new BocceDbContext();
@@ -405,8 +430,8 @@ public class LeaguePanel : UserControl
         }
         catch { }
 
-        _btnDelete.Enabled = true;
         LoadSeasons(leagueId);
+        SetEditModeUI(false);  // Start in read-only mode
     }
 
     private void ClearEditorForm()
@@ -462,6 +487,44 @@ public class LeaguePanel : UserControl
         ClearEditorForm();
         _txtName.Focus();
     }
+
+    // ── Edit Mode ─────────────────────────────────────────────────────────────
+
+    private void EnterEditMode()
+    {
+        if (_selectedLeagueId == null) return;
+        _isEditMode = true;
+        SetEditModeUI(true);
+    }
+
+    private void ExitEditMode()
+    {
+        _isEditMode = false;
+        SetEditModeUI(false);
+        // Reload to discard changes
+        if (_selectedLeagueId.HasValue)
+            LoadLeague(_selectedLeagueId.Value);
+    }
+
+    private void SetEditModeUI(bool editMode)
+    {
+        // Controls editable in edit mode
+        _txtName.ReadOnly = !editMode;
+        _txtDescription.ReadOnly = !editMode;
+        _rtbRules.ReadOnly = !editMode;
+        _chkActive.Enabled = editMode;
+        _numMin.ReadOnly = !editMode;
+        _numMax.ReadOnly = !editMode;
+        _numMaxTeams.ReadOnly = !editMode;
+
+        // Button visibility: Edit/Delete in view mode, Save/Cancel in edit mode
+        _btnEdit.Visible = !editMode && _selectedLeagueId.HasValue;
+        _btnDelete.Visible = !editMode && _selectedLeagueId.HasValue;
+        _btnSave.Visible = editMode;
+        _btnCancel.Visible = editMode;
+    }
+
+    // ── Save ──────────────────────────────────────────────────────────────────
 
     private void SaveLeague()
     {
@@ -530,6 +593,9 @@ public class LeaguePanel : UserControl
 
         MessageBox.Show("League saved.", "BocceManager",
             MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+        // Exit edit mode and return to view
+        ExitEditMode();
 
         // Offer propagation if min/max changed on an existing league that has children
         if (!isNew && (oldMin != newMin || oldMax != newMax))
