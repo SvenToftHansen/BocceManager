@@ -28,7 +28,7 @@ public static class DocumentService
             DocType = docType,
             Notes = notes,
             LeagueId = leagueId,
-            UploadedAt = DateTime.Now
+            UploadedAt = DateTime.UtcNow
         };
         db.ClubDocuments.Add(doc);
         db.SaveChanges();
@@ -45,7 +45,7 @@ public static class DocumentService
             GoogleDocsUrl = url,
             Notes = notes,
             LeagueId = leagueId,
-            UploadedAt = DateTime.Now
+            UploadedAt = DateTime.UtcNow
         };
         db.ClubDocuments.Add(doc);
         db.SaveChanges();
