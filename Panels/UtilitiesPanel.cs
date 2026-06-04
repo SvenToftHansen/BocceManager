@@ -257,8 +257,9 @@ public class UtilitiesPanel : UserControl
 
             _progressBar.Visible = false;
             LogElapsed("✓ Restore complete!", Color.FromArgb(34, 197, 94));
-            LogLine("  Restart the application for changes to take effect.",
-                    Color.FromArgb(100, 116, 139));
+            LogLine("  Restarting application...", Color.FromArgb(100, 116, 139));
+            await Task.Delay(1500); // let the user see the message
+            Application.Restart();
         }
         catch (Exception ex)
         {
