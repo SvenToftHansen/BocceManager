@@ -481,10 +481,15 @@ public class LeaguePanel : UserControl
 
     private void StartNewLeague()
     {
+        _selectedLeagueId = null;
         _leagueCombo.SelectedIndexChanged -= OnLeagueSelected;
         _leagueCombo.SelectedIndex = -1;
         _leagueCombo.SelectedIndexChanged += OnLeagueSelected;
         ClearEditorForm();
+
+        // Enter edit mode so Save/Cancel buttons are visible
+        _isEditMode = true;
+        SetEditModeUI(true);
         _txtName.Focus();
     }
 
@@ -513,9 +518,9 @@ public class LeaguePanel : UserControl
         _txtDescription.ReadOnly = !editMode;
         _rtbRules.ReadOnly = !editMode;
         _chkActive.Enabled = editMode;
-        _numMin.ReadOnly = !editMode;
-        _numMax.ReadOnly = !editMode;
-        _numMaxTeams.ReadOnly = !editMode;
+        _numMin.Enabled = editMode;
+        _numMax.Enabled = editMode;
+        _numMaxTeams.Enabled = editMode;
 
         // Button visibility: Edit/Delete in view mode, Save/Cancel in edit mode
         _btnEdit.Visible = !editMode && _selectedLeagueId.HasValue;
