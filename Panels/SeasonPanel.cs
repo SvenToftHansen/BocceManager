@@ -1005,9 +1005,10 @@ public class SeasonPanel : UserControl
         _divisionsGrid.Columns["DivAct"].ReadOnly = editMode;
 
         // Button visibility: Edit/Delete in view mode, Save/Cancel in edit mode
-        _btnEdit.Visible = !editMode && _selectedSeasonId.HasValue;
+        _btnEdit.Visible   = !editMode && _selectedSeasonId.HasValue;
         _btnDelete.Visible = !editMode && _selectedSeasonId.HasValue;
-        _btnSave.Visible = editMode;
+        _btnDelete.Enabled = !editMode && _selectedSeasonId.HasValue;
+        _btnSave.Visible   = editMode;
         _btnCancel.Visible = editMode;
     }
 
@@ -1424,6 +1425,15 @@ public class SeasonPanel : UserControl
                 .Include(s => s.Divisions).ThenInclude(d => d.Teams).ThenInclude(t => t.TeamPlayers)
                 .FirstOrDefault(s => s.Id == seasonId);
             if (season == null) return;
+
+            // Remove child records in dependency order before deleting the season
+            db.SeasonParameters .RemoveRange(db.SeasonParameters .Where(x => x.SeasonId == seasonId));
+            db.SeasonDaySlots   .RemoveRange(db.SeasonDaySlots   .Where(x => x.SeasonId == seasonId));
+            db.SeasonTimeSlots  .RemoveRange(db.SeasonTimeSlots  .Where(x => x.SeasonId == seasonId));
+            db.SeasonCourts     .RemoveRange(db.SeasonCourts     .Where(x => x.SeasonId == seasonId));
+            db.SeasonFees       .RemoveRange(db.SeasonFees       .Where(x => x.SeasonId == seasonId));
+
+            // Divisions → Teams → TeamPlayers
             foreach (var div in season.Divisions)
             {
                 foreach (var team in div.Teams)
