@@ -37,8 +37,20 @@ static class Program
         if (elapsed < 2000)
             System.Threading.Thread.Sleep(2000 - elapsed);
 
-        var mainForm = new MainForm();
-        splash.Close();
-        Application.Run(mainForm);
+        try
+        {
+            var mainForm = new MainForm();
+            splash.Close();
+            Application.Run(mainForm);
+        }
+        catch (Exception ex)
+        {
+            splash.Close();
+            MessageBox.Show(
+                $"Application failed to start:\n\n{ex.GetType().Name}\n{ex.Message}\n\n{ex.StackTrace}",
+                "Golden Vista Bocce League Manager — Startup Error",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
     }
 }
