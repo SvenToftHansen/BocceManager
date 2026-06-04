@@ -160,7 +160,9 @@ public static class BackupService
             var psi = new ProcessStartInfo
             {
                 FileName = psqlPath,
-                Arguments = $"--host={pgHost} --port={pgPort} --username={pgUsername} --dbname={pgDatabase} --file=\"{backupFilePath}\"",
+                // --single-transaction wraps the entire restore in one commit instead of
+                // committing every INSERT separately — makes restore ~10-50x faster.
+                Arguments = $"--host={pgHost} --port={pgPort} --username={pgUsername} --dbname={pgDatabase} --single-transaction --file=\"{backupFilePath}\"",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
