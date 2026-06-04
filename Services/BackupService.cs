@@ -182,7 +182,9 @@ public static class BackupService
             var psi = new ProcessStartInfo
             {
                 FileName  = psqlPath,
-                Arguments = $"--host={pgHost} --port={pgPort} --username={pgUsername} --dbname={pgDatabase} --single-transaction --file=\"{backupFilePath}\"",
+                // --echo-queries makes psql print each statement as it runs,
+                // letting us parse COPY table names for live progress reporting.
+                Arguments = $"--host={pgHost} --port={pgPort} --username={pgUsername} --dbname={pgDatabase} --single-transaction --echo-queries --file=\"{backupFilePath}\"",
                 UseShellExecute        = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError  = true,
@@ -190,13 +192,44 @@ public static class BackupService
             };
             psi.Environment["PGPASSWORD"] = pgPassword;
 
+            var errorLines = new System.Collections.Generic.List<string>();
             using var proc = Process.Start(psi)
                 ?? throw new Exception("Failed to start psql process");
+
+            // Read stdout in real-time — psql echoes COPY statements here.
+            // Parse table names and row counts as they appear.
+            proc.OutputDataReceived += (_, e) =>
+            {
+                if (string.IsNullOrWhiteSpace(e.Data)) return;
+                var line = e.Data.Trim();
+
+                // "COPY public."TableName" (col1, col2,...) FROM stdin;" → restoring table
+                if (line.StartsWith("COPY ", StringComparison.OrdinalIgnoreCase))
+                {
+                    var tableName = ExtractTableNameFromCopy(line);
+                    if (tableName != null)
+                        progress?.Invoke($"  Restoring table: {tableName}...");
+                }
+                // "COPY 239" → psql prints row count after each COPY block
+                else if (int.TryParse(line.Replace("COPY ", ""), out int rowCount) && line.StartsWith("COPY "))
+                {
+                    progress?.Invoke($"    → {rowCount:N0} rows restored");
+                }
+            };
+
+            proc.ErrorDataReceived += (_, e) =>
+            {
+                if (!string.IsNullOrWhiteSpace(e.Data))
+                    errorLines.Add(e.Data);
+            };
+
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
             proc.WaitForExit();
 
             if (proc.ExitCode != 0)
             {
-                var error = proc.StandardError.ReadToEnd().Trim();
+                var error = string.Join("\n", errorLines).Trim();
                 throw new Exception($"psql restore failed: {error}");
             }
         }
@@ -233,6 +266,23 @@ public static class BackupService
     }
 
     private static string Quote(string s) => "\"" + s.Replace("\"", "\\\"") + "\"";
+
+    private static string ExtractTableNameFromCopy(string copyLine)
+    {
+        // COPY public."TableName" (...) FROM stdin;
+        var start = copyLine.IndexOf('"');
+        var end   = start >= 0 ? copyLine.IndexOf('"', start + 1) : -1;
+        if (start >= 0 && end > start)
+            return copyLine.Substring(start + 1, end - start - 1);
+        // Fallback: COPY public.TableName (...) FROM stdin;
+        var parts = copyLine.Split(' ');
+        if (parts.Length >= 2)
+        {
+            var tbl = parts[1].Contains('.') ? parts[1].Split('.')[1] : parts[1];
+            return tbl.Trim('"');
+        }
+        return null;
+    }
 
     private static List<string> GetActiveConnections(string pgHost, string pgPort,
         string pgUsername, string pgPassword, string pgDatabase)

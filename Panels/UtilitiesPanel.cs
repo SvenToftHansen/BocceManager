@@ -239,6 +239,13 @@ public class UtilitiesPanel : UserControl
         LogSeparator();
         LogLine($"Starting restore from: {Path.GetFileName(file)}",
                 Color.FromArgb(251, 191, 36));
+        LogLine("Navigation is locked until restore completes.",
+                Color.FromArgb(251, 191, 36));
+
+        // Disable the entire main form so nothing can navigate away and
+        // query the database while it is being dropped and restored.
+        var mainForm = this.FindForm();
+        if (mainForm != null) mainForm.Enabled = false;
 
         try
         {
@@ -262,6 +269,8 @@ public class UtilitiesPanel : UserControl
         finally
         {
             _stopwatch.Stop();
+            // Re-enable navigation — must happen even if restore failed.
+            if (mainForm != null) mainForm.Enabled = true;
             SetAllButtons(true);
         }
     }
