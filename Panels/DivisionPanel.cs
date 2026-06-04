@@ -1394,7 +1394,7 @@ public class DivisionPanel : UserControl
         var result = new List<int>();
         using var form = new Form
         {
-            Text = "Add Players to Team", Width = 700, Height = 500,
+            Text = "Add Players to Team", Width = 750, Height = 600,
             StartPosition = FormStartPosition.CenterParent,
             FormBorderStyle = FormBorderStyle.FixedDialog,
             MaximizeBox = false, MinimizeBox = false,
@@ -1402,11 +1402,11 @@ public class DivisionPanel : UserControl
         };
 
         // Load all available players
-        List<(int Id, string Name)> available = [];
+        List<(int Id, string Name)> allPlayers = [];
         try
         {
             using var db = new BocceDbContext();
-            available = db.Players
+            allPlayers = db.Players
                 .Where(p => p.IsActive && !excludeIds.Contains(p.Id))
                 .OrderBy(p => p.LastName).ThenBy(p => p.FirstName)
                 .ToList()
@@ -1415,76 +1415,110 @@ public class DivisionPanel : UserControl
         }
         catch { }
 
+        // Search box
+        var searchBox = new TextBox
+        {
+            Location = new Point(10, 8), Width = 300, Height = 28,
+            Font = AppTheme.FontDefault, PlaceholderText = "Search... (use | for OR: Hans|Hami)",
+            BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary, BorderStyle = BorderStyle.FixedSingle
+        };
+
         // Left side: Available players
-        var lblAvailable = new Label { Text = "Available Players", Font = AppTheme.FontDefaultBold, AutoSize = true, Location = new Point(10, 8) };
+        var lblAvailable = new Label { Text = "Available Players", Font = AppTheme.FontDefaultBold, AutoSize = true, Location = new Point(10, 42) };
         var cmbAvailable = new CheckedListBox
         {
-            Location = new Point(10, 28), Width = 300, Height = 400,
+            Location = new Point(10, 62), Width = 300, Height = 440,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
             CheckOnClick = true
         };
-        foreach (var (id, name) in available)
-            cmbAvailable.Items.Add(new IntItem(id, name));
+
+        // Right side: Selected players
+        var lblSelected = new Label { Text = "Players to Add", Font = AppTheme.FontDefaultBold, AutoSize = true, Location = new Point(430, 42) };
+        var cmbSelected = new CheckedListBox
+        {
+            Location = new Point(430, 62), Width = 300, Height = 440,
+            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
+            CheckOnClick = true
+        };
 
         // Middle buttons
         var btnAdd = new Button
         {
-            Text = "Add  >>", Width = 80, Height = 30, Top = 180, Left = 320,
+            Text = "Add  >>", Width = 80, Height = 30, Top = 200, Left = 320,
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White, Font = AppTheme.FontButton
         };
         var btnRemove = new Button
         {
-            Text = "<< Remove", Width = 80, Height = 30, Top = 220, Left = 320,
+            Text = "<< Remove", Width = 80, Height = 30, Top = 240, Left = 320,
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White, Font = AppTheme.FontButton
         };
 
-        // Right side: Selected players
-        var lblSelected = new Label { Text = "Players to Add", Font = AppTheme.FontDefaultBold, AutoSize = true, Location = new Point(410, 8) };
-        var cmbSelected = new CheckedListBox
-        {
-            Location = new Point(410, 28), Width = 270, Height = 400,
-            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
-            CheckOnClick = true
-        };
-
-        // Button bar
+        // Bottom buttons
         var btnOk = new Button
         {
-            Text = "Add Players", DialogResult = DialogResult.OK, Left = 410, Top = 440, Width = 100, Height = 30,
+            Text = "Add Players", DialogResult = DialogResult.OK, Left = 430, Top = 520, Width = 140, Height = 30,
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White, Font = AppTheme.FontButton
         };
         var btnCancel = new Button
         {
-            Text = "Cancel", DialogResult = DialogResult.Cancel, Left = 520, Top = 440, Width = 90, Height = 30,
+            Text = "Cancel", DialogResult = DialogResult.Cancel, Left = 580, Top = 520, Width = 140, Height = 30,
             FlatStyle = FlatStyle.Flat, Font = AppTheme.FontButton
         };
 
+        // Filter function with pipe-delimited OR search
+        void RefreshAvailable(string query)
+        {
+            cmbAvailable.Items.Clear();
+            foreach (var (id, name) in allPlayers)
+            {
+                // Skip if already in selected
+                if (cmbSelected.Items.Cast<IntItem>().Any(x => x.Id == id)) continue;
+
+                bool matches = false;
+                if (string.IsNullOrWhiteSpace(query))
+                    matches = true;
+                else if (query.Contains('|'))
+                {
+                    var terms = query.Split('|').Select(t => t.Trim()).Where(t => !string.IsNullOrWhiteSpace(t));
+                    matches = terms.Any(term => name.Contains(term, StringComparison.OrdinalIgnoreCase));
+                }
+                else
+                {
+                    matches = name.Contains(query, StringComparison.OrdinalIgnoreCase);
+                }
+
+                if (matches) cmbAvailable.Items.Add(new IntItem(id, name));
+            }
+        }
+        RefreshAvailable("");
+
+        searchBox.TextChanged += (_, _) => RefreshAvailable(searchBox.Text);
+
         btnAdd.Click += (_, _) =>
         {
+            var toMove = new List<IntItem>();
             for (int i = 0; i < cmbAvailable.CheckedItems.Count; i++)
-            {
-                var item = (IntItem)cmbAvailable.CheckedItems[i];
-                if (!cmbSelected.Items.Cast<IntItem>().Any(x => x.Id == item.Id))
-                    cmbSelected.Items.Add(item);
-            }
-            for (int i = cmbAvailable.Items.Count - 1; i >= 0; i--)
-                if (cmbAvailable.GetItemChecked(i))
-                    cmbAvailable.Items.RemoveAt(i);
+                toMove.Add((IntItem)cmbAvailable.CheckedItems[i]);
+
+            foreach (var item in toMove)
+                cmbSelected.Items.Add(item);
+
+            RefreshAvailable(searchBox.Text);
         };
 
         btnRemove.Click += (_, _) =>
         {
-            for (int i = cmbSelected.Items.Count - 1; i >= 0; i--)
-                if (cmbSelected.GetItemChecked(i))
-                {
-                    var item = (IntItem)cmbSelected.Items[i];
-                    cmbAvailable.Items.Add(item);
-                    cmbSelected.Items.RemoveAt(i);
-                }
-            cmbAvailable.Sorted = true;
+            var toRemove = new List<IntItem>();
+            for (int i = 0; i < cmbSelected.CheckedItems.Count; i++)
+                toRemove.Add((IntItem)cmbSelected.CheckedItems[i]);
+
+            foreach (var item in toRemove)
+                cmbSelected.Items.Remove(item);
+
+            RefreshAvailable(searchBox.Text);
         };
 
-        form.Controls.AddRange([lblAvailable, cmbAvailable, btnAdd, btnRemove, lblSelected, cmbSelected, btnOk, btnCancel]);
+        form.Controls.AddRange([searchBox, lblAvailable, cmbAvailable, btnAdd, btnRemove, lblSelected, cmbSelected, btnOk, btnCancel]);
         form.AcceptButton = btnOk;
         form.CancelButton = btnCancel;
 
