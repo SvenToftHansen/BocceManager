@@ -6,6 +6,7 @@ Fast workflow:
 1. At start of session: read this file top to bottom.
 2. During session: follow Non-Negotiables and Decisions.
 3. At end of session: update "Latest Handoff" and move previous one to "History".
+4. Non-optional: after any code change, update this handoff before ending the session.
 
 When switching assistants, paste the "Copy/Paste Handoff Block" at the bottom.
 
@@ -90,6 +91,50 @@ Immediate priorities for next session:
 - Fixed Delete Division button (never enabled + missing FK child cleanup)
 - Fixed Copy Season missing play days and play times
 - Expanded Copy Season to copy teams, players, and LookingForTeam entries
+- Moved "Theme" navigation item from ADMINISTRATION group to UTILITIES group (`MainForm.cs`)
+- Season editor (new season): default name now auto-fills from Start Date year; if that year-name already exists in the league, it auto-fills as `MMMM yyyy` (e.g., `February 2026`)
+- Division editor: Name is now shown as a computed label (no text field), formatted like System Name and Sort Key, with a right-side hint label; value is computed from Day Slot + Time Slot
+- Dashboard stats now include `Spare Players` and `Looking for Team` cards (in addition to existing stats)
+- Dashboard branding updated to two-line title: `Golden Vista` / `Bocce League Master`
+- Dashboard database path row removed
+- UI display branding text updated from `BocceManager` to `Golden Vista Bocce League Master` across app captions/messages
+- Dashboard panel title changed to `Dashboard` (single title) per latest preference
+- Navigation group arrows fixed from mojibake (`â–¶` / `â–¼`) to Unicode escape literals (`\u25B6` / `\u25BC`) in `MainForm.cs`
+- Build workflow preference: before building, ensure `BocceManager` process is not running; stop it if needed
+- Default League/Season management moved to Dashboard: Dashboard now has League + Season dropdown selectors and persists defaults via `AppParameterService`
+- Dashboard section heading updated to `Current League and Season`
+- Startup routing: open `Leagues` when there are no leagues, open `Seasons` when there are leagues but no seasons, otherwise open `Dashboard`
+- Removed automatic default updates from League/Season/Division panel selection handlers; defaults are now set from Dashboard
+- Fixed panel text mojibake/high-ASCII artifacts in user-facing strings across League/Division/Season/Parameters panels (replaced corrupted characters with safe ASCII text and Unicode escapes where needed)
+- Fixed Current Season marker rendering by replacing corrupted star glyph text with `\u2605` in Season/Division selectors
+- Player search now supports multi-term OR with delimiters `|`, `\`, `/`, `:`, `;` (example: `Hans\Hami` matches Hansen/Hamilton) in Division player picker dialogs
+- Delimiter parsing is now centralized in shared `Services/SearchQueryService.cs` (`SplitTerms`, `MatchesAnyTerm`) so future search boxes can reuse the same behavior
+- Dashboard League/Season selectors restyled to a minimal look (popup/flat owner-drawn text) to hide box/focus visuals while retaining dropdown arrows and switching behavior
+- Dashboard League/Season selectors further simplified to plain text + tiny chevron button, backed by hidden ComboBoxes and ContextMenuStrip selection menus
+- Dashboard League/Season selectors updated again: chevrons removed per preference; now plain clickable text selectors with tighter vertical/horizontal spacing
+- Dashboard "League:" and "Season:" headers are now bold for clearer section readability
+- Dashboard default selectors fixed for responsiveness: defaults UI now reloads from a fresh DbContext (prevents stale AppParameter reads), and both header labels + value text are clickable to open the selector menu
+- Default change propagation expanded app-wide: LeaguePanel, SeasonPanel, and DivisionPanel now subscribe to `AppParameterService.DefaultsChanged` and reload their league/season lists when Dashboard defaults are changed
+- Dashboard stats cards now respect selected defaults by ownership model:
+	- Players: app-wide
+	- Teams: filtered by selected League and Season
+	- Spare Players: filtered by selected League
+	- Looking for Team: filtered by selected League and selected Season context
+	- Pending Matches: filtered by selected League and Season
+- LookingForTeam lifecycle update:
+	- When a player is assigned to a team in DivisionPanel, existing `LookingForTeam` row for that league is retained and `TeamId` is set (treated as inactive)
+	- When that player is removed from the team (single remove or remove-all), matching `LookingForTeam.TeamId` is cleared back to `null` (active)
+	- Dashboard "Looking for Team" card now counts active rows only (`TeamId == null`)
+	- Added cleanup service `Services/LookingForTeamService.cs` for future maintenance:
+		- `DeleteAssigned(...)` for bulk cleanup of inactive assigned rows
+		- `DeleteByIds(...)` for selected-row cleanup
+- Team mass builder update in DivisionPanel:
+	- `Create All Teams` now prompts for scope: current Division or all Divisions in selected League
+	- Sync behavior (not just add):
+		- Adds missing teams to reach configured max
+		- Removes excess teams when max decreases
+		- Removal priority: highest letter + empty teams first; if still needed, highest letter teams regardless of content
+		- Re-sequences letters after sync to maintain A.. order
 
 **In progress / needs verification:**
 - Restore live table progress (uses `--echo-queries` + async stdout read — not yet confirmed working)
@@ -134,6 +179,7 @@ Immediate priorities for next session:
 - [ ] Backup → Restore → app restarts and shows correct data
 - [ ] Restore with pgAdmin open — confirm log shows "Database still open: pgAdmin 4(idle)"
 - [ ] Document upload (was fixed for UTC timestamp)
+- [ ] New season naming default: verify `2026` auto-fills, and if `2026` already exists then `MMMM yyyy` auto-fills based on Start Date
 
 ---
 

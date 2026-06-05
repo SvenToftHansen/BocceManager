@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using BocceManager.Data;
 using BocceManager.Services;
 using BocceManager.UI.Theme;
@@ -44,7 +44,7 @@ public class ParametersPanel : UserControl
         Controls.Add(layout);
     }
 
-    // ── Club Rules Document ───────────────────────────────────────────────────
+    // â”€â”€ Club Rules Document â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private static readonly string DocPathFile =
         Path.Combine(AppContext.BaseDirectory, "bocce-rules-doc.txt");
@@ -100,7 +100,7 @@ public class ParametersPanel : UserControl
 
         section.Controls.Add(new Label
         {
-            Text = "PDF or Word document (.pdf, .doc, .docx) — the club’s official rulebook, referenced by all leagues.",
+            Text = "PDF or Word document (.pdf, .doc, .docx) - the club's official rulebook, referenced by all leagues.",
             Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted,
             AutoSize = true, Location = new Point(14, 68)
         });
@@ -130,20 +130,20 @@ public class ParametersPanel : UserControl
             if (string.IsNullOrEmpty(path))
             {
                 MessageBox.Show("No rules document has been selected yet.",
-                    "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             if (!File.Exists(path))
             {
                 MessageBox.Show("The document file could not be found. It may have been moved or deleted.",
-                    "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
             catch (Exception ex)
             {
                 MessageBox.Show($"Could not open the document:\n\n{ex.Message}",
-                    "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         };
 
@@ -151,7 +151,7 @@ public class ParametersPanel : UserControl
         return section;
     }
 
-    // ── Load / Save ───────────────────────────────────────────────────────────
+    // â”€â”€ Load / Save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private static void LoadAppParams(DataGridView grid)
     {
@@ -187,7 +187,7 @@ public class ParametersPanel : UserControl
         ShowSaved();
     }
 
-    // ── Grid ──────────────────────────────────────────────────────────────────
+    // â”€â”€ Grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private static DataGridView MakeGrid()
     {
@@ -262,8 +262,9 @@ public class ParametersPanel : UserControl
     }
 
 private static void ShowSaved()
-        => MessageBox.Show("Parameters saved.", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        => MessageBox.Show("Parameters saved.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
     private static void ShowError(Exception ex)
-        => MessageBox.Show($"Save failed:\n\n{ex.Message}", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        => MessageBox.Show($"Save failed:\n\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
 }
+

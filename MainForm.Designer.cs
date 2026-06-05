@@ -1,4 +1,4 @@
-namespace BocceManager;
+﻿namespace BocceManager;
 
 partial class MainForm
 {
@@ -69,10 +69,11 @@ partial class MainForm
         AutoScaleMode = AutoScaleMode.Font;
         ClientSize = new Size(1280, 800);
         MinimumSize = new Size(1000, 640);
-        Text = "BocceManager";
+        Text = "Golden Vista Bocce League Master";
         StartPosition = FormStartPosition.CenterScreen;
 
         ResumeLayout(false);
         PerformLayout();
     }
 }
+

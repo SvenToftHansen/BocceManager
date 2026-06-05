@@ -1,4 +1,4 @@
-using BocceManager.Data;
+﻿using BocceManager.Data;
 using BocceManager.Data.Entities;
 using BocceManager.Services;
 using BocceManager.UI.Theme;
@@ -7,9 +7,12 @@ namespace BocceManager.Panels;
 
 public class DashboardPanel : UserControl
 {
-    private BocceDbContext _db = new();
-    private Label? _leagueLabel;
-    private Label? _seasonLabel;
+    private ComboBox? _leagueCombo;
+    private ComboBox? _seasonCombo;
+    private Label? _leagueDisplay;
+    private Label? _seasonDisplay;
+    private Panel? _statsPanel;
+    private bool _isLoadingDefaults;
 
     public DashboardPanel()
     {
@@ -22,6 +25,7 @@ public class DashboardPanel : UserControl
     private void OnDefaultsChanged(object? sender, DefaultsChangedEventArgs e)
     {
         LoadDefaultsUI();
+        RefreshStatsPanel();
     }
 
     protected override void Dispose(bool disposing)
@@ -42,7 +46,7 @@ public class DashboardPanel : UserControl
             Padding = new Padding(40, 30, 40, 40)
         };
 
-        // Vertical flow — items stack top-to-bottom, each taking its natural height
+        // Vertical flow - items stack top-to-bottom, each taking its natural height
         var flow = new FlowLayoutPanel
         {
             FlowDirection = FlowDirection.TopDown,
@@ -67,12 +71,8 @@ public class DashboardPanel : UserControl
         };
 
         // Title
-        flow.Controls.Add(FlowLabel("BocceManager",
-            AppTheme.FontPageTitle, AppTheme.TextPrimary, bottomPad: 4));
-
-        // Subtitle
-        flow.Controls.Add(FlowLabel("Bocce Ball League Administration",
-            AppTheme.FontPageSubtitle, AppTheme.TextSecondary, bottomPad: 16));
+        flow.Controls.Add(FlowLabel("Dashboard",
+            AppTheme.FontPageTitle, AppTheme.TextPrimary, bottomPad: 16));
 
         // Separator
         flow.Controls.Add(new Panel
@@ -81,35 +81,11 @@ public class DashboardPanel : UserControl
             BackColor = AppTheme.Separator,
             Margin = new Padding(0, 0, 0, 16)
         });
-
-        // DB path row
-        var dbRow = new FlowLayoutPanel
-        {
-            FlowDirection = FlowDirection.LeftToRight,
-            AutoSize = true,
-            BackColor = AppTheme.ContentBackground,
-            Margin = new Padding(0, 0, 0, 24)
-        };
-        dbRow.Controls.Add(new Label
-        {
-            Text = "Database:",
-            Font = AppTheme.FontSmallBold,
-            ForeColor = AppTheme.TextPrimary,
-            AutoSize = true
-        });
-        dbRow.Controls.Add(new Label
-        {
-            Text = "  PostgreSQL (localhost:5432 / bocce_league)",
-            Font = AppTheme.FontSmall,
-            ForeColor = AppTheme.TextMuted,
-            AutoSize = true
-        });
-        flow.Controls.Add(dbRow);
 
         // Stats cards
-        var statsPanel = BuildStatsPanel(flowWidth);
-        statsPanel.Margin = new Padding(0, 0, 0, 28);
-        flow.Controls.Add(statsPanel);
+        _statsPanel = BuildStatsPanel(flowWidth);
+        _statsPanel.Margin = new Padding(0, 0, 0, 28);
+        flow.Controls.Add(_statsPanel);
 
         // Separator
         flow.Controls.Add(new Panel
@@ -119,8 +95,8 @@ public class DashboardPanel : UserControl
             Margin = new Padding(0, 0, 0, 16)
         });
 
-        // Default League and Season section
-        flow.Controls.Add(FlowLabel("Default League and Season",
+        // Current League and Season section
+        flow.Controls.Add(FlowLabel("Current League and Season",
             AppTheme.FontSectionHeading, AppTheme.TextPrimary, bottomPad: 12));
 
         var defaultsPanel = BuildDefaultsPanel(flowWidth);
@@ -131,25 +107,52 @@ public class DashboardPanel : UserControl
         Controls.Add(scroll);
     }
 
-    private static Panel BuildStatsPanel(int width)
+    private Panel BuildStatsPanel(int width)
     {
-        int leagues = 0, players = 0, teams = 0, pendingMatches = 0;
+        int leagues = 0, players = 0, teams = 0, sparePlayers = 0, lookingForTeam = 0, pendingMatches = 0;
         try
         {
             using var db = new BocceDbContext();
+            var leagueId = AppParameterService.GetDefaultLeagueId(db);
+            var seasonId = AppParameterService.GetDefaultSeasonId(db);
+
             leagues        = db.Leagues.Count(l => l.IsActive);
             players        = db.Players.Count(p => p.IsActive);
-            teams          = db.Teams.Count(t => t.IsActive);
-            pendingMatches = db.Matches.Count(m => m.Status == "scheduled");
+
+            IQueryable<Team> teamsQuery = db.Teams.Where(t => t.IsActive);
+            if (leagueId.HasValue)
+                teamsQuery = teamsQuery.Where(t => t.Division.Season.LeagueId == leagueId.Value);
+            if (seasonId.HasValue)
+                teamsQuery = teamsQuery.Where(t => t.Division.SeasonId == seasonId.Value);
+            teams = teamsQuery.Count();
+
+            IQueryable<SpareList> spareQuery = db.SpareLists.Where(s => s.IsActive);
+            if (leagueId.HasValue)
+                spareQuery = spareQuery.Where(s => s.LeagueId == leagueId.Value);
+            sparePlayers = spareQuery.Count();
+
+            IQueryable<LookingForTeam> lftQuery = db.LookingForTeams.Where(l => l.TeamId == null);
+            if (leagueId.HasValue)
+                lftQuery = lftQuery.Where(l => l.LeagueId == leagueId.Value);
+            lookingForTeam = lftQuery.Count();
+
+            IQueryable<BocceMatch> matchQuery = db.Matches.Where(m => m.Status == "scheduled");
+            if (leagueId.HasValue)
+                matchQuery = matchQuery.Where(m => m.ScheduleWeek.Division.Season.LeagueId == leagueId.Value);
+            if (seasonId.HasValue)
+                matchQuery = matchQuery.Where(m => m.ScheduleWeek.Division.SeasonId == seasonId.Value);
+            pendingMatches = matchQuery.Count();
         }
         catch { }
 
         (string label, int value, Color accent)[] stats =
         [
-            ("Leagues",         leagues,        Color.FromArgb(46,  204, 113)),
-            ("Players",         players,        Color.FromArgb(155, 89,  182)),
-            ("Teams",           teams,          Color.FromArgb(230, 126, 34)),
-            ("Pending Matches", pendingMatches, Color.FromArgb(231, 76,  60)),
+            ("Leagues",          leagues,        Color.FromArgb(46,  204, 113)),
+            ("Players",          players,        Color.FromArgb(155, 89,  182)),
+            ("Teams",            teams,          Color.FromArgb(230, 126, 34)),
+            ("Spare Players",    sparePlayers,   Color.FromArgb(52,  152, 219)),
+            ("Looking for Team", lookingForTeam, Color.FromArgb(231, 76,  60)),
+            ("Pending Matches",  pendingMatches, Color.FromArgb(127, 140, 141)),
         ];
 
         var panel = new Panel
@@ -194,84 +197,240 @@ public class DashboardPanel : UserControl
         return panel;
     }
 
+    private void RefreshStatsPanel()
+    {
+        if (_statsPanel == null)
+            return;
+
+        var parent = _statsPanel.Parent;
+        if (parent == null)
+            return;
+
+        var margin = _statsPanel.Margin;
+        int index = parent.Controls.IndexOf(_statsPanel);
+        int width = _statsPanel.Width;
+
+        parent.Controls.Remove(_statsPanel);
+        _statsPanel.Dispose();
+
+        _statsPanel = BuildStatsPanel(width);
+        _statsPanel.Margin = margin;
+        parent.Controls.Add(_statsPanel);
+        parent.Controls.SetChildIndex(_statsPanel, index);
+    }
+
     private Panel BuildDefaultsPanel(int width)
     {
         var panel = new Panel
         {
-            Size = new Size(width, 50),
+            Size = new Size(width, 58),
             BackColor = AppTheme.ContentBackground
         };
 
-        // League label
-        panel.Controls.Add(new Label
+        // League selector
+        var leagueHeader = new Label
         {
             Text = "League:",
-            Font = AppTheme.FontSmall,
+            Font = AppTheme.FontSmallBold,
             ForeColor = AppTheme.TextPrimary,
             Location = new Point(0, 0),
-            AutoSize = true
-        });
+            AutoSize = true,
+            Cursor = Cursors.Hand
+        };
+        leagueHeader.Click += (_, _) => OpenSelectorMenu(_leagueCombo, _leagueDisplay ?? leagueHeader, 260);
+        panel.Controls.Add(leagueHeader);
 
-        _leagueLabel = new Label
+        _leagueDisplay = new Label
         {
             Location = new Point(0, 16),
-            AutoSize = true,
-            ForeColor = AppTheme.TextSecondary,
-            Font = AppTheme.FontSmall,
-            Text = "(not set)",
-            BackColor = AppTheme.ContentBackground
-        };
-        panel.Controls.Add(_leagueLabel);
-
-        // Season label
-        panel.Controls.Add(new Label
-        {
-            Text = "Season:",
+            Size = new Size(250, 22),
             Font = AppTheme.FontSmall,
             ForeColor = AppTheme.TextPrimary,
-            Location = new Point(280, 0),
-            AutoSize = true
-        });
-
-        _seasonLabel = new Label
-        {
-            Location = new Point(280, 16),
-            AutoSize = true,
-            ForeColor = AppTheme.TextSecondary,
-            Font = AppTheme.FontSmall,
-            Text = "(not set)",
-            BackColor = AppTheme.ContentBackground
+            BackColor = AppTheme.ContentBackground,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Cursor = Cursors.Hand
         };
-        panel.Controls.Add(_seasonLabel);
+        _leagueDisplay.Click += (_, _) => OpenSelectorMenu(_leagueCombo, _leagueDisplay, 260);
+        panel.Controls.Add(_leagueDisplay);
+
+        _leagueCombo = new ComboBox
+        {
+            Location = new Point(0, 20),
+            Width = 260,
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Font = AppTheme.FontSmall,
+            ForeColor = AppTheme.TextPrimary,
+            BackColor = AppTheme.ContentBackground,
+            Visible = false
+        };
+        _leagueCombo.SelectedIndexChanged += OnDefaultLeagueSelected;
+        panel.Controls.Add(_leagueCombo);
+
+        // Season selector
+        var seasonHeader = new Label
+        {
+            Text = "Season:",
+            Font = AppTheme.FontSmallBold,
+            ForeColor = AppTheme.TextPrimary,
+            Location = new Point(270, 0),
+            AutoSize = true,
+            Cursor = Cursors.Hand
+        };
+        seasonHeader.Click += (_, _) => OpenSelectorMenu(_seasonCombo, _seasonDisplay ?? seasonHeader, 320);
+        panel.Controls.Add(seasonHeader);
+
+        _seasonDisplay = new Label
+        {
+            Location = new Point(270, 16),
+            Size = new Size(300, 22),
+            Font = AppTheme.FontSmall,
+            ForeColor = AppTheme.TextPrimary,
+            BackColor = AppTheme.ContentBackground,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Cursor = Cursors.Hand
+        };
+        _seasonDisplay.Click += (_, _) => OpenSelectorMenu(_seasonCombo, _seasonDisplay, 320);
+        panel.Controls.Add(_seasonDisplay);
+
+        _seasonCombo = new ComboBox
+        {
+            Location = new Point(280, 20),
+            Width = 320,
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Font = AppTheme.FontSmall,
+            ForeColor = AppTheme.TextPrimary,
+            BackColor = AppTheme.ContentBackground,
+            Visible = false
+        };
+        _seasonCombo.SelectedIndexChanged += OnDefaultSeasonSelected;
+        panel.Controls.Add(_seasonCombo);
 
         LoadDefaultsUI();
 
         return panel;
     }
 
-    private void LoadDefaultsUI()
+    private void OpenSelectorMenu(ComboBox? combo, Control anchor, int width)
     {
-        var leagueId = AppParameterService.GetDefaultLeagueId(_db);
-        var seasonId = AppParameterService.GetDefaultSeasonId(_db);
+        if (combo == null || combo.Items.Count == 0) return;
+
+        var menu = new ContextMenuStrip
+        {
+            BackColor = AppTheme.Surface,
+            ForeColor = AppTheme.TextPrimary,
+            ShowImageMargin = false
+        };
+
+        for (int i = 0; i < combo.Items.Count; i++)
+        {
+            int index = i;
+            var item = new ToolStripMenuItem(combo.Items[i]?.ToString() ?? string.Empty)
+            {
+                Checked = index == combo.SelectedIndex
+            };
+            item.Click += (_, _) => combo.SelectedIndex = index;
+            menu.Items.Add(item);
+        }
+
+        menu.Width = width;
+        menu.Show(anchor, new Point(0, anchor.Height));
+    }
+
+    private void RefreshSelectorDisplay()
+    {
+        if (_leagueDisplay != null && _leagueCombo != null)
+            _leagueDisplay.Text = _leagueCombo.SelectedItem?.ToString() ?? "(none)";
+
+        if (_seasonDisplay != null && _seasonCombo != null)
+            _seasonDisplay.Text = _seasonCombo.SelectedItem?.ToString() ?? "(none)";
+    }
+
+    private void OnDefaultLeagueSelected(object? sender, EventArgs e)
+    {
+        if (_isLoadingDefaults || _leagueCombo == null) return;
+
+        using var db = new BocceDbContext();
+        int? leagueId = _leagueCombo.SelectedItem is IntItem li ? li.Id : null;
+        AppParameterService.SetDefaultLeagueId(db, leagueId);
 
         if (leagueId.HasValue)
         {
-            var league = _db.Leagues.FirstOrDefault(l => l.Id == leagueId);
-            _leagueLabel!.Text = league?.Name ?? "(not set)";
+            // Clear season default when not valid for selected league.
+            var seasonId = AppParameterService.GetDefaultSeasonId(db);
+            if (!seasonId.HasValue || !db.Seasons.Any(s => s.Id == seasonId.Value && s.LeagueId == leagueId.Value))
+                AppParameterService.SetDefaultSeasonId(db, null);
         }
         else
         {
-            _leagueLabel!.Text = "(not set)";
+            AppParameterService.SetDefaultSeasonId(db, null);
         }
 
-        if (seasonId.HasValue)
+        LoadDefaultsUI();
+    }
+
+    private void OnDefaultSeasonSelected(object? sender, EventArgs e)
+    {
+        if (_isLoadingDefaults || _seasonCombo == null) return;
+        using var db = new BocceDbContext();
+        int? seasonId = _seasonCombo.SelectedItem is IntItem si ? si.Id : null;
+        AppParameterService.SetDefaultSeasonId(db, seasonId);
+        RefreshSelectorDisplay();
+    }
+
+    private void LoadDefaultsUI()
+    {
+        if (_leagueCombo == null || _seasonCombo == null) return;
+
+        _isLoadingDefaults = true;
+        using var db = new BocceDbContext();
+        var leagueId = AppParameterService.GetDefaultLeagueId(db);
+        var seasonId = AppParameterService.GetDefaultSeasonId(db);
+
+        _leagueCombo.Items.Clear();
+        foreach (var l in db.Leagues.OrderBy(l => l.Name).ToList())
+            _leagueCombo.Items.Add(new IntItem(l.Id, l.Name + (l.IsActive ? "" : " (inactive)")));
+
+        if (_leagueCombo.Items.Count == 0)
         {
-            var season = _db.Seasons.FirstOrDefault(s => s.Id == seasonId);
-            _seasonLabel!.Text = season?.Name ?? "(not set)";
+            _seasonCombo.Items.Clear();
+            _isLoadingDefaults = false;
+            return;
         }
-        else
+
+        int leagueIndex = -1;
+        if (leagueId.HasValue)
+            leagueIndex = _leagueCombo.Items.Cast<IntItem>().ToList().FindIndex(i => i.Id == leagueId.Value);
+        _leagueCombo.SelectedIndex = leagueIndex >= 0 ? leagueIndex : 0;
+
+        var selectedLeagueId = (_leagueCombo.SelectedItem as IntItem)?.Id;
+        _seasonCombo.Items.Clear();
+        if (selectedLeagueId.HasValue)
         {
-            _seasonLabel!.Text = "(not set)";
+            foreach (var s in db.Seasons.Where(s => s.LeagueId == selectedLeagueId.Value)
+                .OrderByDescending(s => s.IsCurrent)
+                .ThenByDescending(s => s.StartDate)
+                .ToList())
+            {
+                _seasonCombo.Items.Add(new IntItem(s.Id, s.Name + (s.IsCurrent ? "  ★" : "") + (s.IsActive ? "" : " (inactive)")));
+            }
         }
+
+        if (_seasonCombo.Items.Count > 0)
+        {
+            int seasonIndex = -1;
+            if (seasonId.HasValue)
+                seasonIndex = _seasonCombo.Items.Cast<IntItem>().ToList().FindIndex(i => i.Id == seasonId.Value);
+            _seasonCombo.SelectedIndex = seasonIndex >= 0 ? seasonIndex : 0;
+        }
+
+        RefreshSelectorDisplay();
+        _isLoadingDefaults = false;
+        RefreshStatsPanel();
+    }
+
+    private sealed record IntItem(int Id, string Name)
+    {
+        public override string ToString() => Name;
     }
 }
+

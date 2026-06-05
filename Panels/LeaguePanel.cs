@@ -1,4 +1,4 @@
-using BocceManager.Data;
+﻿using BocceManager.Data;
 using BocceManager.Data.Entities;
 using BocceManager.Services;
 using BocceManager.UI.Theme;
@@ -38,16 +38,23 @@ public class LeaguePanel : UserControl
         BackColor = AppTheme.ContentBackground;
         Dock = DockStyle.Fill;
         BuildUI();
+        AppParameterService.DefaultsChanged += OnDefaultsChanged;
+        LoadLeagueList();
+    }
+
+    private void OnDefaultsChanged(object? sender, DefaultsChangedEventArgs e)
+    {
         LoadLeagueList();
     }
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { }
+        if (disposing)
+            AppParameterService.DefaultsChanged -= OnDefaultsChanged;
         base.Dispose(disposing);
     }
 
-    // ── Build UI ─────────────────────────────────────────────────────────────
+    // â”€â”€ Build UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void BuildUI()
     {
@@ -103,7 +110,7 @@ public class LeaguePanel : UserControl
         return tabs;
     }
 
-    // ── Editor Tab ───────────────────────────────────────────────────────────
+    // â”€â”€ Editor Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private TabPage BuildEditorTab()
     {
@@ -158,8 +165,8 @@ public class LeaguePanel : UserControl
         };
         var lblRulesHint = new Label
         {
-            Text = "Optional — captures any rule variations or additions specific to this league, " +
-                   "applied alongside the club’s official rules document. Most leagues leave this blank.",
+                 Text = "Optional - captures any rule variations or additions specific to this league, " +
+                     "applied alongside the club's official rules document. Most leagues leave this blank.",
             AutoSize = true, MaximumSize = new Size(inputW, 0),
             Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted,
             Location = new Point(inputX, y + 154)
@@ -271,7 +278,7 @@ public class LeaguePanel : UserControl
         Location = new Point(x, y)
     };
 
-    // ── Seasons Tab ───────────────────────────────────────────────────────────
+    // â”€â”€ Seasons Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private TabPage BuildSeasonsTab()
     {
@@ -344,7 +351,7 @@ public class LeaguePanel : UserControl
         return page;
     }
 
-    // ── Data Loading ─────────────────────────────────────────────────────────
+    // â”€â”€ Data Loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void LoadLeagueList()
     {
@@ -391,19 +398,6 @@ public class LeaguePanel : UserControl
         {
             _leagueIdToRestore = item.Id;  // Save for persistence across reloads
             LoadLeague(item.Id);
-            // Update default league only if user selected (not during data load)
-            if (!_isLoadingData)
-            {
-                using var db = new BocceDbContext();
-                AppParameterService.SetDefaultLeagueId(db, item.Id);
-
-                // If this league has no seasons, clear the default season
-                var hasSeasons = db.Seasons.Any(s => s.LeagueId == item.Id && s.IsActive);
-                if (!hasSeasons)
-                {
-                    AppParameterService.SetDefaultSeasonId(db, null);
-                }
-            }
         }
         else
             ClearEditorForm();
@@ -469,15 +463,15 @@ public class LeaguePanel : UserControl
             foreach (var s in rows)
                 _seasonsGrid.Rows.Add(
                     s.Id, s.Name,
-                    s.StartDate?.ToString("yyyy-MM-dd") ?? "—",
-                    s.WeeksInSeason > 0 ? s.WeeksInSeason.ToString() : "—",
+                    s.StartDate?.ToString("yyyy-MM-dd") ?? "-",
+                    s.WeeksInSeason > 0 ? s.WeeksInSeason.ToString() : "-",
                     s.Divisions, s.Teams, s.IsCurrent, s.IsActive);
             _seasonsGrid.ClearSelection();
         }
         catch { }
     }
 
-    // ── New / Save League ─────────────────────────────────────────────────────
+    // â”€â”€ New / Save League â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void StartNewLeague()
     {
@@ -493,7 +487,7 @@ public class LeaguePanel : UserControl
         _txtName.Focus();
     }
 
-    // ── Edit Mode ─────────────────────────────────────────────────────────────
+    // â”€â”€ Edit Mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void EnterEditMode()
     {
@@ -530,14 +524,14 @@ public class LeaguePanel : UserControl
         _btnCancel.Visible = editMode;
     }
 
-    // ── Save ──────────────────────────────────────────────────────────────────
+    // â”€â”€ Save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void SaveLeague()
     {
         var name = _txtName.Text.Trim();
         if (string.IsNullOrEmpty(name))
         {
-            MessageBox.Show("League name is required.", "BocceManager",
+            MessageBox.Show("League name is required.", "Golden Vista Bocce League Master",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
             _txtName.Focus();
             return;
@@ -592,12 +586,12 @@ public class LeaguePanel : UserControl
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Save failed:\n\n{ex.Message}", "BocceManager",
+            MessageBox.Show($"Save failed:\n\n{ex.Message}", "Golden Vista Bocce League Master",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
 
-        MessageBox.Show("League saved.", "BocceManager",
+        MessageBox.Show("League saved.", "Golden Vista Bocce League Master",
             MessageBoxButtons.OK, MessageBoxIcon.Information);
 
         // Exit edit mode and return to view
@@ -652,12 +646,12 @@ public class LeaguePanel : UserControl
                 }
             }
             db.SaveChanges();
-            MessageBox.Show($"Updated {dlg.ApprovedTargets.Count} record(s).", "BocceManager",
+            MessageBox.Show($"Updated {dlg.ApprovedTargets.Count} record(s).", "Golden Vista Bocce League Master",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Propagation failed:\n\n{ex.Message}", "BocceManager",
+            MessageBox.Show($"Propagation failed:\n\n{ex.Message}", "Golden Vista Bocce League Master",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
@@ -697,7 +691,7 @@ public class LeaguePanel : UserControl
         }
     }
 
-    // ── Delete League (cascade) ───────────────────────────────────────────────
+    // â”€â”€ Delete League (cascade) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void DeleteLeague()
     {
@@ -711,7 +705,7 @@ public class LeaguePanel : UserControl
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Could not compute impact:\n\n{ex.Message}", "BocceManager",
+            MessageBox.Show($"Could not compute impact:\n\n{ex.Message}", "Golden Vista Bocce League Master",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
@@ -725,7 +719,7 @@ public class LeaguePanel : UserControl
         {
             sb.AppendLine($"  Seasons ({impact.Seasons.Count}):");
             foreach (var s in impact.Seasons)
-                sb.AppendLine($"    • {s.Name}  —  {s.Divisions} division(s), {s.Teams} team(s)");
+                sb.AppendLine($"    - {s.Name} - {s.Divisions} division(s), {s.Teams} team(s)");
         }
         else sb.AppendLine("  0 Seasons");
         sb.AppendLine();
@@ -737,7 +731,7 @@ public class LeaguePanel : UserControl
         sb.AppendLine($"  Email lists ................... {impact.EmailListCount}");
         sb.AppendLine($"  League parameters ............. {impact.ParameterCount}");
         sb.AppendLine();
-        sb.AppendLine("Players are NOT deleted — they belong to the app, not this league.");
+        sb.AppendLine("Players are NOT deleted - they belong to the app, not this league.");
         sb.AppendLine();
         sb.AppendLine("This cannot be undone. Continue?");
 
@@ -752,19 +746,19 @@ public class LeaguePanel : UserControl
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Delete failed:\n\n{ex.Message}", "BocceManager",
+            MessageBox.Show($"Delete failed:\n\n{ex.Message}", "Golden Vista Bocce League Master",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
 
-        MessageBox.Show("League deleted.", "BocceManager",
+        MessageBox.Show("League deleted.", "Golden Vista Bocce League Master",
             MessageBoxButtons.OK, MessageBoxIcon.Information);
         _selectedLeagueId = null;
         LoadLeagueList();
         if (_leagueCombo.Items.Count == 0) ClearEditorForm();
     }
 
-    // ── Season Navigation ─────────────────────────────────────────────────────
+    // â”€â”€ Season Navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void OnSeasonDoubleClick(object? sender, DataGridViewCellEventArgs e)
     {
@@ -776,7 +770,7 @@ public class LeaguePanel : UserControl
     {
         if (_seasonsGrid.SelectedRows.Count == 0)
         {
-            MessageBox.Show("Select a season first.", "BocceManager",
+            MessageBox.Show("Select a season first.", "Golden Vista Bocce League Master",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
@@ -784,7 +778,7 @@ public class LeaguePanel : UserControl
         (FindForm() as MainForm)?.NavigateToSeasons(seasonId);
     }
 
-    // ── Layout Helper ─────────────────────────────────────────────────────────
+    // â”€â”€ Layout Helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private static TableLayoutPanel MakeLayout(Control fill, Panel toolbar)
     {
@@ -804,7 +798,7 @@ public class LeaguePanel : UserControl
         return layout;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private static string? NullIfEmpty(string s) =>
         string.IsNullOrWhiteSpace(s) ? null : s;
@@ -814,3 +808,4 @@ public class LeaguePanel : UserControl
         public override string ToString() => Name;
     }
 }
+

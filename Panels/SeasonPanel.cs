@@ -1,4 +1,4 @@
-using BocceManager.Data;
+﻿using BocceManager.Data;
 using BocceManager.Data.Entities;
 using BocceManager.Services;
 using BocceManager.UI.Theme;
@@ -10,8 +10,11 @@ public class SeasonPanel : UserControl
 {
     private bool _isLoadingData = false;
     private bool _isEditMode = false;
+    private bool _isNewSeasonDraft = false;
+    private bool _seasonNameCustomized = false;
+    private bool _settingSeasonNameProgrammatically = false;
 
-    // ── State ────────────────────────────────────────────────────────────────
+    // â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private int? _selectedLeagueId;
     private int? _selectedSeasonId;
     private int? _previousSeasonId;  // Track season before starting new season
@@ -20,11 +23,11 @@ public class SeasonPanel : UserControl
     private bool _isCopied;
     private int? _copySourceId;
 
-    // ── Header ───────────────────────────────────────────────────────────────
+    // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private ComboBox _leagueCombo = null!;
     private ComboBox _seasonCombo = null!;
 
-    // ── Editor — basic ───────────────────────────────────────────────────────
+    // â”€â”€ Editor â€” basic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private TextBox       _txtName           = null!;
     private DateTimePicker _dtpStartDate     = null!;
     private NumericUpDown _numWeeks          = null!;
@@ -34,10 +37,10 @@ public class SeasonPanel : UserControl
     private CheckBox      _chkActive         = null!;
     private Label         _lblCreatedAt      = null!;
 
-    // ── Editor — division defaults ───────────────────────────────────────────
+    // â”€â”€ Editor â€” division defaults â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private NumericUpDown _numMaxTeamsDiv    = null!;
 
-    // ── Editor — scoring ─────────────────────────────────────────────────────
+    // â”€â”€ Editor â€” scoring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private ComboBox      _cmbGameInterval   = null!;
     private CheckBox      _chkTimeslotDriven = null!;
     private NumericUpDown _numPlayersMin     = null!;
@@ -50,7 +53,7 @@ public class SeasonPanel : UserControl
     private NumericUpDown _numGamesPerMatch  = null!;
     private ComboBox      _cmbScoringMode    = null!;
 
-    // ── Editor — playoff settings ────────────────────────────────────────────
+    // â”€â”€ Editor â€” playoff settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private NumericUpDown _numTeamsPlayoffs     = null!;
     private CheckBox      _chkFirstPlace        = null!;
     private ComboBox      _cmbPlayoffType       = null!;
@@ -63,27 +66,34 @@ public class SeasonPanel : UserControl
     private Button _btnDelete = null!;
     private Button _btnCancel = null!;
 
-    // ── Divisions tab ─────────────────────────────────────────────────────────
+    // â”€â”€ Divisions tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private DataGridView _divisionsGrid = null!;
 
-    // ── Slots tab ─────────────────────────────────────────────────────────────
+    // â”€â”€ Slots tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private CheckedListBox _daysList  = null!;
     private CheckedListBox _timesList = null!;
     private Button         _btnBuild  = null!;
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public SeasonPanel()
     {
         BackColor = AppTheme.ContentBackground;
         Dock = DockStyle.Fill;
         BuildUI();
+        AppParameterService.DefaultsChanged += OnDefaultsChanged;
+        LoadLeagueList();
+    }
+
+    private void OnDefaultsChanged(object? sender, DefaultsChangedEventArgs e)
+    {
         LoadLeagueList();
     }
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { }
+        if (disposing)
+            AppParameterService.DefaultsChanged -= OnDefaultsChanged;
         base.Dispose(disposing);
     }
 
@@ -100,7 +110,7 @@ public class SeasonPanel : UserControl
         catch { }
     }
 
-    // ── Build UI ─────────────────────────────────────────────────────────────
+    // â”€â”€ Build UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void BuildUI()
     {
@@ -172,7 +182,7 @@ public class SeasonPanel : UserControl
         return tabs;
     }
 
-    // ── Editor Tab ───────────────────────────────────────────────────────────
+    // â”€â”€ Editor Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private TabPage BuildEditorTab()
     {
@@ -184,13 +194,15 @@ public class SeasonPanel : UserControl
         var cc = new List<Control>();
         void Add(params Control[] items) => cc.AddRange(items);
 
-        // ── Basic ────────────────────────────────────────────────────────────
+        // â”€â”€ Basic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         Add(Lbl("Name *", lx, y));
         _txtName = new TextBox { Location = new Point(ix, y), Size = new Size(iw, 26), Font = AppTheme.FontDefault, BackColor = AppTheme.ContentBackground, ForeColor = AppTheme.TextPrimary };
+        _txtName.TextChanged += OnSeasonNameTextChanged;
         Add(_txtName); y += 44;
 
         Add(Lbl("Start Date", lx, y));
         _dtpStartDate = new DateTimePicker { Location = new Point(ix, y), Width = 180, Format = DateTimePickerFormat.Short, Font = AppTheme.FontDefault };
+        _dtpStartDate.ValueChanged += OnSeasonStartDateChanged;
         Add(_dtpStartDate); y += 44;
 
         Add(Lbl("Weeks in Season", lx, y));
@@ -201,13 +213,13 @@ public class SeasonPanel : UserControl
         _numGamesPerSeason = Num(ix, y, 0, 999);
         Add(_numGamesPerSeason, Hint("Total games each team plays", ix + 100, y + 4)); y += 44;
 
-        // ── Status ───────────────────────────────────────────────────────────
+        // â”€â”€ Status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         Add(Sep(lx, y, iw + ix - lx)); y += 10;
         Add(SecHdr("Status", lx, y)); y += 34;
 
         Add(Lbl("Is Current Season", lx, y));
         _chkIsCurrent = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary };
-        Add(_chkIsCurrent, Hint("Only one season per league can be current (★)", ix + 26, y + 4)); y += 38;
+        Add(_chkIsCurrent, Hint("Only one season per league can be current (\u2605)", ix + 26, y + 4)); y += 38;
 
         Add(Lbl("Active", lx, y));
         _chkActive = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary, Checked = true };
@@ -222,7 +234,7 @@ public class SeasonPanel : UserControl
         return page;
     }
 
-    // ── Parameters Tab ───────────────────────────────────────────────────────
+    // â”€â”€ Parameters Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private TabPage BuildParametersTab()
     {
@@ -234,7 +246,7 @@ public class SeasonPanel : UserControl
         var cc = new List<Control>();
         void Add(params Control[] items) => cc.AddRange(items);
 
-        // ── Division Defaults ─────────────────────────────────────────────────
+        // â”€â”€ Division Defaults â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         Add(SecHdr("Division Defaults", lx, y)); y += 34;
 
         Add(Lbl("Max Teams / Division", lx, y));
@@ -243,12 +255,12 @@ public class SeasonPanel : UserControl
 
         Add(Sep(lx, y, iw + ix - lx)); y += 10;
 
-        // ── Scoring Parameters ────────────────────────────────────────────────
+        // â”€â”€ Scoring Parameters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         Add(SecHdr("Scoring Parameters", lx, y)); y += 34;
 
         Add(Lbl("Game Interval", lx, y));
         _cmbGameInterval = StrCombo(ix, y, 300,
-            ("weekly",              "Weekly — same day each week"),
+            ("weekly",              "Weekly - same day each week"),
             ("schedule_determined", "Schedule Determined"));
         Add(_cmbGameInterval); y += 44;
 
@@ -301,7 +313,7 @@ public class SeasonPanel : UserControl
             Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted
         }); y += 32;
 
-        // ── Playoff Settings ──────────────────────────────────────────────────
+        // â”€â”€ Playoff Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         Add(Sep(lx, y, iw + ix - lx)); y += 10;
         Add(SecHdr("Playoff Settings", lx, y)); y += 34;
 
@@ -311,7 +323,7 @@ public class SeasonPanel : UserControl
 
         Add(Lbl("Playoff Start Date", lx, y));
         _dtpPlayoffStart = new DateTimePicker { Location = new Point(ix, y), Width = 200, Format = DateTimePickerFormat.Short, Font = AppTheme.FontDefault, ShowCheckBox = true, Checked = false };
-        Add(_dtpPlayoffStart, Hint("Optional — uncheck if not yet known", ix + 212, y + 4)); y += 44;
+        Add(_dtpPlayoffStart, Hint("Optional - uncheck if not yet known", ix + 212, y + 4)); y += 44;
 
         Add(Lbl("First Place Guaranteed", lx, y));
         _chkFirstPlace = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary, Checked = true };
@@ -343,7 +355,7 @@ public class SeasonPanel : UserControl
         return page;
     }
 
-    // ── Save Toolbar (visible below all tabs) ─────────────────────────────────
+    // â”€â”€ Save Toolbar (visible below all tabs) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private Panel BuildSaveToolbar()
     {
@@ -394,7 +406,7 @@ public class SeasonPanel : UserControl
         return toolbar;
     }
 
-    // ── Divisions Tab ─────────────────────────────────────────────────────────
+    // â”€â”€ Divisions Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private TabPage BuildDivisionsTab()
     {
@@ -473,7 +485,7 @@ public class SeasonPanel : UserControl
         return page;
     }
 
-    // ── Slots Tab ─────────────────────────────────────────────────────────────
+    // â”€â”€ Slots Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private TabPage BuildSlotsTab()
     {
@@ -512,7 +524,7 @@ public class SeasonPanel : UserControl
         _btnBuild.Click += OnBuildDivisions;
         var bHint = new Label
         {
-            Text = "Creates one division per Day × Time combination. Existing combinations are skipped.",
+            Text = "Creates one division per Day Ã— Time combination. Existing combinations are skipped.",
             Location = new Point(285, 18), AutoSize = true,
             Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted
         };
@@ -523,7 +535,7 @@ public class SeasonPanel : UserControl
         return page;
     }
 
-    // ── Data Loading ─────────────────────────────────────────────────────────
+    // â”€â”€ Data Loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void LoadLeagueList()
     {
@@ -607,19 +619,6 @@ public class SeasonPanel : UserControl
             _selectedLeagueId = item.Id;
             _leagueIdToRestore = item.Id;  // Save for persistence across reloads
             LoadSeasonList(item.Id);
-            // Update default league only if user selected (not during data load)
-            if (!_isLoadingData)
-            {
-                using var db = new BocceDbContext();
-                AppParameterService.SetDefaultLeagueId(db, item.Id);
-
-                // If this league has no seasons, clear the default season
-                var hasSeasons = db.Seasons.Any(s => s.LeagueId == item.Id && s.IsActive);
-                if (!hasSeasons)
-                {
-                    AppParameterService.SetDefaultSeasonId(db, null);
-                }
-            }
         }
         else ClearEditor();
     }
@@ -639,7 +638,7 @@ public class SeasonPanel : UserControl
                 foreach (var s in db.Seasons.Where(s => s.LeagueId == leagueId)
                     .OrderByDescending(s => s.StartDate).ThenBy(s => s.Name).ToList())
                 {
-                    var label = s.Name + (s.IsCurrent ? "  ★" : "") + (s.IsActive ? "" : " (inactive)");
+                    var label = s.Name + (s.IsCurrent ? "  \u2605" : "") + (s.IsActive ? "" : " (inactive)");
                     _seasonCombo.Items.Add(new IntItem(s.Id, label));
                 }
 
@@ -674,12 +673,6 @@ public class SeasonPanel : UserControl
             _selectedSeasonId = item.Id;
             _seasonIdToRestore = item.Id;  // Save for persistence across reloads
             LoadSeason(item.Id);
-            // Update default season only if user selected (not during data load)
-            if (!_isLoadingData)
-            {
-                using var db = new BocceDbContext();
-                AppParameterService.SetDefaultSeasonId(db, item.Id);
-            }
         }
         else ClearEditor();
     }
@@ -689,6 +682,8 @@ public class SeasonPanel : UserControl
         _selectedSeasonId = seasonId;
         _isCopied = false; _copySourceId = null;
         _isEditMode = false;
+        _isNewSeasonDraft = false;
+        _seasonNameCustomized = false;
 
         try
         {
@@ -741,6 +736,8 @@ public class SeasonPanel : UserControl
     {
         _selectedSeasonId = null;
         _isCopied = false; _copySourceId = null;
+        _isNewSeasonDraft = false;
+        _seasonNameCustomized = false;
 
         _txtName.Text = "";
         _dtpStartDate.Value = DateTime.Today;
@@ -779,8 +776,8 @@ public class SeasonPanel : UserControl
                 .Select(d => new
                 {
                     d.Id, d.Name, d.ShortName, d.SortName,
-                    Day  = d.DaySlot  != null ? d.DaySlot.DayName      : "—",
-                    Time = d.TimeSlot != null ? d.TimeSlot.Timeslot12h : "—",
+                    Day  = d.DaySlot  != null ? d.DaySlot.DayName      : "-",
+                    Time = d.TimeSlot != null ? d.TimeSlot.Timeslot12h : "-",
                     Teams = db.Teams.Count(t => t.DivisionId == d.Id),
                     d.IsActive
                 }).ToList();
@@ -827,13 +824,13 @@ public class SeasonPanel : UserControl
             if (_timesList.Items[i] is SlotItem ti) _timesList.SetItemChecked(i, configuredTimes.Contains(ti.Id));
     }
 
-    // ── New Season ────────────────────────────────────────────────────────────
+    // â”€â”€ New Season â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void StartNewSeason()
     {
         if (!_selectedLeagueId.HasValue)
         {
-            MessageBox.Show("Select a league first.", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show("Select a league first.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
@@ -843,7 +840,10 @@ public class SeasonPanel : UserControl
         _seasonCombo.SelectedIndexChanged += OnSeasonSelected;
         ClearEditor();
         _isEditMode = true;
+        _isNewSeasonDraft = true;
+        _seasonNameCustomized = false;
         SetEditModeUI(true);
+        ApplyDefaultSeasonNameForNewDraft();
 
         try
         {
@@ -865,6 +865,51 @@ public class SeasonPanel : UserControl
         catch { }
 
         _txtName.Focus();
+    }
+
+    private void OnSeasonStartDateChanged(object? sender, EventArgs e)
+    {
+        ApplyDefaultSeasonNameForNewDraft();
+    }
+
+    private void OnSeasonNameTextChanged(object? sender, EventArgs e)
+    {
+        if (!_isNewSeasonDraft || _settingSeasonNameProgrammatically)
+            return;
+        _seasonNameCustomized = true;
+    }
+
+    private void ApplyDefaultSeasonNameForNewDraft()
+    {
+        if (!_isNewSeasonDraft || _seasonNameCustomized || !_selectedLeagueId.HasValue)
+            return;
+
+        var name = BuildDefaultSeasonName(_selectedLeagueId.Value, _dtpStartDate.Value);
+        _settingSeasonNameProgrammatically = true;
+        _txtName.Text = name;
+        _settingSeasonNameProgrammatically = false;
+    }
+
+    private static string BuildDefaultSeasonName(int leagueId, DateTime startDate)
+    {
+        var yearName = startDate.Year.ToString();
+        try
+        {
+            using var db = new BocceDbContext();
+            var existingNames = db.Seasons
+                .Where(s => s.LeagueId == leagueId)
+                .Select(s => s.Name)
+                .ToList();
+
+            var yearExists = existingNames.Any(n =>
+                string.Equals((n ?? string.Empty).Trim(), yearName, StringComparison.OrdinalIgnoreCase));
+
+            return yearExists ? startDate.ToString("MMMM yyyy") : yearName;
+        }
+        catch
+        {
+            return yearName;
+        }
     }
 
     private void OfferCopyDate(Season source)
@@ -926,9 +971,9 @@ public class SeasonPanel : UserControl
         _copySourceId = source.Id;
     }
 
-    // ── Save ──────────────────────────────────────────────────────────────────
+    // â”€â”€ Save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    // ── Edit Mode ─────────────────────────────────────────────────────────────
+    // â”€â”€ Edit Mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void EnterEditMode()
     {
@@ -1012,19 +1057,19 @@ public class SeasonPanel : UserControl
         _btnCancel.Visible = editMode;
     }
 
-    // ── Save ──────────────────────────────────────────────────────────────────
+    // â”€â”€ Save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void SaveSeason()
     {
         var name = _txtName.Text.Trim();
         if (string.IsNullOrEmpty(name))
         {
-            MessageBox.Show("Season name is required.", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show("Season name is required.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             _txtName.Focus(); return;
         }
         if (!_selectedLeagueId.HasValue)
         {
-            MessageBox.Show("Select a league first.", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show("Select a league first.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
@@ -1081,7 +1126,7 @@ public class SeasonPanel : UserControl
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Save failed:\n\n{ex.Message}", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show($"Save failed:\n\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
 
@@ -1105,7 +1150,7 @@ public class SeasonPanel : UserControl
             }
         }
 
-        MessageBox.Show("Season saved." + divMsg, "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        MessageBox.Show("Season saved." + divMsg, "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
         // Exit edit mode and return to view
         ExitEditMode();
@@ -1145,7 +1190,7 @@ public class SeasonPanel : UserControl
         s.PlayoffTiebreakerEnd  = _chkPlayoffTiebreaker.Checked;
     }
 
-    // ── Division helpers ──────────────────────────────────────────────────────
+    // â”€â”€ Division helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private (int divs, int teams, int players, int lft) CopySeasonData(int sourceSeasonId, int newSeasonId)
     {
@@ -1163,7 +1208,7 @@ public class SeasonPanel : UserControl
                 .Where(t => sourceDivs.Select(d => d.Id).Contains(t.DivisionId))
                 .ToList();
 
-            // Maps old IDs → new IDs so we can rewire LookingForTeam
+            // Maps old IDs â†’ new IDs so we can rewire LookingForTeam
             var divMap  = new Dictionary<int, int>();
             var teamMap = new Dictionary<int, int>();
 
@@ -1320,12 +1365,12 @@ public class SeasonPanel : UserControl
     {
         if (!_selectedSeasonId.HasValue)
         {
-            MessageBox.Show("Save the season first, then build divisions.", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show("Save the season first, then build divisions.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         if (_numWeeks.Value == 0)
         {
-            MessageBox.Show("Enter the number of weeks in the season before building divisions.", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show("Enter the number of weeks in the season before building divisions.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
@@ -1333,7 +1378,7 @@ public class SeasonPanel : UserControl
         var selDayIds  = _daysList.CheckedItems.Cast<SlotItem>().Select(s => s.Id).ToHashSet();
         var selTimeIds = _timesList.CheckedItems.Cast<SlotItem>().Select(s => s.Id).ToHashSet();
 
-        // ── Find orphaned divisions ───────────────────────────────────────────
+        // â”€â”€ Find orphaned divisions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         var orphans = new List<(int Id, string Name, int Teams, int Players)>();
         try
         {
@@ -1353,19 +1398,19 @@ public class SeasonPanel : UserControl
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error checking existing divisions:\n{ex.Message}", "BocceManager",
+            MessageBox.Show($"Error checking existing divisions:\n{ex.Message}", "Golden Vista Bocce League Master",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
 
-        // ── Warn and confirm deletion of orphans ──────────────────────────────
+        // â”€â”€ Warn and confirm deletion of orphans â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         if (orphans.Count > 0)
         {
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("The following divisions no longer match the selected day/time slots and will be DELETED:\n");
             foreach (var (_, name, tc, pc) in orphans)
             {
-                sb.Append($"  • {name}");
+                sb.Append($"  - {name}");
                 if (tc > 0) sb.Append($"  ({tc} team(s), {pc} player assignment(s) removed)");
                 sb.AppendLine();
             }
@@ -1397,20 +1442,20 @@ public class SeasonPanel : UserControl
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Delete failed:\n{ex.Message}", "BocceManager",
+                MessageBox.Show($"Delete failed:\n{ex.Message}", "Golden Vista Bocce League Master",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
         }
 
-        // ── Create new divisions for uncovered combinations ───────────────────
+        // â”€â”€ Create new divisions for uncovered combinations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         int n = BuildDivisionsFromSlots(seasonId);
 
         var msg = orphans.Count > 0 ? $"{orphans.Count} division(s) removed." : "";
         if (n > 0) msg += (msg.Length > 0 ? "\n" : "") + $"{n} new division(s) created.";
-        if (msg.Length == 0) msg = "No changes — all selected slot combinations already have divisions.";
+        if (msg.Length == 0) msg = "No changes - all selected slot combinations already have divisions.";
 
-        MessageBox.Show(msg, "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        MessageBox.Show(msg, "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
         LoadDivisions(seasonId);
         LoadSeasonSlots(seasonId);
     }
@@ -1438,7 +1483,7 @@ public class SeasonPanel : UserControl
             sb.AppendLine($"  Teams to be disbanded ......... {teamCount}");
             sb.AppendLine($"  Player assignments removed .... {playerCount}");
             sb.AppendLine();
-            sb.AppendLine("Players are NOT deleted — only their team assignments.");
+            sb.AppendLine("Players are NOT deleted - only their team assignments.");
         }
         sb.AppendLine();
         sb.AppendLine("This cannot be undone. Continue?");
@@ -1464,14 +1509,14 @@ public class SeasonPanel : UserControl
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Delete failed:\n{ex.Message}", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show($"Delete failed:\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
 
         if (_selectedSeasonId.HasValue) LoadDivisions(_selectedSeasonId.Value);
     }
 
-    // ── Delete Season ─────────────────────────────────────────────────────────
+    // â”€â”€ Delete Season â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void DeleteSeason()
     {
@@ -1514,7 +1559,7 @@ public class SeasonPanel : UserControl
             db.SeasonCourts     .RemoveRange(db.SeasonCourts     .Where(x => x.SeasonId == seasonId));
             db.SeasonFees       .RemoveRange(db.SeasonFees       .Where(x => x.SeasonId == seasonId));
 
-            // Divisions → Teams → TeamPlayers
+            // Divisions â†’ Teams â†’ TeamPlayers
             foreach (var div in season.Divisions)
             {
                 foreach (var team in div.Teams)
@@ -1527,17 +1572,17 @@ public class SeasonPanel : UserControl
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Delete failed:\n{ex.Message}", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show($"Delete failed:\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
 
-        MessageBox.Show("Season deleted.", "BocceManager", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        MessageBox.Show("Season deleted.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
         _selectedSeasonId = null;
         LoadSeasonList(_selectedLeagueId!.Value);
         if (_seasonCombo.Items.Count == 0) ClearEditor();
     }
 
-    // ── Navigation helpers ────────────────────────────────────────────────────
+    // â”€â”€ Navigation helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private void SelectLeagueInCombo(int leagueId)
     {
@@ -1553,7 +1598,7 @@ public class SeasonPanel : UserControl
             { _seasonCombo.SelectedIndex = i; return; }
     }
 
-    // ── Date prompt ───────────────────────────────────────────────────────────
+    // â”€â”€ Date prompt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private DateOnly? PromptDate(string caption, string message, DateOnly defaultDate)
     {
@@ -1574,7 +1619,7 @@ public class SeasonPanel : UserControl
         return form.ShowDialog(this) == DialogResult.OK ? DateOnly.FromDateTime(dtp.Value) : null;
     }
 
-    // ── Control factories ─────────────────────────────────────────────────────
+    // â”€â”€ Control factories â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private static Label NavLabel(string text, int x, int y) => new()
     {
@@ -1657,3 +1702,4 @@ public class SeasonPanel : UserControl
     private sealed record StrItem(string Key, string Label) { public override string ToString() => Label; }
     private sealed record SlotItem(int Id, string Display)  { public override string ToString() => Display; }
 }
+

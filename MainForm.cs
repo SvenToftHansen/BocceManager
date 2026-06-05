@@ -1,4 +1,4 @@
-using BocceManager.Panels;
+﻿using BocceManager.Panels;
 using BocceManager.UI.Theme;
 
 namespace BocceManager;
@@ -26,8 +26,27 @@ public partial class MainForm : Form
     {
         InitializeComponent();
         BuildNavigation();
-        Navigate(NavSection.Dashboard);
+        Navigate(GetStartupSection());
         UpdateStatusBar();
+    }
+
+    private static NavSection GetStartupSection()
+    {
+        try
+        {
+            using var db = new Data.BocceDbContext();
+            bool hasLeagues = db.Leagues.Any();
+            if (!hasLeagues) return NavSection.Leagues;
+
+            bool hasSeasons = db.Seasons.Any();
+            if (!hasSeasons) return NavSection.Seasons;
+        }
+        catch
+        {
+            // Fall back to dashboard if startup data checks fail.
+        }
+
+        return NavSection.Dashboard;
     }
 
     private void BuildNavigation()
@@ -46,8 +65,8 @@ public partial class MainForm : Form
 
         flow.Controls.Add(new Label
         {
-            Text = "BocceManager",
-            Width = 220, Height = 64,
+            Text = "Golden Vista\r\nBocce League Master",
+            Width = 220, Height = 72,
             ForeColor = AppTheme.NavText,
             BackColor = AppTheme.NavTitleBackground,
             TextAlign = ContentAlignment.MiddleCenter,
@@ -83,7 +102,7 @@ public partial class MainForm : Form
 
             var header = new Label
             {
-                Text = "▶  " + groupName,
+                Text = "\u25B6  " + groupName,
                 Tag = groupName,
                 Width = 220, Height = 28,
                 ForeColor = AppTheme.NavHeader,
@@ -155,11 +174,11 @@ public partial class MainForm : Form
             add("Email Lists",    NavSection.EmailLists);
             add("Documents",      NavSection.Documents);
             add("Parameters",     NavSection.Parameters);
-            add("Theme",          NavSection.Theme);
         });
 
         AddGroup("UTILITIES", add => {
             add("Backup",         NavSection.Utilities);
+            add("Theme",          NavSection.Theme);
         });
     }
 
@@ -171,7 +190,7 @@ public partial class MainForm : Form
         {
             foreach (var item in items)
                 item.Visible = false;
-            header.Text = "▶  " + (string)header.Tag!;
+            header.Text = "\u25B6  " + (string)header.Tag!;
         }
         _openGroupIndex = -1;
 
@@ -180,7 +199,7 @@ public partial class MainForm : Form
             var (header, items) = _navGroups[index];
             foreach (var item in items)
                 item.Visible = true;
-            header.Text = "▼  " + (string)header.Tag!;
+            header.Text = "\u25BC  " + (string)header.Tag!;
             _openGroupIndex = index;
         }
     }
@@ -281,3 +300,4 @@ public partial class MainForm : Form
         lblDbPath.Text = "DB: PostgreSQL (localhost:5432)";
     }
 }
+
