@@ -1552,21 +1552,72 @@ public class SeasonPanel : UserControl
                 .FirstOrDefault(s => s.Id == seasonId);
             if (season == null) return;
 
-            // Remove child records in dependency order before deleting the season
-            db.SeasonParameters .RemoveRange(db.SeasonParameters .Where(x => x.SeasonId == seasonId));
-            db.SeasonDaySlots   .RemoveRange(db.SeasonDaySlots   .Where(x => x.SeasonId == seasonId));
-            db.SeasonTimeSlots  .RemoveRange(db.SeasonTimeSlots  .Where(x => x.SeasonId == seasonId));
-            db.SeasonCourts     .RemoveRange(db.SeasonCourts     .Where(x => x.SeasonId == seasonId));
-            db.SeasonFees       .RemoveRange(db.SeasonFees       .Where(x => x.SeasonId == seasonId));
+            var divisionIds = season.Divisions.Select(d => d.Id).ToList();
 
-            // Divisions â†’ Teams â†’ TeamPlayers
+            // Clear team captain FKs first (Restrict constraint)
             foreach (var div in season.Divisions)
             {
                 foreach (var team in div.Teams)
+                    team.CaptainPlayerId = null;
+            }
+            db.SaveChanges();
+
+            // Schedule data: Games > MatchTeamResults > Matches > ScheduleWeeks
+            var weekIds = db.ScheduleWeeks.Where(w => divisionIds.Contains(w.DivisionId))
+                                          .Select(w => w.Id).ToList();
+            if (weekIds.Count > 0)
+            {
+                var matchIds = db.Matches.Where(m => weekIds.Contains(m.ScheduleWeekId))
+                                         .Select(m => m.Id).ToList();
+                db.Games.RemoveRange(db.Games.Where(g => matchIds.Contains(g.MatchId)));
+                db.MatchTeamResults.RemoveRange(db.MatchTeamResults.Where(r => matchIds.Contains(r.MatchId)));
+                db.Matches.RemoveRange(db.Matches.Where(m => weekIds.Contains(m.ScheduleWeekId)));
+            }
+            db.ScheduleWeeks.RemoveRange(db.ScheduleWeeks.Where(w => divisionIds.Contains(w.DivisionId)));
+
+            // Playoff data
+            var playoffMatchIds = db.PlayoffMatches.Where(pm => pm.SeasonId == seasonId)
+                                                   .Select(pm => pm.Id).ToList();
+            foreach (var pmId in playoffMatchIds)
+                db.PlayoffGames.RemoveRange(db.PlayoffGames.Where(pg => pg.PlayoffMatchId == pmId));
+            db.PlayoffMatches.RemoveRange(db.PlayoffMatches.Where(pm => pm.SeasonId == seasonId));
+            db.PlayoffRounds.RemoveRange(db.PlayoffRounds.Where(pr => pr.SeasonId == seasonId));
+
+            // Division and team data
+            foreach (var div in season.Divisions)
+            {
+                db.DivisionParameters.RemoveRange(db.DivisionParameters.Where(x => x.DivisionId == div.Id));
+                db.TeamStandings.RemoveRange(db.TeamStandings.Where(x => x.DivisionId == div.Id));
+                foreach (var team in div.Teams)
+                {
                     db.TeamPlayers.RemoveRange(team.TeamPlayers);
+                    db.TeamParameters.RemoveRange(db.TeamParameters.Where(x => x.TeamId == team.Id));
+                }
                 db.Teams.RemoveRange(div.Teams);
             }
             db.Divisions.RemoveRange(season.Divisions);
+
+            // Season-level data
+            db.SeasonParameters.RemoveRange(db.SeasonParameters.Where(x => x.SeasonId == seasonId));
+            db.SeasonDaySlots.RemoveRange(db.SeasonDaySlots.Where(x => x.SeasonId == seasonId));
+            db.SeasonTimeSlots.RemoveRange(db.SeasonTimeSlots.Where(x => x.SeasonId == seasonId));
+            db.SeasonCourts.RemoveRange(db.SeasonCourts.Where(x => x.SeasonId == seasonId));
+            db.SeasonFees.RemoveRange(db.SeasonFees.Where(x => x.SeasonId == seasonId));
+
+            // Team applicants
+            var applicantIds = db.TeamApplicants.Where(ta => ta.SeasonId == seasonId)
+                                                .Select(ta => ta.Id).ToList();
+            if (applicantIds.Count > 0)
+            {
+                db.TeamApplicantPlayers.RemoveRange(
+                    db.TeamApplicantPlayers.Where(p => applicantIds.Contains(p.TeamApplicantId)));
+                db.TeamApplicantDaySlots.RemoveRange(
+                    db.TeamApplicantDaySlots.Where(d => applicantIds.Contains(d.TeamApplicantId)));
+                db.TeamApplicantTimeSlots.RemoveRange(
+                    db.TeamApplicantTimeSlots.Where(t => applicantIds.Contains(t.TeamApplicantId)));
+                db.TeamApplicants.RemoveRange(db.TeamApplicants.Where(ta => ta.SeasonId == seasonId));
+            }
+
             db.Seasons.Remove(season);
             db.SaveChanges();
         }
