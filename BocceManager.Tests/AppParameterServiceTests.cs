@@ -1,6 +1,7 @@
 using BocceManager.Data;
 using BocceManager.Data.Entities;
 using BocceManager.Services;
+using Microsoft.Data.Sqlite;
 
 namespace BocceManager.Tests;
 

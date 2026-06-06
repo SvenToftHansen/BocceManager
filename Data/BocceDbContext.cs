@@ -8,6 +8,9 @@ public class BocceDbContext : DbContext
     // PostgreSQL connection string
     private const string PostgresConnString = "Host=localhost;Port=5432;Database=bocce_league;Username=postgres;Password=7720";
 
+    // Test mode support
+    public static string? DbPath { get; set; }
+
     // Reference / Lookup
     public DbSet<Court> Courts => Set<Court>();
     public DbSet<TimeSlot> TimeSlots => Set<TimeSlot>();
@@ -83,7 +86,18 @@ public class BocceDbContext : DbContext
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder options)
-        => options.UseNpgsql(PostgresConnString);
+    {
+        if (!string.IsNullOrEmpty(DbPath))
+        {
+            // Test mode: use SQLite
+            options.UseSqlite($"Data Source={DbPath}");
+        }
+        else
+        {
+            // Production: use PostgreSQL
+            options.UseNpgsql(PostgresConnString);
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder model)
     {
