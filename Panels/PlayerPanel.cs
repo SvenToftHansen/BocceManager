@@ -69,8 +69,12 @@ public class PlayerPanel : UserControl
     private Label _lblLeagueStatus = null!;
     private Label _lblLeagueContext = null!;
 
-    private CheckBox _chkInLookingForTeam = null!;
-    private CheckBox _chkInSpareList = null!;
+    private Label _lblLookingForTeams = null!;
+    private Label _lblSpareListLeagues = null!;
+    private Panel _pnlLookingForTeamsCheckboxes = null!;
+    private Panel _pnlSpareListCheckboxes = null!;
+    private Dictionary<string, CheckBox> _lookingForTeamCheckboxes = new();
+    private Dictionary<int, CheckBox> _spareListCheckboxes = new();
 
     private Button _btnNew = null!;
     private Button _btnEdit = null!;
@@ -345,25 +349,77 @@ public class PlayerPanel : UserControl
         };
         y += 28;
 
-        _chkInLookingForTeam = new CheckBox
+        // Looking for Teams display
+        var lblLft = new Label
         {
-            Text = "Looking for Team",
-            Location = new Point(inputX, y),
+            Text = "Looking for Teams In:",
+            Font = AppTheme.FontSmallBold,
+            ForeColor = AppTheme.TextPrimary,
             AutoSize = true,
-            Font = AppTheme.FontDefault,
-            ForeColor = AppTheme.TextPrimary
+            Location = new Point(inputX, y)
         };
-        y += 30;
+        scroll.Controls.Add(lblLft);
+        y += 24;
 
-        _chkInSpareList = new CheckBox
+        _lblLookingForTeams = new Label
         {
-            Text = "On Spare List",
-            Location = new Point(inputX, y),
-            AutoSize = true,
-            Font = AppTheme.FontDefault,
-            ForeColor = AppTheme.TextPrimary
+            Text = "(none)",
+            Font = AppTheme.FontSmall,
+            ForeColor = AppTheme.TextMuted,
+            AutoSize = false,
+            Size = new Size(inputW, 40),
+            Location = new Point(inputX, y)
         };
-        y += 30;
+        scroll.Controls.Add(_lblLookingForTeams);
+        y += 50;
+
+        // Looking for Teams checkboxes (for create mode)
+        _pnlLookingForTeamsCheckboxes = new Panel
+        {
+            Location = new Point(inputX, y),
+            Size = new Size(inputW, 100),
+            BackColor = AppTheme.ContentBackground,
+            AutoScroll = true,
+            Visible = false
+        };
+        scroll.Controls.Add(_pnlLookingForTeamsCheckboxes);
+        y += 110;
+
+        // Spare List display
+        var lblSpare = new Label
+        {
+            Text = "Spare In:",
+            Font = AppTheme.FontSmallBold,
+            ForeColor = AppTheme.TextPrimary,
+            AutoSize = true,
+            Location = new Point(inputX, y)
+        };
+        scroll.Controls.Add(lblSpare);
+        y += 24;
+
+        _lblSpareListLeagues = new Label
+        {
+            Text = "(none)",
+            Font = AppTheme.FontSmall,
+            ForeColor = AppTheme.TextMuted,
+            AutoSize = false,
+            Size = new Size(inputW, 40),
+            Location = new Point(inputX, y)
+        };
+        scroll.Controls.Add(_lblSpareListLeagues);
+        y += 50;
+
+        // Spare List checkboxes (for create mode)
+        _pnlSpareListCheckboxes = new Panel
+        {
+            Location = new Point(inputX, y),
+            Size = new Size(inputW, 100),
+            BackColor = AppTheme.ContentBackground,
+            AutoScroll = true,
+            Visible = false
+        };
+        scroll.Controls.Add(_pnlSpareListCheckboxes);
+        y += 110;
 
         _lblLeagueContext = new Label
         {
@@ -385,8 +441,6 @@ public class PlayerPanel : UserControl
             lblActive, _chkIsActive,
             lblCreated, _lblCreatedAt,
             _lblLeagueStatus,
-            _chkInLookingForTeam,
-            _chkInSpareList,
             _lblLeagueContext
         ]);
 
@@ -566,6 +620,7 @@ public class PlayerPanel : UserControl
         ClearEditor();
         PopulatePartnerLookup(null, null);
         RefreshLeagueContextAndStatus(null);
+        BuildLeagueSelectionPanels();
 
         SetMode(PlayerMode.Create);
     }
@@ -578,9 +633,10 @@ public class PlayerPanel : UserControl
         _txtPhone.Text = "";
         _txtLotNumber.Text = "";
         _chkIsActive.Checked = true;
-        _chkInLookingForTeam.Checked = false;
-        _chkInSpareList.Checked = false;
+        _lblLookingForTeams.Text = "(none)";
+        _lblSpareListLeagues.Text = "(none)";
         _lblCreatedAt.Text = "(new)";
+        ClearLeagueSelections();
     }
 
     private void SetMode(PlayerMode mode)
@@ -598,8 +654,19 @@ public class PlayerPanel : UserControl
 
         _chkIsActive.Enabled = editing;
         _cmbPartner.Enabled = editing;
-        _chkInLookingForTeam.Enabled = editing && hasDefaultLeague;
-        _chkInSpareList.Enabled = editing && hasDefaultLeague;
+
+        // Show league selection panels only when creating a new player
+        if (mode == PlayerMode.Create)
+        {
+            BuildLeagueSelectionPanels();
+            _pnlLookingForTeamsCheckboxes.Visible = true;
+            _pnlSpareListCheckboxes.Visible = true;
+        }
+        else
+        {
+            _pnlLookingForTeamsCheckboxes.Visible = false;
+            _pnlSpareListCheckboxes.Visible = false;
+        }
 
         _btnEdit.Visible = mode == PlayerMode.View && hasSelection;
         _btnDelete.Visible = mode == PlayerMode.View && hasSelection;
@@ -643,36 +710,41 @@ public class PlayerPanel : UserControl
     private void RefreshLeagueContextAndStatus(int? playerId)
     {
         using var db = new BocceDbContext();
-        int? defaultLeagueId = AppParameterService.GetDefaultLeagueId(db);
-
-        if (!defaultLeagueId.HasValue)
-        {
-            _chkInLookingForTeam.Checked = false;
-            _chkInSpareList.Checked = false;
-            _lblLeagueContext.Text = "No default league selected. Set one on Dashboard to edit league status.";
-            return;
-        }
-
-        string leagueName = db.Leagues
-            .AsNoTracking()
-            .Where(l => l.Id == defaultLeagueId.Value)
-            .Select(l => l.Name)
-            .FirstOrDefault() ?? "(unknown)";
-
-        _lblLeagueContext.Text = $"League context: {leagueName}";
 
         if (!playerId.HasValue)
         {
-            _chkInLookingForTeam.Checked = false;
-            _chkInSpareList.Checked = false;
+            _lblLookingForTeams.Text = "(none)";
+            _lblSpareListLeagues.Text = "(none)";
+            _lblLeagueContext.Text = "";
             return;
         }
 
-        _chkInLookingForTeam.Checked = db.LookingForTeams.Any(l =>
-            l.LeagueId == defaultLeagueId.Value && l.PlayerId == playerId.Value);
+        // Load Looking for Teams (Leagues)
+        var lookingForTeams = db.LookingForTeams
+            .Where(l => l.PlayerId == playerId.Value)
+            .Include(l => l.League)
+            .OrderBy(l => l.League.Name)
+            .ToList();
 
-        _chkInSpareList.Checked = db.SpareLists.Any(s =>
-            s.LeagueId == defaultLeagueId.Value && s.PlayerId == playerId.Value && s.IsActive);
+        if (lookingForTeams.Count == 0)
+            _lblLookingForTeams.Text = "(none)";
+        else
+            _lblLookingForTeams.Text = string.Join("\n",
+                lookingForTeams.Select(x => x.League.Name));
+
+        // Load Spare Lists (Leagues)
+        var spareLists = db.SpareLists
+            .Where(s => s.PlayerId == playerId.Value && s.IsActive)
+            .Include(s => s.League)
+            .OrderBy(s => s.League.Name)
+            .ToList();
+
+        if (spareLists.Count == 0)
+            _lblSpareListLeagues.Text = "(none)";
+        else
+            _lblSpareListLeagues.Text = string.Join("\n", spareLists.Select(s => s.League.Name));
+
+        _lblLeagueContext.Text = "";
     }
 
     private void CancelEdit()
@@ -684,6 +756,116 @@ public class PlayerPanel : UserControl
             ClearEditor();
             SetMode(PlayerMode.View);
         }
+    }
+
+    private bool _preventingCheckChange = false;
+
+    private List<int> GetCheckedLookingForLeagues()
+    {
+        var result = new List<int>();
+        var seenLeagues = new HashSet<int>();
+        foreach (var kvp in _lookingForTeamCheckboxes)
+        {
+            if (kvp.Value.Checked)
+            {
+                var parts = kvp.Key.Split('_');
+                if (parts.Length == 2 && int.TryParse(parts[0], out int leagueId))
+                {
+                    if (seenLeagues.Add(leagueId))
+                        result.Add(leagueId);
+                }
+            }
+        }
+        return result;
+    }
+
+    private List<int> GetCheckedSpareLeagues()
+    {
+        var result = new List<int>();
+        foreach (var kvp in _spareListCheckboxes)
+        {
+            if (kvp.Value.Checked)
+                result.Add(kvp.Key);
+        }
+        return result;
+    }
+
+    private void ClearLeagueSelections()
+    {
+        _lookingForTeamCheckboxes.Clear();
+        _spareListCheckboxes.Clear();
+        _pnlLookingForTeamsCheckboxes.Controls.Clear();
+        _pnlSpareListCheckboxes.Controls.Clear();
+    }
+
+    private void BuildLeagueSelectionPanels()
+    {
+        ClearLeagueSelections();
+
+        try
+        {
+            using var db = new BocceDbContext();
+
+            // Build Looking for Team checkboxes (League/Season pairs - current and next season)
+            var leagues = db.Leagues.OrderBy(l => l.Name).ToList();
+            int yPos = 4;
+
+            foreach (var league in leagues)
+            {
+                var seasons = db.Seasons.Where(s => s.LeagueId == league.Id)
+                    .OrderByDescending(s => s.IsCurrent)
+                    .ThenByDescending(s => s.StartDate)
+                    .Take(2)  // Current + next
+                    .ToList();
+
+                if (seasons.Count > 0)
+                {
+                    var leagueLabel = new Label
+                    {
+                        Text = $"{league.Name}:",
+                        Font = AppTheme.FontSmallBold,
+                        ForeColor = AppTheme.TextPrimary,
+                        Location = new Point(4, yPos),
+                        AutoSize = true
+                    };
+                    _pnlLookingForTeamsCheckboxes.Controls.Add(leagueLabel);
+                    yPos += 20;
+
+                    foreach (var season in seasons)
+                    {
+                        var chk = new CheckBox
+                        {
+                            Text = $"{season.Name}" + (season.IsCurrent ? " ★" : ""),
+                            Location = new Point(16, yPos),
+                            AutoSize = true,
+                            Font = AppTheme.FontSmall,
+                            ForeColor = AppTheme.TextPrimary
+                        };
+                        _pnlLookingForTeamsCheckboxes.Controls.Add(chk);
+                        _lookingForTeamCheckboxes[$"{league.Id}_{season.Id}"] = chk;
+                        yPos += 22;
+                    }
+                }
+            }
+
+            // Build Spare List checkboxes (Leagues)
+            yPos = 4;
+            foreach (var league in leagues)
+            {
+                var chk = new CheckBox
+                {
+                    Text = league.Name,
+                    Location = new Point(4, yPos),
+                    AutoSize = true,
+                    Font = AppTheme.FontSmall,
+                    ForeColor = AppTheme.TextPrimary
+                };
+                _pnlSpareListCheckboxes.Controls.Add(chk);
+                _spareListCheckboxes[league.Id] = chk;
+                yPos += 22;
+            }
+        }
+        catch { }
     }
 
     private void SavePlayer()
@@ -712,7 +894,6 @@ public class PlayerPanel : UserControl
                     Phone = NullIfEmpty(_txtPhone.Text),
                     LotNumber = NullIfEmpty(_txtLotNumber.Text),
                     IsActive = _chkIsActive.Checked,
-                    LookingForTeam = _chkInLookingForTeam.Checked,
                     CreatedAt = DateTime.UtcNow
                 };
 
@@ -720,7 +901,7 @@ public class PlayerPanel : UserControl
                 db.SaveChanges();
 
                 UpdatePartnerLink(db, player, selectedPartnerId);
-                ApplyLeagueListStatus(db, player);
+                ApplyLeagueListStatus(db, player, GetCheckedLookingForLeagues(), GetCheckedSpareLeagues());
 
                 db.SaveChanges();
                 _selectedPlayerId = player.Id;
@@ -740,10 +921,9 @@ public class PlayerPanel : UserControl
                 player.Phone = NullIfEmpty(_txtPhone.Text);
                 player.LotNumber = NullIfEmpty(_txtLotNumber.Text);
                 player.IsActive = _chkIsActive.Checked;
-                player.LookingForTeam = _chkInLookingForTeam.Checked;
 
                 UpdatePartnerLink(db, player, selectedPartnerId);
-                ApplyLeagueListStatus(db, player);
+                ApplyLeagueListStatus(db, player, GetCheckedLookingForLeagues(), GetCheckedSpareLeagues());
                 db.SaveChanges();
             }
             else
@@ -761,45 +941,39 @@ public class PlayerPanel : UserControl
         }
     }
 
-    private void ApplyLeagueListStatus(BocceDbContext db, Player player)
+    private void ApplyLeagueListStatus(BocceDbContext db, Player player, List<int> lookingForLeagueIds, List<int> spareLeagueIds)
     {
-        int? defaultLeagueId = AppParameterService.GetDefaultLeagueId(db);
-        if (!defaultLeagueId.HasValue)
-            return;
+        // Remove all existing looking for teams for this player
+        var existingLft = db.LookingForTeams.Where(l => l.PlayerId == player.Id).ToList();
+        foreach (var lft in existingLft)
+            db.LookingForTeams.Remove(lft);
 
-        var existingLft = db.LookingForTeams.FirstOrDefault(l =>
-            l.LeagueId == defaultLeagueId.Value && l.PlayerId == player.Id);
-        if (_chkInLookingForTeam.Checked)
+        // Add new looking for team entries
+        foreach (var leagueId in lookingForLeagueIds)
         {
-            if (existingLft == null)
-                db.LookingForTeams.Add(new LookingForTeam
-                {
-                    LeagueId = defaultLeagueId.Value,
-                    PlayerId = player.Id,
-                    TeamId = null
-                });
-            else
-                existingLft.TeamId = null;
+            db.LookingForTeams.Add(new LookingForTeam
+            {
+                LeagueId = leagueId,
+                PlayerId = player.Id,
+                TeamId = null
+            });
         }
-        else if (existingLft != null)
-            db.LookingForTeams.Remove(existingLft);
 
-        var existingSpare = db.SpareLists.FirstOrDefault(s =>
-            s.LeagueId == defaultLeagueId.Value && s.PlayerId == player.Id);
-        if (_chkInSpareList.Checked)
+        // Remove all existing spare lists for this player
+        var existingSpares = db.SpareLists.Where(s => s.PlayerId == player.Id).ToList();
+        foreach (var spare in existingSpares)
+            db.SpareLists.Remove(spare);
+
+        // Add new spare list entries
+        foreach (var leagueId in spareLeagueIds)
         {
-            if (existingSpare == null)
-                db.SpareLists.Add(new SpareList
-                {
-                    LeagueId = defaultLeagueId.Value,
-                    PlayerId = player.Id,
-                    IsActive = true
-                });
-            else
-                existingSpare.IsActive = true;
+            db.SpareLists.Add(new SpareList
+            {
+                LeagueId = leagueId,
+                PlayerId = player.Id,
+                IsActive = true
+            });
         }
-        else if (existingSpare != null)
-            db.SpareLists.Remove(existingSpare);
     }
 
     private static void UpdatePartnerLink(BocceDbContext db, Player player, int? newPartnerId)
