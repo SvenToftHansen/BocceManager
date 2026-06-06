@@ -29,6 +29,7 @@ public partial class MainForm : Form
         BuildNavigation();
         AppParameterService.DefaultsChanged += OnDefaultsChanged;
         FormClosed += OnMainFormClosed;
+        UpdateNavigationAvailability();
         Navigate(GetStartupSection());
         UpdateStatusBar();
         UpdateContextBar();
@@ -42,6 +43,7 @@ public partial class MainForm : Form
     private void OnDefaultsChanged(object? sender, DefaultsChangedEventArgs e)
     {
         UpdateContextBar();
+        UpdateNavigationAvailability();
     }
 
     private static NavSection GetStartupSection()
@@ -77,27 +79,16 @@ public partial class MainForm : Form
         };
         pnlNav.Controls.Add(flow);
 
-        flow.Controls.Add(new Label
-        {
-            Text = "Golden Vista\r\nBocce League Master",
-            Width = 220, Height = 72,
-            ForeColor = AppTheme.NavText,
-            BackColor = AppTheme.NavTitleBackground,
-            TextAlign = ContentAlignment.MiddleCenter,
-            Font = AppTheme.FontNavTitle,
-            Margin = new Padding(0)
-        });
-
         void AddStandaloneItem(string text, NavSection section)
         {
             var item = new Label
             {
                 Text = "  " + text,
-                Width = 220, Height = 38,
+                Width = 220, Height = 40,
                 ForeColor = AppTheme.NavText,
                 BackColor = AppTheme.NavBackground,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Font = AppTheme.FontNavItem,
+                Font = new Font("Segoe UI", 11f, FontStyle.Bold),
                 Cursor = Cursors.Hand,
                 Margin = new Padding(0),
                 Tag = section
@@ -119,7 +110,7 @@ public partial class MainForm : Form
                 Text = "\u25B6  " + groupName,
                 Tag = groupName,
                 Width = 220, Height = 28,
-                ForeColor = AppTheme.NavHeader,
+                ForeColor = AppTheme.NavText,
                 BackColor = AppTheme.NavBackground,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Padding = new Padding(10, 0, 0, 0),
@@ -127,8 +118,8 @@ public partial class MainForm : Form
                 Cursor = Cursors.Hand,
                 Margin = new Padding(0)
             };
-            header.MouseEnter += (s, _) => ((Label)s!).ForeColor = AppTheme.NavText;
-            header.MouseLeave += (s, _) => ((Label)s!).ForeColor = AppTheme.NavHeader;
+            header.MouseEnter += (s, _) => { };
+            header.MouseLeave += (s, _) => { };
             header.Click += (s, _) => ToggleGroup(groupIndex);
             flow.Controls.Add(header);
 
@@ -137,11 +128,11 @@ public partial class MainForm : Form
                 var item = new Label
                 {
                     Text = "  " + text,
-                    Width = 220, Height = 38,
+                    Width = 220, Height = 40,
                     ForeColor = AppTheme.NavText,
                     BackColor = AppTheme.NavBackground,
                     TextAlign = ContentAlignment.MiddleLeft,
-                    Font = AppTheme.FontNavItem,
+                    Font = new Font("Segoe UI", 11f, FontStyle.Bold),
                     Cursor = Cursors.Hand,
                     Margin = new Padding(0),
                     Tag = section,
@@ -233,6 +224,7 @@ public partial class MainForm : Form
 
     private void Navigate(NavSection section)
     {
+        UpdateNavigationAvailability();
         ExpandGroupContaining(section);
 
         if (_navItems.TryGetValue(_currentSection, out var prev))
@@ -249,10 +241,8 @@ public partial class MainForm : Form
 
         pnlContent.Controls.Clear();
         pnlContent.Controls.Add(_currentPanel);
-        pnlContent.Controls.Add(pnlContextBar);
-        pnlContent.Controls.Add(pnlHeader);
 
-        lblSection.Text = SectionTitle(section);
+        lblCtxPageTitle.Text = SectionTitle(section);
     }
 
     private static UserControl CreatePanel(NavSection section) => section switch
@@ -342,6 +332,51 @@ public partial class MainForm : Form
             lblCtxLeague.Text = "League: (unavailable)";
             lblCtxSeason.Text = "Season: (unavailable)";
         }
+    }
+
+    private void UpdateNavigationAvailability()
+    {
+        try
+        {
+            using var db = new Data.BocceDbContext();
+            bool hasLeagues = db.Leagues.Any();
+            bool hasSeasons = db.Seasons.Any();
+            int? defaultSeasonId = AppParameterService.GetDefaultSeasonId(db);
+            bool hasDefaultSeason = defaultSeasonId.HasValue;
+
+            // If no leagues: only Dashboard and Leagues enabled
+            // If no seasons: only Leagues and Seasons enabled
+            // If no default season selected: disable Divisions and dependent sections
+            // Otherwise: all enabled
+
+            var sectionsToEnable = new HashSet<NavSection> { NavSection.Dashboard, NavSection.Leagues };
+            if (hasLeagues)
+                sectionsToEnable.Add(NavSection.Seasons);
+            if (hasLeagues && hasSeasons && hasDefaultSeason)
+            {
+                sectionsToEnable.Add(NavSection.Divisions);
+                sectionsToEnable.Add(NavSection.Players);
+                sectionsToEnable.Add(NavSection.Teams);
+                sectionsToEnable.Add(NavSection.ScoreEntry);
+                sectionsToEnable.Add(NavSection.Schedule);
+                sectionsToEnable.Add(NavSection.Standings);
+                sectionsToEnable.Add(NavSection.Playoffs);
+                sectionsToEnable.Add(NavSection.SpareLists);
+                sectionsToEnable.Add(NavSection.Announcements);
+                sectionsToEnable.Add(NavSection.Fees);
+                sectionsToEnable.Add(NavSection.EmailLists);
+                sectionsToEnable.Add(NavSection.Documents);
+                sectionsToEnable.Add(NavSection.Parameters);
+                sectionsToEnable.Add(NavSection.Utilities);
+                sectionsToEnable.Add(NavSection.Theme);
+            }
+
+            foreach (var section in _navItems.Keys)
+            {
+                _navItems[section].Enabled = sectionsToEnable.Contains(section);
+            }
+        }
+        catch { }
     }
 }
 

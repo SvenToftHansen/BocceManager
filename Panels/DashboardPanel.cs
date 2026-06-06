@@ -342,7 +342,14 @@ public class DashboardPanel : UserControl
             _leagueDisplay.Text = _leagueCombo.SelectedItem?.ToString() ?? "(none)";
 
         if (_seasonDisplay != null && _seasonCombo != null)
-            _seasonDisplay.Text = _seasonCombo.SelectedItem?.ToString() ?? "(none)";
+        {
+            if (_seasonCombo.SelectedIndex < 0)
+                _seasonDisplay.Text = "";
+            else if (_seasonCombo.SelectedItem is IntItem si && si.Id < 0)
+                _seasonDisplay.Text = "n/a";
+            else
+                _seasonDisplay.Text = _seasonCombo.SelectedItem?.ToString() ?? "(none)";
+        }
     }
 
     private void OnDefaultLeagueSelected(object? sender, EventArgs e)
@@ -372,7 +379,7 @@ public class DashboardPanel : UserControl
     {
         if (_isLoadingDefaults || _seasonCombo == null) return;
         using var db = new BocceDbContext();
-        int? seasonId = _seasonCombo.SelectedItem is IntItem si ? si.Id : null;
+        int? seasonId = _seasonCombo.SelectedItem is IntItem si && si.Id > 0 ? si.Id : null;
         AppParameterService.SetDefaultSeasonId(db, seasonId);
         RefreshSelectorDisplay();
     }
@@ -404,23 +411,40 @@ public class DashboardPanel : UserControl
 
         var selectedLeagueId = (_leagueCombo.SelectedItem as IntItem)?.Id;
         _seasonCombo.Items.Clear();
+
         if (selectedLeagueId.HasValue)
         {
-            foreach (var s in db.Seasons.Where(s => s.LeagueId == selectedLeagueId.Value)
+            var seasons = db.Seasons.Where(s => s.LeagueId == selectedLeagueId.Value)
                 .OrderByDescending(s => s.IsCurrent)
                 .ThenByDescending(s => s.StartDate)
-                .ToList())
+                .ToList();
+
+            if (seasons.Count == 0)
             {
-                _seasonCombo.Items.Add(new IntItem(s.Id, s.Name + (s.IsCurrent ? "  ★" : "") + (s.IsActive ? "" : " (inactive)")));
+                // No seasons for this league - show n/a
+                _seasonCombo.Items.Add(new IntItem(-1, "<n/a>"));
+                _seasonCombo.SelectedIndex = 0;
+            }
+            else
+            {
+                // Add placeholder first
+                _seasonCombo.Items.Add(new IntItem(-1, "<not set>"));
+
+                // Add actual seasons
+                foreach (var s in seasons)
+                {
+                    _seasonCombo.Items.Add(new IntItem(s.Id, s.Name + (s.IsCurrent ? "  ★" : "") + (s.IsActive ? "" : " (inactive)")));
+                }
+
+                // Force user to explicitly select a season (don't auto-select)
+                _seasonCombo.SelectedIndex = 0;  // Select the "<not set>" placeholder
             }
         }
-
-        if (_seasonCombo.Items.Count > 0)
+        else
         {
-            int seasonIndex = -1;
-            if (seasonId.HasValue)
-                seasonIndex = _seasonCombo.Items.Cast<IntItem>().ToList().FindIndex(i => i.Id == seasonId.Value);
-            _seasonCombo.SelectedIndex = seasonIndex >= 0 ? seasonIndex : 0;
+            // No league selected - show placeholder
+            _seasonCombo.Items.Add(new IntItem(-1, "<not set>"));
+            _seasonCombo.SelectedIndex = 0;
         }
 
         RefreshSelectorDisplay();
