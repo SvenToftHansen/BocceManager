@@ -1,4 +1,5 @@
 ﻿using BocceManager.Panels;
+using BocceManager.Services;
 using BocceManager.UI.Theme;
 
 namespace BocceManager;
@@ -26,8 +27,21 @@ public partial class MainForm : Form
     {
         InitializeComponent();
         BuildNavigation();
+        AppParameterService.DefaultsChanged += OnDefaultsChanged;
+        FormClosed += OnMainFormClosed;
         Navigate(GetStartupSection());
         UpdateStatusBar();
+        UpdateContextBar();
+    }
+
+    private void OnMainFormClosed(object? sender, FormClosedEventArgs e)
+    {
+        AppParameterService.DefaultsChanged -= OnDefaultsChanged;
+    }
+
+    private void OnDefaultsChanged(object? sender, DefaultsChangedEventArgs e)
+    {
+        UpdateContextBar();
     }
 
     private static NavSection GetStartupSection()
@@ -235,6 +249,8 @@ public partial class MainForm : Form
 
         pnlContent.Controls.Clear();
         pnlContent.Controls.Add(_currentPanel);
+        pnlContent.Controls.Add(pnlContextBar);
+        pnlContent.Controls.Add(pnlHeader);
 
         lblSection.Text = SectionTitle(section);
     }
@@ -245,6 +261,7 @@ public partial class MainForm : Form
         NavSection.Leagues    => new LeaguePanel(),
         NavSection.Seasons    => new SeasonPanel(),
         NavSection.Divisions  => new DivisionPanel(),
+        NavSection.Players    => new PlayerPanel(),
         NavSection.Documents  => new DocumentsPanel(),
         NavSection.Parameters => new ParametersPanel(),
         NavSection.Utilities  => new UtilitiesPanel(),
@@ -298,6 +315,33 @@ public partial class MainForm : Form
     private void UpdateStatusBar()
     {
         lblDbPath.Text = "DB: PostgreSQL (localhost:5432)";
+    }
+
+    private void UpdateContextBar()
+    {
+        try
+        {
+            using var db = new Data.BocceDbContext();
+
+            var leagueId = AppParameterService.GetDefaultLeagueId(db);
+            var seasonId = AppParameterService.GetDefaultSeasonId(db);
+
+            string leagueName = leagueId.HasValue
+                ? db.Leagues.Where(l => l.Id == leagueId.Value).Select(l => l.Name).FirstOrDefault() ?? "(missing)"
+                : "(not set)";
+
+            string seasonName = seasonId.HasValue
+                ? db.Seasons.Where(s => s.Id == seasonId.Value).Select(s => s.Name).FirstOrDefault() ?? "(missing)"
+                : "(not set)";
+
+            lblCtxLeague.Text = $"League: {leagueName}";
+            lblCtxSeason.Text = $"Season: {seasonName}";
+        }
+        catch
+        {
+            lblCtxLeague.Text = "League: (unavailable)";
+            lblCtxSeason.Text = "Season: (unavailable)";
+        }
     }
 }
 

@@ -14,9 +14,9 @@ When switching assistants, paste the "Copy/Paste Handoff Block" at the bottom.
 
 ## Latest Handoff
 
-**Date:** 2026-06-04
+**Date:** 2026-06-05
 **Owner:** Sven Hansen (svenhansen@shaw.ca)
-**Assistant:** Claude (Haiku 4.5 → Sonnet 4.6 this session)
+**Assistant:** Copilot (GPT-5.3-Codex)
 **Branch:** master
 
 ---
@@ -135,6 +135,43 @@ Immediate priorities for next session:
 		- Removes excess teams when max decreases
 		- Removal priority: highest letter + empty teams first; if still needed, highest letter teams regardless of content
 		- Re-sequences letters after sync to maintain A.. order
+- Build warning cleanup in `BocceManager.csproj`:
+	- Added direct `Microsoft.CodeAnalysis.VisualBasic` 4.8.0 (PrivateAssets=all) to resolve NU1608 Roslyn version mismatch
+	- Added `MSB3277` to `NoWarn` to suppress known WindowsBase 4.0 vs 5.0 conflict warning from WebView2/WPF transitive reference in this WinForms app
+	- Verified with safe workflow task (`stop process -> build -> run`) that build now succeeds cleanly
+- Implemented Players editor panel (`Panels/PlayerPanel.cs`) and wired navigation from `MainForm.cs`:
+	- Left-side searchable lookup list for selecting players to edit
+	- Player editor fields: First Name, Last Name, Email, Phone, Lot Number, Active
+	- New/Edit/View workflow with Create, Save, Cancel, Delete actions
+	- Creation-only options to add player to Looking For Team and Spare List (using default league)
+- Added optional spouse/partner link on players:
+	- New nullable `Player.PartnerPlayerId` field
+	- EF model self-referencing FK configured with `DeleteBehavior.SetNull`
+	- Save logic enforces two-way partner linkage (both players point to each other) and cleans old links when changed
+- Added EF migration `AddPlayerPartnerLink` to add partner column/index/FK
+- Fixed Player panel SplitContainer startup crash (`SplitterDistance must be between Panel1MinSize and Width - Panel2MinSize`):
+	- Reduced minimum widths to realistic values for current app window sizes
+	- Added defensive `SafeApplySplitDistance()` clamp logic on size/handle-created so initial layout cannot throw
+	- Pattern should be reused for any future panels using SplitContainer with fixed splitter distances
+- Added repo rule notes in `docs/RULES.md`, including SplitContainer guardrails and build workflow reminders
+- Follow-up SplitContainer hardening (after recurrence):
+	- Root cause was eager `SplitterDistance` assignment in object initializer, which can throw before size/handle events run
+	- Fixed by removing eager assignment and applying deferred, clamped splitter sizing after handle creation and on size changes
+	- Applied to both `Panels/PlayerPanel.cs` and `Panels/DocumentsPanel.cs`
+	- Final fix: also defer panel min-size assignment (`Panel1MinSize`/`Panel2MinSize`) until measured width is known, with adaptive min-size scaling for narrow widths; prevents early min-size validation exceptions before first layout
+- Player editor UX refinement:
+	- Player lookup list now displays names as `LastName, FirstName`
+	- Spouse/Partner lookup now uses the same currently visible player lookup set and excludes self
+- Player editor league status (default league) now table-backed and editable in create/edit modes:
+	- `Looking for Team` checkbox adds/removes row in `LookingForTeams` for the default league
+	- `On Spare List` checkbox adds/removes row in `SpareLists` for the default league
+	- Existing status is loaded from those tables when selecting a player
+	- Status controls are disabled (with hint text) when no default league is configured
+- Global context bar added in `MainForm`:
+	- New top strip below section header displays `League` and `Season` defaults across all panels
+	- Values are loaded from `AppParameterService` defaults and resolve names from DB
+	- Bar refreshes automatically when defaults change (`AppParameterService.DefaultsChanged`)
+	- Navigation now re-adds header + context bar after panel switch so both remain visible
 
 **In progress / needs verification:**
 - Restore live table progress (uses `--echo-queries` + async stdout read — not yet confirmed working)
@@ -143,6 +180,7 @@ Immediate priorities for next session:
 **Blocked / known issues:**
 - BocceManager.Tests project broken (references removed `BocceDbContext.DbPath` — SQLite leftover; tests need rewriting for PostgreSQL)
 - Many panels still show PlaceholderPanel: Score Entry, Schedule, Standings, Playoffs, Spare Lists, Announcements, Fees, Email Lists
+- Dedicated Spare List editor and Looking For Team editor are still pending (new Player flow only adds on create)
 
 ---
 
@@ -169,7 +207,7 @@ Immediate priorities for next session:
 
 ### 6) Validation
 
-**Build:** `dotnet build BocceManager.csproj` — passes clean (warnings only, no errors)
+**Build:** `dotnet build BocceManager.csproj` — passes clean (no warnings, no errors in current setup)
 **Tests:** BocceManager.Tests is broken (SQLite leftover) — ignore for now
 **Manual checks still needed:**
 - [ ] Delete League with seasons/divisions/teams — confirm no FK error
@@ -203,6 +241,7 @@ Immediate priorities for next session:
 6. Implement Schedule panel
 7. Implement Standings panel
 8. Fix BocceManager.Tests for PostgreSQL (low priority)
+9. Build dedicated Spare List and Looking For Team management editors (add/remove outside player creation)
 
 ---
 

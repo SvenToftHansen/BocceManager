@@ -7,7 +7,11 @@ partial class MainForm
     private Panel pnlNav = null!;
     private Panel pnlContent = null!;
     private Panel pnlHeader = null!;
+    private Panel pnlContextBar = null!;
     private Label lblSection = null!;
+    private Label lblCtxLeague = null!;
+    private Label lblCtxSeason = null!;
+    private Label lblCtxDivider = null!;
     private StatusStrip statusStrip = null!;
     private ToolStripStatusLabel lblDbPath = null!;
     private ToolStripStatusLabel lblSpacer = null!;
@@ -24,7 +28,11 @@ partial class MainForm
         pnlNav     = new Panel();
         pnlContent = new Panel();
         pnlHeader  = new Panel();
+        pnlContextBar = new Panel();
         lblSection = new Label();
+        lblCtxLeague = new Label();
+        lblCtxSeason = new Label();
+        lblCtxDivider = new Label();
         statusStrip = new StatusStrip();
         lblDbPath   = new ToolStripStatusLabel();
         lblSpacer   = new ToolStripStatusLabel();
@@ -43,6 +51,33 @@ partial class MainForm
         pnlHeader.BackColor = Color.FromArgb(245, 248, 250);
         pnlHeader.Padding = new Padding(4, 0, 0, 0);
 
+        // Global context bar (League / Season)
+        lblCtxLeague.Text = "League: (not set)";
+        lblCtxLeague.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+        lblCtxLeague.ForeColor = Color.FromArgb(44, 62, 80);
+        lblCtxLeague.AutoSize = true;
+        lblCtxLeague.Location = new Point(16, 9);
+
+        lblCtxDivider.Text = "|";
+        lblCtxDivider.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
+        lblCtxDivider.ForeColor = Color.FromArgb(127, 140, 141);
+        lblCtxDivider.AutoSize = true;
+        lblCtxDivider.Location = new Point(320, 9);
+
+        lblCtxSeason.Text = "Season: (not set)";
+        lblCtxSeason.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+        lblCtxSeason.ForeColor = Color.FromArgb(44, 62, 80);
+        lblCtxSeason.AutoSize = true;
+        lblCtxSeason.Location = new Point(340, 9);
+
+        pnlContextBar.Controls.Add(lblCtxLeague);
+        pnlContextBar.Controls.Add(lblCtxDivider);
+        pnlContextBar.Controls.Add(lblCtxSeason);
+        pnlContextBar.Dock = DockStyle.Top;
+        pnlContextBar.Height = 30;
+        pnlContextBar.BackColor = Color.FromArgb(236, 242, 247);
+        pnlContextBar.Padding = new Padding(4, 0, 0, 0);
+
         // Status strip
         lblSpacer.Spring = true;
         lblDbPath.Text = "";
@@ -59,6 +94,7 @@ partial class MainForm
         // Content panel
         pnlContent.Dock = DockStyle.Fill;
         pnlContent.BackColor = Color.White;
+        pnlContent.Controls.Add(pnlContextBar);
         pnlContent.Controls.Add(pnlHeader);
 
         // Form

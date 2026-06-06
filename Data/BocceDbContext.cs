@@ -106,6 +106,13 @@ public class BocceDbContext : DbContext
         model.Entity<EmailListMember>().HasIndex(e => new { e.EmailListId, e.PlayerId }).IsUnique();
         model.Entity<LeagueOfficial>().HasIndex(e => new { e.LeagueId, e.PlayerId }).IsUnique();
 
+        // Optional spouse/partner link between players (self-reference)
+        model.Entity<Player>()
+            .HasOne<Player>()
+            .WithMany()
+            .HasForeignKey(e => e.PartnerPlayerId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         // GlAccount unique code
         model.Entity<GlAccount>().HasIndex(e => e.Code).IsUnique();
 

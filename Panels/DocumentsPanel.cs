@@ -10,9 +10,11 @@ public class DocumentsPanel : UserControl
 {
     private ListView _listView = null!;
     private WebView2 _webView = null!;
+    private SplitContainer _mainSplit = null!;
     private Button _btnDelete = null!;
     private bool _webViewReady;
     private string? _pendingNavUrl;
+    private const int PreferredSplitDistance = 310;
 
     public DocumentsPanel()
     {
@@ -55,12 +57,16 @@ public class DocumentsPanel : UserControl
             x += btn.Width + 8;
         }
 
-        var split = new SplitContainer
+        _mainSplit = new SplitContainer
         {
             Dock = DockStyle.Fill,
-            SplitterDistance = 310,
+            Panel1MinSize = 0,
+            Panel2MinSize = 0,
             BackColor = AppTheme.Separator
         };
+
+        _mainSplit.SizeChanged += (_, _) => SafeApplySplitDistance();
+        _mainSplit.HandleCreated += (_, _) => BeginInvoke(new Action(SafeApplySplitDistance));
 
         _listView = new ListView
         {
@@ -78,13 +84,54 @@ public class DocumentsPanel : UserControl
         _listView.Columns.Add("Type",     52);
         _listView.Columns.Add("Date",     70);
         _listView.SelectedIndexChanged += OnSelectionChanged;
-        split.Panel1.Controls.Add(_listView);
+        _mainSplit.Panel1.Controls.Add(_listView);
 
         _webView = new WebView2 { Dock = DockStyle.Fill };
-        split.Panel2.Controls.Add(_webView);
+        _mainSplit.Panel2.Controls.Add(_webView);
 
-        Controls.Add(split);
+        Controls.Add(_mainSplit);
         Controls.Add(toolbar);
+    }
+
+    private void SafeApplySplitDistance()
+    {
+        if (_mainSplit.Width <= 1) return;
+
+        // Assign min sizes only after we know the measured width.
+        const int desiredLeftMin = 220;
+        const int desiredRightMin = 320;
+        int maxTotalMin = Math.Max(0, _mainSplit.Width - 1);
+
+        int leftMin = desiredLeftMin;
+        int rightMin = desiredRightMin;
+        if (leftMin + rightMin > maxTotalMin)
+        {
+            if (maxTotalMin == 0)
+            {
+                leftMin = 0;
+                rightMin = 0;
+            }
+            else
+            {
+                double leftRatio = desiredLeftMin / (double)(desiredLeftMin + desiredRightMin);
+                leftMin = (int)Math.Floor(maxTotalMin * leftRatio);
+                rightMin = maxTotalMin - leftMin;
+            }
+        }
+
+        _mainSplit.Panel1MinSize = leftMin;
+        _mainSplit.Panel2MinSize = rightMin;
+
+        int minLeft = _mainSplit.Panel1MinSize;
+        int maxLeft = _mainSplit.Width - _mainSplit.Panel2MinSize;
+        if (maxLeft < minLeft)
+            maxLeft = minLeft;
+
+        int clamped = Math.Min(PreferredSplitDistance, maxLeft);
+        clamped = Math.Max(minLeft, clamped);
+
+        if (clamped > 0)
+            _mainSplit.SplitterDistance = clamped;
     }
 
     private static Button MakeButton(string text, Color back) => new()
