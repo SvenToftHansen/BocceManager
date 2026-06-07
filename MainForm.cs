@@ -23,10 +23,14 @@ public partial class MainForm : Form
     private int _openGroupIndex = -1;
     private UserControl? _currentPanel;
 
+    private List<(int Id, string Name)> _topBarLeagues = [];
+    private List<(int Id, string Name)> _topBarSeasons = [];
+
     public MainForm()
     {
         InitializeComponent();
         BuildNavigation();
+        SetupTopBarInteraction();
         AppParameterService.DefaultsChanged += OnDefaultsChanged;
         FormClosed += OnMainFormClosed;
         UpdateNavigationAvailability();
@@ -38,6 +42,140 @@ public partial class MainForm : Form
     private void OnMainFormClosed(object? sender, FormClosedEventArgs e)
     {
         AppParameterService.DefaultsChanged -= OnDefaultsChanged;
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        AppTheme.ApplyDisabledStylesToAll(this);
+    }
+
+    private void SetupTopBarInteraction()
+    {
+        lblCtxLeague.Click += (_, _) => ShowLeagueMenu();
+        lblCtxSeason.Click += (_, _) => ShowSeasonMenu();
+    }
+
+    private void LoadTopBarItems()
+    {
+        try
+        {
+            using var db = new Data.BocceDbContext();
+            var leagueId = AppParameterService.GetDefaultLeagueId(db);
+
+            _topBarLeagues = db.Leagues
+                .OrderBy(l => l.Name)
+                .Select(l => new { l.Id, l.Name })
+                .AsEnumerable()
+                .Select(l => (l.Id, l.Name))
+                .ToList();
+
+            _topBarSeasons = leagueId.HasValue
+                ? db.Seasons
+                    .Where(s => s.LeagueId == leagueId.Value)
+                    .OrderByDescending(s => s.Name)
+                    .Select(s => new { s.Id, s.Name })
+                    .AsEnumerable()
+                    .Select(s => (s.Id, s.Name))
+                    .ToList()
+                : [];
+        }
+        catch
+        {
+            _topBarLeagues = [];
+            _topBarSeasons = [];
+        }
+    }
+
+    private void ShowLeagueMenu()
+    {
+        var menu = new ContextMenuStrip();
+        menu.Font = new Font("Segoe UI", 10f);
+
+        if (_topBarLeagues.Count == 0)
+        {
+            menu.Items.Add("(no leagues)").Enabled = false;
+        }
+        else
+        {
+            int? currentId;
+            try
+            {
+                using var db = new Data.BocceDbContext();
+                currentId = AppParameterService.GetDefaultLeagueId(db);
+            }
+            catch { currentId = null; }
+
+            foreach (var (id, name) in _topBarLeagues)
+            {
+                var item = menu.Items.Add(name);
+                item.Tag = id;
+                if (id == currentId)
+                    item.Font = new Font(menu.Font, FontStyle.Bold);
+                item.Click += (_, _) => SelectLeague((int)item.Tag!);
+            }
+        }
+
+        menu.Show(lblCtxLeague, new Point(0, lblCtxLeague.Height));
+    }
+
+    private void ShowSeasonMenu()
+    {
+        var menu = new ContextMenuStrip();
+        menu.Font = new Font("Segoe UI", 10f);
+
+        int? currentId;
+        try
+        {
+            using var db = new Data.BocceDbContext();
+            currentId = AppParameterService.GetDefaultSeasonId(db);
+        }
+        catch { currentId = null; }
+
+        if (_topBarSeasons.Count == 0)
+        {
+            menu.Items.Add("(no seasons)").Enabled = false;
+        }
+        else
+        {
+            foreach (var (id, name) in _topBarSeasons)
+            {
+                var item = menu.Items.Add(name);
+                item.Tag = id;
+                if (id == currentId)
+                    item.Font = new Font(menu.Font, FontStyle.Bold);
+                item.Click += (_, _) => SelectSeason((int)item.Tag!);
+            }
+        }
+
+        menu.Show(lblCtxSeason, new Point(0, lblCtxSeason.Height));
+    }
+
+    private void SelectLeague(int id)
+    {
+        try
+        {
+            using var db = new Data.BocceDbContext();
+            AppParameterService.SetDefaultLeagueId(db, id);
+            var seasonId = AppParameterService.GetDefaultSeasonId(db);
+            if (seasonId.HasValue)
+            {
+                var season = db.Seasons.Find(seasonId.Value);
+                if (season == null || season.LeagueId != id)
+                    AppParameterService.SetDefaultSeasonId(db, null);
+            }
+        }
+        catch { }
+    }
+
+    private void SelectSeason(int id)
+    {
+        try
+        {
+            using var db = new Data.BocceDbContext();
+            AppParameterService.SetDefaultSeasonId(db, id);
+        }
+        catch { }
     }
 
     private void OnDefaultsChanged(object? sender, DefaultsChangedEventArgs e)
@@ -151,15 +289,12 @@ public partial class MainForm : Form
 
         AddStandaloneItem("Dashboard", NavSection.Dashboard);
 
-        AddGroup("SETUP", add => {
+        AddGroup("LEAGUE", add => {
             add("Leagues",   NavSection.Leagues);
             add("Seasons",   NavSection.Seasons);
             add("Divisions", NavSection.Divisions);
-        });
-
-        AddGroup("TEAMS & PLAYERS", add => {
-            add("Players", NavSection.Players);
-            add("Teams",   NavSection.Teams);
+            add("Players",   NavSection.Players);
+            add("Teams",     NavSection.Teams);
         });
 
         AddGroup("OPERATIONS", add => {
@@ -252,6 +387,7 @@ public partial class MainForm : Form
         NavSection.Seasons    => new SeasonPanel(),
         NavSection.Divisions  => new DivisionPanel(),
         NavSection.Players    => new PlayerPanel(),
+        NavSection.Teams      => new TeamPanel(),
         NavSection.Documents  => new DocumentsPanel(),
         NavSection.Parameters => new ParametersPanel(),
         NavSection.Utilities  => new UtilitiesPanel(),
@@ -309,6 +445,7 @@ public partial class MainForm : Form
 
     private void UpdateContextBar()
     {
+        LoadTopBarItems();
         try
         {
             using var db = new Data.BocceDbContext();
