@@ -792,7 +792,154 @@ public class TeamPanel : UserControl
 
     private void AddPlayerToTeam()
     {
-        MessageBox.Show("Player selection coming soon.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        if (!_selectedTeamId.HasValue || !_selectedDivisionId.HasValue) return;
+        int teamId = _selectedTeamId.Value;
+        int divisionId = _selectedDivisionId.Value;
+
+        // Get max players limit upfront
+        int currentPlayerCount = 0;
+        int maxPlayersPerTeam = 0;
+
+        try
+        {
+            using var db = new Data.BocceDbContext();
+            var team = db.Teams.Find(teamId);
+            var division = db.Divisions.Include(d => d.Season).Include(d => d.Season!.League).FirstOrDefault(d => d.Id == divisionId);
+            if (team == null || division == null) return;
+
+            currentPlayerCount = db.TeamPlayers.Count(tp => tp.TeamId == teamId);
+            maxPlayersPerTeam = ResolveMaxPlayers();
+
+            if (maxPlayersPerTeam == 0)
+            {
+                MessageBox.Show(
+                    "Cannot add players: Max players per team is not configured.\n\n" +
+                    "Set a value in Division Parameters or Season Parameters.",
+                    "Configuration Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            int availableSlots = maxPlayersPerTeam - currentPlayerCount;
+            if (availableSlots <= 0)
+            {
+                MessageBox.Show(
+                    $"This team is at maximum capacity ({maxPlayersPerTeam} players).\n\n" +
+                    "Remove players before adding new ones.",
+                    "Team at Capacity", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+        }
+        catch { return; }
+
+        // Loop picker until valid selection is made
+        while (true)
+        {
+            var excludeIds = new HashSet<int>();
+            try
+            {
+                using var db = new Data.BocceDbContext();
+                // Exclude players already on ANY team in this division
+                excludeIds = db.TeamPlayers
+                    .Where(tp => tp.Team.DivisionId == divisionId)
+                    .Select(tp => tp.PlayerId)
+                    .ToHashSet();
+            }
+            catch { }
+
+            var playerIds = PickPlayersMultiple(excludeIds);
+            if (playerIds.Count == 0) return;
+
+            int availableSlots = maxPlayersPerTeam - currentPlayerCount;
+
+            // Validate selection
+            if (playerIds.Count > availableSlots)
+            {
+                MessageBox.Show(
+                    $"You selected {playerIds.Count} player(s) but only {availableSlots} slot(s) are available.\n\n" +
+                    $"Team max: {maxPlayersPerTeam}  |  Current: {currentPlayerCount}  |  Available: {availableSlots}\n\n" +
+                    $"Please deselect {playerIds.Count - availableSlots} player(s) and try again.",
+                    "Selection Exceeds Capacity", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                continue;
+            }
+
+            // Valid selection - proceed with adding players
+            try
+            {
+                using var db = new Data.BocceDbContext();
+                int count = 0;
+                var skipped = new List<string>();
+
+                foreach (var playerId in playerIds)
+                {
+                    // Check if player already on this team
+                    var alreadyOnThisTeam = db.TeamPlayers.Any(tp => tp.TeamId == teamId && tp.PlayerId == playerId);
+                    if (alreadyOnThisTeam) continue;
+
+                    // Check if player already on another team in this division (should not happen due to picker, but validate)
+                    var alreadyInDivision = db.TeamPlayers
+                        .Any(tp => tp.Team.DivisionId == divisionId && tp.PlayerId == playerId);
+                    if (alreadyInDivision)
+                    {
+                        var player = db.Players.Find(playerId);
+                        skipped.Add(player?.FullName ?? $"Player {playerId}");
+                        continue;
+                    }
+
+                    // Check if player would exceed team limit (3 teams max in league)
+                    var teamCountInLeague = db.TeamPlayers
+                        .Where(tp => tp.PlayerId == playerId && tp.Team.Division.Season.LeagueId == _selectedLeagueId)
+                        .Select(tp => tp.TeamId)
+                        .Distinct()
+                        .Count();
+                    if (teamCountInLeague >= 3)
+                    {
+                        var player = db.Players.Find(playerId);
+                        skipped.Add($"{player?.FullName ?? $"Player {playerId}"} (already on 3 teams)");
+                        continue;
+                    }
+
+                    db.TeamPlayers.Add(new TeamPlayer
+                    {
+                        TeamId    = teamId,
+                        PlayerId  = playerId,
+                        Role      = "player",
+                        JoinedDate = DateOnly.FromDateTime(DateTime.Today)
+                    });
+
+                    // Keep LookingForTeam history: assigned entries get TeamId set.
+                    if (_selectedSeasonId.HasValue)
+                    {
+                        var lft = db.LookingForTeams.FirstOrDefault(l =>
+                            l.PlayerId == playerId &&
+                            (!_selectedLeagueId.HasValue || l.LeagueId == _selectedLeagueId.Value) &&
+                            l.SeasonId == _selectedSeasonId.Value);
+                        if (lft != null)
+                            lft.TeamId = teamId;
+                    }
+
+                    count++;
+                }
+
+                if (count > 0) db.SaveChanges();
+
+                var msg = $"Added {count} player(s) to team.\n\nTeam now has {currentPlayerCount + count}/{maxPlayersPerTeam} players.";
+                if (skipped.Count > 0)
+                    msg += $"\n\nSkipped {skipped.Count}:\n  - " + string.Join("\n  - ", skipped);
+
+                MessageBox.Show(msg, count > 0 ? "Success" : "Info", MessageBoxButtons.OK,
+                    count > 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+                break;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not add player(s):\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+        }
+
+        LoadTeamPlayers(teamId);
+        FilterTeamList();
+        SetEditModeUI();
     }
 
     private void RemovePlayerFromTeam()
@@ -1298,4 +1445,168 @@ public class TeamPanel : UserControl
         Text = text, Location = new Point(x, y), AutoSize = true,
         Font = AppTheme.FontSectionHeading, ForeColor = AppTheme.Accent
     };
+
+    // ── Multi-select player picker ──────────────────────────────────────────────
+    private List<int> PickPlayersMultiple(HashSet<int> excludeIds)
+    {
+        var result = new List<int>();
+        using var form = new Form
+        {
+            Text = "Add Players to Team", Width = 750, Height = 600,
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false, MinimizeBox = false,
+            BackColor = AppTheme.ContentBackground
+        };
+
+        // Load all available players
+        List<(int Id, string Name)> allPlayers = [];
+        HashSet<int> lookingForTeam = [];
+        try
+        {
+            using var db = new Data.BocceDbContext();
+            allPlayers = db.Players
+                .Where(p => p.IsActive && !excludeIds.Contains(p.Id))
+                .OrderBy(p => p.LastName).ThenBy(p => p.FirstName)
+                .ToList()
+                .Select(p => (p.Id, $"{p.LastName}, {p.FirstName}"))
+                .ToList();
+
+            if (_selectedSeasonId.HasValue)
+            {
+                lookingForTeam = db.LookingForTeams
+                    .Where(l => l.SeasonId == _selectedSeasonId.Value && !l.TeamId.HasValue)
+                    .Select(l => l.PlayerId)
+                    .ToHashSet();
+            }
+        }
+        catch { }
+
+        // Search box
+        var searchBox = new TextBox
+        {
+            Location = new Point(10, 8), Width = 300, Height = 28,
+            Font = AppTheme.FontDefault, PlaceholderText = "Search... (OR delimiters: | \\ / : ;)",
+            BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary, BorderStyle = BorderStyle.FixedSingle
+        };
+
+        // Left side: Available players
+        var lblAvailable = new Label { Text = "Available Players", Font = AppTheme.FontDefaultBold, AutoSize = true, Location = new Point(10, 42) };
+        var cmbAvailable = new CheckedListBox
+        {
+            Location = new Point(10, 62), Width = 300, Height = 440,
+            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
+            CheckOnClick = true
+        };
+
+        // Right side: Selected players
+        var lblSelected = new Label { Text = "Players to Add", Font = AppTheme.FontDefaultBold, AutoSize = true, Location = new Point(430, 42) };
+        var cmbSelected = new CheckedListBox
+        {
+            Location = new Point(430, 62), Width = 300, Height = 440,
+            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
+            CheckOnClick = true
+        };
+
+        // Middle buttons
+        var btnAdd = new Button
+        {
+            Text = "Add  >>", Width = 80, Height = 30, Top = 200, Left = 320,
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White, Font = AppTheme.FontButton
+        };
+        var btnRemove = new Button
+        {
+            Text = "<< Remove", Width = 80, Height = 30, Top = 240, Left = 320,
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White, Font = AppTheme.FontButton
+        };
+
+        // Bottom buttons
+        var btnOk = new Button
+        {
+            Text = "Add Players", DialogResult = DialogResult.OK, Left = 430, Top = 520, Width = 140, Height = 30,
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White, Font = AppTheme.FontButton
+        };
+        var btnCancel = new Button
+        {
+            Text = "Cancel", DialogResult = DialogResult.Cancel, Left = 580, Top = 520, Width = 140, Height = 30,
+            FlatStyle = FlatStyle.Flat, Font = AppTheme.FontButton
+        };
+
+        // Filter function with multi-delimiter OR search
+        void RefreshAvailable(string query)
+        {
+            cmbAvailable.Items.Clear();
+            foreach (var (id, name) in allPlayers)
+            {
+                // Skip if already in selected
+                if (cmbSelected.Items.Cast<IntItem>().Any(x => x.Id == id)) continue;
+
+                bool matches = SearchQueryService.MatchesAnyTerm(name, query);
+
+                if (matches)
+                {
+                    string displayName = lookingForTeam.Contains(id) ? $"◆ {name}" : name;
+                    cmbAvailable.Items.Add(new IntItem(id, displayName));
+                }
+            }
+        }
+        RefreshAvailable("");
+
+        searchBox.TextChanged += (_, _) => RefreshAvailable(searchBox.Text);
+
+        btnAdd.Click += (_, _) =>
+        {
+            var toMove = new List<(int Index, IntItem Item)>();
+            for (int i = cmbAvailable.Items.Count - 1; i >= 0; i--)
+            {
+                if (cmbAvailable.GetItemChecked(i))
+                {
+                    var item = (IntItem)cmbAvailable.Items[i];
+                    toMove.Add((i, item));
+                }
+            }
+
+            foreach (var (_, item) in toMove)
+                cmbSelected.Items.Add(item);
+
+            // Clear checkboxes in available
+            for (int i = 0; i < cmbAvailable.Items.Count; i++)
+                cmbAvailable.SetItemChecked(i, false);
+
+            RefreshAvailable(searchBox.Text);
+        };
+
+        btnRemove.Click += (_, _) =>
+        {
+            var toRemove = new List<(int Index, IntItem Item)>();
+            for (int i = cmbSelected.Items.Count - 1; i >= 0; i--)
+            {
+                if (cmbSelected.GetItemChecked(i))
+                {
+                    var item = (IntItem)cmbSelected.Items[i];
+                    toRemove.Add((i, item));
+                }
+            }
+
+            foreach (var (_, item) in toRemove)
+                cmbSelected.Items.Remove(item);
+
+            // Clear checkboxes in selected
+            for (int i = 0; i < cmbSelected.Items.Count; i++)
+                cmbSelected.SetItemChecked(i, false);
+
+            RefreshAvailable(searchBox.Text);
+        };
+
+        form.Controls.AddRange([searchBox, lblAvailable, cmbAvailable, btnAdd, btnRemove, lblSelected, cmbSelected, btnOk, btnCancel]);
+        form.AcceptButton = btnOk;
+        form.CancelButton = btnCancel;
+
+        if (form.ShowDialog(this) == DialogResult.OK)
+            result = cmbSelected.Items.Cast<IntItem>().Select(x => x.Id).ToList();
+
+        return result;
+    }
+
+    private sealed record IntItem(int Id, string Name) { public override string ToString() => Name; }
 }
