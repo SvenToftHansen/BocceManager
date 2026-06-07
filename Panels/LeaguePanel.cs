@@ -1,6 +1,7 @@
-﻿using BocceManager.Data;
+using BocceManager.Data;
 using BocceManager.Data.Entities;
 using BocceManager.Services;
+using BocceManager.UI.Controls;
 using BocceManager.UI.Theme;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,29 +10,31 @@ namespace BocceManager.Panels;
 public class LeaguePanel : UserControl
 {
     private int? _selectedLeagueId;
-    private int? _leagueIdToRestore;  // Preserve selection across reloads
     private bool _isLoadingData = false;
-    private bool _isEditMode = false;
 
-    // Header
-    private ComboBox _leagueCombo = null!;
+    // Left panel
+    private TextBox _txtSearch  = null!;
+    private ListBox _lstLeagues = null!;
 
-    // Editor tab
-    private TextBox      _txtName        = null!;
-    private TextBox      _txtDescription = null!;
-    private RichTextBox  _rtbRules       = null!;
-    private CheckBox     _chkActive      = null!;
-    private Label        _lblCreatedAt   = null!;
-    private NumericUpDown _numMin        = null!;
-    private NumericUpDown _numMax        = null!;
-    private NumericUpDown _numMaxTeams   = null!;
-    private Button       _btnEdit        = null!;
-    private Button       _btnSave        = null!;
-    private Button       _btnDelete      = null!;
-    private Button       _btnCancel      = null!;
+    // Editor fields
+    private TextBox       _txtName        = null!;
+    private TextBox       _txtDescription = null!;
+    private RichTextBox   _rtbRules       = null!;
+    private CheckBox      _chkActive      = null!;
+    private Label         _lblCreatedAt   = null!;
+    private ThemedNumericUpDown _numMin         = null!;
+    private ThemedNumericUpDown _numMax         = null!;
+    private ThemedNumericUpDown _numMaxTeams    = null!;
+    private Button        _btnEdit        = null!;
+    private Button        _btnSave        = null!;
+    private Button        _btnDelete      = null!;
+    private Button        _btnCancel      = null!;
 
     // Seasons tab
     private DataGridView _seasonsGrid = null!;
+
+    // All leagues for search filtering
+    private List<(int Id, string Display)> _allLeagues = [];
 
     public LeaguePanel()
     {
@@ -54,49 +57,116 @@ public class LeaguePanel : UserControl
         base.Dispose(disposing);
     }
 
-    // â”€â”€ Build UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Build UI ──────────────────────────────────────────────────────────────
 
     private void BuildUI()
     {
-        var header = BuildHeader();
-        var tabs   = BuildTabs();
-        Controls.Add(tabs);
-        Controls.Add(header);
+        var split = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Vertical,
+            Panel1MinSize = 0,
+            Panel2MinSize = 0,
+            BackColor = AppTheme.ContentBackground
+        };
+
+        void Apply()
+        {
+            if (split.Width <= 1) return;
+            const int preferred = 220, desiredLeft = 180, desiredRight = 400;
+            int maxTotal = Math.Max(0, split.Width - 1);
+            int leftMin  = desiredLeft;
+            int rightMin = desiredRight;
+            if (leftMin + rightMin > maxTotal)
+            {
+                if (maxTotal == 0) { leftMin = 0; rightMin = 0; }
+                else { double r = desiredLeft / (double)(desiredLeft + desiredRight); leftMin = (int)Math.Floor(maxTotal * r); rightMin = maxTotal - leftMin; }
+            }
+            split.Panel1MinSize   = leftMin;
+            split.Panel2MinSize   = rightMin;
+            int maxLeft = split.Width - rightMin;
+            if (maxLeft < leftMin) maxLeft = leftMin;
+            int dist = Math.Max(leftMin, Math.Min(preferred, maxLeft));
+            split.FixedPanel      = FixedPanel.Panel1;
+            split.IsSplitterFixed = true;
+            if (dist > 0) split.SplitterDistance = dist;
+        }
+
+        split.SizeChanged   += (_, _) => Apply();
+        split.HandleCreated += (_, _) => BeginInvoke(new Action(Apply));
+
+        BuildLeftPanel(split.Panel1);
+        BuildRightPanel(split.Panel2);
+
+        Controls.Add(split);
     }
 
-    private Panel BuildHeader()
+    private void BuildLeftPanel(SplitterPanel panel)
     {
-        var panel = new Panel
-        {
-            Dock = DockStyle.Top, Height = 54,
-            BackColor = AppTheme.Surface, Padding = new Padding(12, 8, 12, 8)
-        };
+        panel.BackColor = AppTheme.Surface;
+        panel.Padding = new Padding(8, 8, 8, 8);
 
-        var lbl = new Label
+        _txtSearch = new TextBox
         {
-            Text = "League:", Font = AppTheme.FontDefaultBold, ForeColor = AppTheme.TextPrimary,
-            AutoSize = true, Location = new Point(12, 17)
+            Dock = DockStyle.Top,
+            Font = AppTheme.FontDefault,
+            ForeColor = AppTheme.TextSecondary,
+            BackColor = AppTheme.ContentBackground,
+            Text = "Search...",
+            Height = 28,
+            Margin = new Padding(0, 0, 0, 6)
         };
+        _txtSearch.Enter += (_, _) => { if (_txtSearch.Text == "Search...") { _txtSearch.Text = ""; _txtSearch.ForeColor = AppTheme.TextPrimary; } };
+        _txtSearch.Leave += (_, _) => { if (string.IsNullOrEmpty(_txtSearch.Text)) { _txtSearch.Text = "Search..."; _txtSearch.ForeColor = AppTheme.TextSecondary; } };
+        _txtSearch.TextChanged += (_, _) => FilterLeagueList();
 
-        _leagueCombo = new ComboBox
+        _lstLeagues = new ListBox
         {
-            DropDownStyle = ComboBoxStyle.DropDownList, Font = AppTheme.FontDefault,
-            Width = 340, Location = new Point(lbl.PreferredWidth + 22, 13)
+            Dock = DockStyle.Fill,
+            Font = AppTheme.FontDefault,
+            BackColor = AppTheme.ContentBackground,
+            ForeColor = AppTheme.TextPrimary,
+            BorderStyle = BorderStyle.None,
+            IntegralHeight = false
         };
-        _leagueCombo.SelectedIndexChanged += OnLeagueSelected;
+        _lstLeagues.SelectedIndexChanged += OnListLeagueSelected;
 
         var btnNew = new Button
         {
-            Text = "+ New League", Location = new Point(_leagueCombo.Right + 16, 12),
-            Size = new Size(130, 30), FlatStyle = FlatStyle.Flat,
-            BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand,
+            Dock = DockStyle.Bottom,
+            Text = "+ New League",
+            Height = 32,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = AppTheme.ButtonSuccess,
+            ForeColor = Color.White,
+            Font = AppTheme.FontButton,
+            Cursor = Cursors.Hand,
             FlatAppearance = { BorderSize = 0 }
         };
         btnNew.Click += (_, _) => StartNewLeague();
 
-        panel.Controls.AddRange([lbl, _leagueCombo, btnNew]);
-        return panel;
+        // Search label
+        var lblSearch = new Label
+        {
+            Dock = DockStyle.Top,
+            Text = "Leagues",
+            Font = AppTheme.FontSmallBold,
+            ForeColor = AppTheme.TextPrimary,
+            Height = 22,
+            TextAlign = ContentAlignment.MiddleLeft
+        };
+
+        panel.Controls.Add(_lstLeagues);
+        panel.Controls.Add(_txtSearch);
+        panel.Controls.Add(lblSearch);
+        panel.Controls.Add(btnNew);
+    }
+
+    private void BuildRightPanel(SplitterPanel panel)
+    {
+        var tabs = BuildTabs();
+        tabs.Dock = DockStyle.Fill;
+        panel.Controls.Add(tabs);
     }
 
     private TabControl BuildTabs()
@@ -110,7 +180,7 @@ public class LeaguePanel : UserControl
         return tabs;
     }
 
-    // â”€â”€ Editor Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Editor Tab ────────────────────────────────────────────────────────────
 
     private TabPage BuildEditorTab()
     {
@@ -165,8 +235,8 @@ public class LeaguePanel : UserControl
         };
         var lblRulesHint = new Label
         {
-                 Text = "Optional - captures any rule variations or additions specific to this league, " +
-                     "applied alongside the club's official rules document. Most leagues leave this blank.",
+            Text = "Optional - captures any rule variations or additions specific to this league, " +
+                   "applied alongside the club's official rules document. Most leagues leave this blank.",
             AutoSize = true, MaximumSize = new Size(inputW, 0),
             Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted,
             Location = new Point(inputX, y + 154)
@@ -264,7 +334,7 @@ public class LeaguePanel : UserControl
         return page;
     }
 
-    private static NumericUpDown NumericBox(int x, int y) => new()
+    private static ThemedNumericUpDown NumericBox(int x, int y) => new()
     {
         Location = new Point(x, y), Size = new Size(90, 26),
         Font = AppTheme.FontDefault, Minimum = 0, Maximum = 99,
@@ -278,7 +348,7 @@ public class LeaguePanel : UserControl
         Location = new Point(x, y)
     };
 
-    // â”€â”€ Seasons Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Seasons Tab ───────────────────────────────────────────────────────────
 
     private TabPage BuildSeasonsTab()
     {
@@ -351,40 +421,34 @@ public class LeaguePanel : UserControl
         return page;
     }
 
-    // â”€â”€ Data Loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Data Loading ──────────────────────────────────────────────────────────
 
     private void LoadLeagueList()
     {
         _isLoadingData = true;
         try
         {
-            _leagueCombo.SelectedIndexChanged -= OnLeagueSelected;
-            _leagueCombo.Items.Clear();
-
             int? defaultLeagueId = null;
             try
             {
                 using var db = new BocceDbContext();
-                foreach (var l in db.Leagues.OrderBy(l => l.Name).ToList())
-                    _leagueCombo.Items.Add(new ComboItem(l.Id, l.Name + (l.IsActive ? "" : " (inactive)")));
-
+                _allLeagues = db.Leagues
+                    .OrderBy(l => l.Name)
+                    .Select(l => new { l.Id, l.Name, l.IsActive })
+                    .AsEnumerable()
+                    .Select(l => (l.Id, l.Name + (l.IsActive ? "" : " (inactive)")))
+                    .ToList();
                 defaultLeagueId = AppParameterService.GetDefaultLeagueId(db);
             }
             catch { }
 
-            _leagueCombo.SelectedIndexChanged += OnLeagueSelected;
+            FilterLeagueList();
 
-            // Restore default from database
+            // Select default league
             if (defaultLeagueId.HasValue)
-            {
-                int idx = _leagueCombo.Items.Cast<ComboItem>().ToList().FindIndex(item => item.Id == defaultLeagueId);
-                if (idx >= 0)
-                    _leagueCombo.SelectedIndex = idx;
-                else
-                    ClearEditorForm();
-            }
-            else
-                ClearEditorForm();
+                SelectInList(defaultLeagueId.Value);
+            else if (_selectedLeagueId.HasValue)
+                SelectInList(_selectedLeagueId.Value);
         }
         finally
         {
@@ -392,13 +456,49 @@ public class LeaguePanel : UserControl
         }
     }
 
-    private void OnLeagueSelected(object? sender, EventArgs e)
+    private void FilterLeagueList()
     {
-        if (_leagueCombo.SelectedItem is ComboItem item)
+        var query = _txtSearch.Text == "Search..." ? "" : _txtSearch.Text;
+
+        _isLoadingData = true;
+        _lstLeagues.SelectedIndexChanged -= OnListLeagueSelected;
+        _lstLeagues.BeginUpdate();
+
+        var prevId = _selectedLeagueId;
+        _lstLeagues.Items.Clear();
+
+        foreach (var (id, display) in _allLeagues)
         {
-            _leagueIdToRestore = item.Id;  // Save for persistence across reloads
-            LoadLeague(item.Id);
+            if (SearchQueryService.MatchesAnyTerm(display, query))
+                _lstLeagues.Items.Add(new ListItem(id, display));
         }
+
+        _lstLeagues.EndUpdate();
+        _lstLeagues.SelectedIndexChanged += OnListLeagueSelected;
+        _isLoadingData = false;
+
+        // Restore selection
+        if (prevId.HasValue)
+            SelectInList(prevId.Value);
+    }
+
+    private void SelectInList(int leagueId)
+    {
+        for (int i = 0; i < _lstLeagues.Items.Count; i++)
+        {
+            if (_lstLeagues.Items[i] is ListItem li && li.Id == leagueId)
+            {
+                _lstLeagues.SelectedIndex = i;
+                return;
+            }
+        }
+    }
+
+    private void OnListLeagueSelected(object? sender, EventArgs e)
+    {
+        if (_isLoadingData) return;
+        if (_lstLeagues.SelectedItem is ListItem li)
+            LoadLeague(li.Id);
         else
             ClearEditorForm();
     }
@@ -406,7 +506,6 @@ public class LeaguePanel : UserControl
     private void LoadLeague(int leagueId)
     {
         _selectedLeagueId = leagueId;
-        _isEditMode = false;
 
         try
         {
@@ -425,7 +524,7 @@ public class LeaguePanel : UserControl
         catch { }
 
         LoadSeasons(leagueId);
-        SetEditModeUI(false);  // Start in read-only mode
+        SetEditModeUI(false);
     }
 
     private void ClearEditorForm()
@@ -471,52 +570,41 @@ public class LeaguePanel : UserControl
         catch { }
     }
 
-    // â”€â”€ New / Save League â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── New / Edit League ─────────────────────────────────────────────────────
 
     private void StartNewLeague()
     {
-        _selectedLeagueId = null;
-        _leagueCombo.SelectedIndexChanged -= OnLeagueSelected;
-        _leagueCombo.SelectedIndex = -1;
-        _leagueCombo.SelectedIndexChanged += OnLeagueSelected;
+        _lstLeagues.SelectedIndexChanged -= OnListLeagueSelected;
+        _lstLeagues.ClearSelected();
+        _lstLeagues.SelectedIndexChanged += OnListLeagueSelected;
         ClearEditorForm();
-
-        // Enter edit mode so Save/Cancel buttons are visible
-        _isEditMode = true;
         SetEditModeUI(true);
         _txtName.Focus();
     }
 
-    // â”€â”€ Edit Mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
     private void EnterEditMode()
     {
         if (_selectedLeagueId == null) return;
-        _isEditMode = true;
         SetEditModeUI(true);
     }
 
     private void ExitEditMode()
     {
-        _isEditMode = false;
         SetEditModeUI(false);
-        // Reload to discard changes
         if (_selectedLeagueId.HasValue)
             LoadLeague(_selectedLeagueId.Value);
     }
 
     private void SetEditModeUI(bool editMode)
     {
-        // Controls editable in edit mode
-        _txtName.ReadOnly = !editMode;
+        _txtName.ReadOnly        = !editMode;
         _txtDescription.ReadOnly = !editMode;
-        _rtbRules.ReadOnly = !editMode;
-        _chkActive.Enabled = editMode;
-        _numMin.Enabled = editMode;
-        _numMax.Enabled = editMode;
-        _numMaxTeams.Enabled = editMode;
+        _rtbRules.ReadOnly       = !editMode;
+        _chkActive.Enabled       = editMode;
+        _numMin.Enabled          = editMode;
+        _numMax.Enabled          = editMode;
+        _numMaxTeams.Enabled     = editMode;
 
-        // Button visibility: Edit/Delete in view mode, Save/Cancel in edit mode
         _btnEdit.Visible   = !editMode && _selectedLeagueId.HasValue;
         _btnDelete.Visible = !editMode && _selectedLeagueId.HasValue;
         _btnDelete.Enabled = !editMode && _selectedLeagueId.HasValue;
@@ -524,7 +612,7 @@ public class LeaguePanel : UserControl
         _btnCancel.Visible = editMode;
     }
 
-    // â”€â”€ Save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Save ──────────────────────────────────────────────────────────────────
 
     private void SaveLeague()
     {
@@ -553,10 +641,10 @@ public class LeaguePanel : UserControl
                 if (league == null) return;
                 oldMin = league.PlayersPerTeamMinimum;
                 oldMax = league.PlayersPerTeamMaximum;
-                league.Name                 = name;
-                league.Description          = NullIfEmpty(_txtDescription.Text);
-                league.RulesText            = NullIfEmpty(_rtbRules.Text);
-                league.IsActive             = _chkActive.Checked;
+                league.Name                  = name;
+                league.Description           = NullIfEmpty(_txtDescription.Text);
+                league.RulesText             = NullIfEmpty(_rtbRules.Text);
+                league.IsActive              = _chkActive.Checked;
                 league.PlayersPerTeamMinimum = newMin;
                 league.PlayersPerTeamMaximum = newMax;
                 league.MaxTeamsInDivision    = (int)_numMaxTeams.Value;
@@ -594,20 +682,17 @@ public class LeaguePanel : UserControl
         MessageBox.Show("League saved.", "Golden Vista Bocce League Master",
             MessageBoxButtons.OK, MessageBoxIcon.Information);
 
-        // Exit edit mode and return to view
         ExitEditMode();
 
-        // Offer propagation if min/max changed on an existing league that has children
         if (!isNew && (oldMin != newMin || oldMax != newMax))
             OfferPropagate(savedId, oldMin, oldMax, newMin, newMax);
 
         LoadLeagueList();
-        SelectLeagueInCombo(savedId);
+        SelectInList(savedId);
     }
 
     private void OfferPropagate(int leagueId, int? oldMin, int? oldMax, int? newMin, int? newMax)
     {
-        // Only propagate the fields that actually changed
         int? propMin = oldMin != newMin ? newMin : (int?)null;
         int? propMax = oldMax != newMax ? newMax : (int?)null;
 
@@ -679,19 +764,7 @@ public class LeaguePanel : UserControl
         return targets;
     }
 
-    private void SelectLeagueInCombo(int leagueId)
-    {
-        for (int i = 0; i < _leagueCombo.Items.Count; i++)
-        {
-            if (_leagueCombo.Items[i] is ComboItem ci && ci.Id == leagueId)
-            {
-                _leagueCombo.SelectedIndex = i;
-                return;
-            }
-        }
-    }
-
-    // â”€â”€ Delete League (cascade) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Delete League (cascade) ───────────────────────────────────────────────
 
     private void DeleteLeague()
     {
@@ -755,10 +828,10 @@ public class LeaguePanel : UserControl
             MessageBoxButtons.OK, MessageBoxIcon.Information);
         _selectedLeagueId = null;
         LoadLeagueList();
-        if (_leagueCombo.Items.Count == 0) ClearEditorForm();
+        if (_lstLeagues.Items.Count == 0) ClearEditorForm();
     }
 
-    // â”€â”€ Season Navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Season Navigation ─────────────────────────────────────────────────────
 
     private void OnSeasonDoubleClick(object? sender, DataGridViewCellEventArgs e)
     {
@@ -778,7 +851,7 @@ public class LeaguePanel : UserControl
         (FindForm() as MainForm)?.NavigateToSeasons(seasonId);
     }
 
-    // â”€â”€ Layout Helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Layout Helper ─────────────────────────────────────────────────────────
 
     private static TableLayoutPanel MakeLayout(Control fill, Panel toolbar)
     {
@@ -798,14 +871,13 @@ public class LeaguePanel : UserControl
         return layout;
     }
 
-    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static string? NullIfEmpty(string s) =>
         string.IsNullOrWhiteSpace(s) ? null : s;
 
-    private sealed record ComboItem(int Id, string Name)
+    private sealed record ListItem(int Id, string Name)
     {
         public override string ToString() => Name;
     }
 }
-

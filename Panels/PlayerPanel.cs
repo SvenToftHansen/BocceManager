@@ -339,63 +339,66 @@ public class PlayerPanel : UserControl
         };
         y += 40;
 
-        _lblLeagueStatus = new Label
-        {
-            Text = "League Status",
-            Location = new Point(labelX, y + 4),
-            AutoSize = true,
-            Font = AppTheme.FontDefaultBold,
-            ForeColor = AppTheme.TextPrimary
-        };
-        y += 28;
+        // Column headers for League Status section
+        const int col1X = 230;
+        const int col2X = 500;
 
-        // Looking for Teams display
-        var lblLft = new Label
+        var lblLftHeader = new Label
         {
-            Text = "Looking for Teams In:",
+            Text = "Looking For Team",
             Font = AppTheme.FontSmallBold,
             ForeColor = AppTheme.TextPrimary,
             AutoSize = true,
-            Location = new Point(inputX, y)
+            Location = new Point(col1X, y)
         };
-        scroll.Controls.Add(lblLft);
-        y += 24;
+        scroll.Controls.Add(lblLftHeader);
 
+        var lblSpareHeader = new Label
+        {
+            Text = "Spare List",
+            Font = AppTheme.FontSmallBold,
+            ForeColor = AppTheme.TextPrimary,
+            AutoSize = true,
+            Location = new Point(col2X, y)
+        };
+        scroll.Controls.Add(lblSpareHeader);
+
+        y += 20;
+
+        // Divider lines
+        var divider1 = new Label
+        {
+            Text = "============",
+            Font = AppTheme.FontSmall,
+            ForeColor = AppTheme.TextMuted,
+            AutoSize = true,
+            Location = new Point(col1X, y)
+        };
+        scroll.Controls.Add(divider1);
+
+        var divider2 = new Label
+        {
+            Text = "=======",
+            Font = AppTheme.FontSmall,
+            ForeColor = AppTheme.TextMuted,
+            AutoSize = true,
+            Location = new Point(col2X, y)
+        };
+        scroll.Controls.Add(divider2);
+
+        y += 18;
+
+        // Values
         _lblLookingForTeams = new Label
         {
             Text = "(none)",
             Font = AppTheme.FontSmall,
             ForeColor = AppTheme.TextMuted,
             AutoSize = false,
-            Size = new Size(inputW, 40),
-            Location = new Point(inputX, y)
+            Size = new Size(250, 40),
+            Location = new Point(col1X, y)
         };
         scroll.Controls.Add(_lblLookingForTeams);
-        y += 50;
-
-        // Looking for Teams checkboxes (for create mode)
-        _pnlLookingForTeamsCheckboxes = new Panel
-        {
-            Location = new Point(inputX, y),
-            Size = new Size(inputW, 100),
-            BackColor = AppTheme.ContentBackground,
-            AutoScroll = true,
-            Visible = false
-        };
-        scroll.Controls.Add(_pnlLookingForTeamsCheckboxes);
-        y += 110;
-
-        // Spare List display
-        var lblSpare = new Label
-        {
-            Text = "Spare In:",
-            Font = AppTheme.FontSmallBold,
-            ForeColor = AppTheme.TextPrimary,
-            AutoSize = true,
-            Location = new Point(inputX, y)
-        };
-        scroll.Controls.Add(lblSpare);
-        y += 24;
 
         _lblSpareListLeagues = new Label
         {
@@ -403,23 +406,37 @@ public class PlayerPanel : UserControl
             Font = AppTheme.FontSmall,
             ForeColor = AppTheme.TextMuted,
             AutoSize = false,
-            Size = new Size(inputW, 40),
-            Location = new Point(inputX, y)
+            Size = new Size(250, 40),
+            Location = new Point(col2X, y)
         };
         scroll.Controls.Add(_lblSpareListLeagues);
+
         y += 50;
+
+        // Looking for Teams checkboxes (for create mode)
+        _pnlLookingForTeamsCheckboxes = new Panel
+        {
+            Location = new Point(col1X, y),
+            Size = new Size(250, 100),
+            BackColor = AppTheme.ContentBackground,
+            AutoScroll = true,
+            Visible = false
+        };
+        scroll.Controls.Add(_pnlLookingForTeamsCheckboxes);
 
         // Spare List checkboxes (for create mode)
         _pnlSpareListCheckboxes = new Panel
         {
-            Location = new Point(inputX, y),
-            Size = new Size(inputW, 100),
+            Location = new Point(col2X, y),
+            Size = new Size(250, 100),
             BackColor = AppTheme.ContentBackground,
             AutoScroll = true,
             Visible = false
         };
         scroll.Controls.Add(_pnlSpareListCheckboxes);
+
         y += 110;
+        _lblLeagueStatus = null;
 
         _lblLeagueContext = new Label
         {
@@ -440,7 +457,6 @@ public class PlayerPanel : UserControl
             lblPartner, _cmbPartner,
             lblActive, _chkIsActive,
             lblCreated, _lblCreatedAt,
-            _lblLeagueStatus,
             _lblLeagueContext
         ]);
 
@@ -757,8 +773,6 @@ public class PlayerPanel : UserControl
             SetMode(PlayerMode.View);
         }
     }
-
-    private bool _preventingCheckChange = false;
 
     private List<int> GetCheckedLookingForLeagues()
     {

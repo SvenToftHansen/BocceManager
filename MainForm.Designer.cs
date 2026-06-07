@@ -1,17 +1,19 @@
-﻿namespace BocceManager;
+﻿using BocceManager.UI.Theme;
+
+namespace BocceManager;
 
 partial class MainForm
 {
     private System.ComponentModel.IContainer components = null;
 
     private Panel pnlNav = null!;
+    private Panel pnlTopBar = null!;
     private Panel pnlContent = null!;
-    private Panel pnlHeader = null!;
-    private Panel pnlContextBar = null!;
-    private Label lblSection = null!;
+    private Label lblNavTitle = null!;
     private Label lblCtxLeague = null!;
     private Label lblCtxSeason = null!;
     private Label lblCtxDivider = null!;
+    private Label lblCtxPageTitle = null!;
     private StatusStrip statusStrip = null!;
     private ToolStripStatusLabel lblDbPath = null!;
     private ToolStripStatusLabel lblSpacer = null!;
@@ -26,57 +28,73 @@ partial class MainForm
     private void InitializeComponent()
     {
         pnlNav     = new Panel();
+        pnlTopBar  = new Panel();
         pnlContent = new Panel();
-        pnlHeader  = new Panel();
-        pnlContextBar = new Panel();
-        lblSection = new Label();
+        lblNavTitle = new Label();
         lblCtxLeague = new Label();
         lblCtxSeason = new Label();
         lblCtxDivider = new Label();
+        lblCtxPageTitle = new Label();
         statusStrip = new StatusStrip();
         lblDbPath   = new ToolStripStatusLabel();
         lblSpacer   = new ToolStripStatusLabel();
 
         SuspendLayout();
 
-        // Header strip (top of content area, shows current section name)
-        lblSection.Text = "Dashboard";
-        lblSection.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
-        lblSection.ForeColor = Color.FromArgb(44, 62, 80);
-        lblSection.AutoSize = true;
-        lblSection.Location = new Point(16, 10);
-        pnlHeader.Controls.Add(lblSection);
-        pnlHeader.Dock = DockStyle.Top;
-        pnlHeader.Height = 38;
-        pnlHeader.BackColor = Color.FromArgb(245, 248, 250);
-        pnlHeader.Padding = new Padding(4, 0, 0, 0);
+        // Global top bar (Title + League/Season + Page Title)
+        lblNavTitle.Text = "Golden Vista\r\nBocce League Master";
+        lblNavTitle.Font = AppTheme.FontNavTitle;
+        lblNavTitle.ForeColor = AppTheme.NavText;
+        lblNavTitle.BackColor = AppTheme.NavTitleBackground;
+        lblNavTitle.TextAlign = ContentAlignment.MiddleCenter;
+        lblNavTitle.Dock = DockStyle.Left;
+        lblNavTitle.Width = 220;
+        lblNavTitle.Margin = new Padding(0);
 
-        // Global context bar (League / Season)
         lblCtxLeague.Text = "League: (not set)";
-        lblCtxLeague.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-        lblCtxLeague.ForeColor = Color.FromArgb(44, 62, 80);
-        lblCtxLeague.AutoSize = true;
-        lblCtxLeague.Location = new Point(16, 9);
+        lblCtxLeague.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
+        lblCtxLeague.ForeColor = AppTheme.NavText;
+        lblCtxLeague.AutoSize = false;
+        lblCtxLeague.TextAlign = ContentAlignment.MiddleLeft;
+        lblCtxLeague.Size = new Size(300, 72);
+        lblCtxLeague.Location = new Point(236, 0);
+        lblCtxLeague.Cursor = Cursors.Hand;
 
         lblCtxDivider.Text = "|";
-        lblCtxDivider.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
-        lblCtxDivider.ForeColor = Color.FromArgb(127, 140, 141);
-        lblCtxDivider.AutoSize = true;
-        lblCtxDivider.Location = new Point(320, 9);
+        lblCtxDivider.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
+        lblCtxDivider.ForeColor = AppTheme.NavText;
+        lblCtxDivider.AutoSize = false;
+        lblCtxDivider.TextAlign = ContentAlignment.MiddleCenter;
+        lblCtxDivider.Size = new Size(20, 72);
+        lblCtxDivider.Location = new Point(536, 0);
 
         lblCtxSeason.Text = "Season: (not set)";
-        lblCtxSeason.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-        lblCtxSeason.ForeColor = Color.FromArgb(44, 62, 80);
-        lblCtxSeason.AutoSize = true;
-        lblCtxSeason.Location = new Point(340, 9);
+        lblCtxSeason.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
+        lblCtxSeason.ForeColor = AppTheme.NavText;
+        lblCtxSeason.AutoSize = false;
+        lblCtxSeason.TextAlign = ContentAlignment.MiddleLeft;
+        lblCtxSeason.Size = new Size(300, 72);
+        lblCtxSeason.Location = new Point(556, 0);
+        lblCtxSeason.Cursor = Cursors.Hand;
 
-        pnlContextBar.Controls.Add(lblCtxLeague);
-        pnlContextBar.Controls.Add(lblCtxDivider);
-        pnlContextBar.Controls.Add(lblCtxSeason);
-        pnlContextBar.Dock = DockStyle.Top;
-        pnlContextBar.Height = 30;
-        pnlContextBar.BackColor = Color.FromArgb(236, 242, 247);
-        pnlContextBar.Padding = new Padding(4, 0, 0, 0);
+        lblCtxPageTitle.Text = "Dashboard";
+        lblCtxPageTitle.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
+        lblCtxPageTitle.ForeColor = AppTheme.NavText;
+        lblCtxPageTitle.AutoSize = false;
+        lblCtxPageTitle.TextAlign = ContentAlignment.MiddleRight;
+        lblCtxPageTitle.Dock = DockStyle.Right;
+        lblCtxPageTitle.Padding = new Padding(0, 0, 40, 0);
+        lblCtxPageTitle.MinimumSize = new Size(300, 72);
+
+        pnlTopBar.Controls.Add(lblCtxPageTitle);
+        pnlTopBar.Controls.Add(lblCtxSeason);
+        pnlTopBar.Controls.Add(lblCtxDivider);
+        pnlTopBar.Controls.Add(lblCtxLeague);
+        pnlTopBar.Controls.Add(lblNavTitle);
+        pnlTopBar.Dock = DockStyle.Top;
+        pnlTopBar.Height = 72;
+        pnlTopBar.BackColor = AppTheme.NavTitleBackground;
+        pnlTopBar.Padding = new Padding(0);
 
         // Status strip
         lblSpacer.Spring = true;
@@ -89,17 +107,16 @@ partial class MainForm
         // Nav panel
         pnlNav.Dock = DockStyle.Left;
         pnlNav.Width = 220;
-        pnlNav.BackColor = Color.FromArgb(44, 62, 80);
+        pnlNav.BackColor = AppTheme.NavBackground;
 
         // Content panel
         pnlContent.Dock = DockStyle.Fill;
         pnlContent.BackColor = Color.White;
-        pnlContent.Controls.Add(pnlContextBar);
-        pnlContent.Controls.Add(pnlHeader);
 
         // Form
         Controls.Add(pnlContent);
         Controls.Add(pnlNav);
+        Controls.Add(pnlTopBar);
         Controls.Add(statusStrip);
 
         AutoScaleMode = AutoScaleMode.Font;

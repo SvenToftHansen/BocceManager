@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using BocceManager.Data;
 using BocceManager.Services;
 using BocceManager.UI.Theme;
 
@@ -20,6 +21,13 @@ public class UtilitiesPanel : UserControl
     private ProgressBar _progressBar;
     private Stopwatch   _stopwatch = new();
 
+    // Ideas tab
+    private TextBox     _txtNewIdea = null!;
+    private ListBox     _lstIdeas = null!;
+    private Button      _btnAddIdea = null!;
+    private Button      _btnDeleteIdea = null!;
+    private Button      _btnMarkCollected = null!;
+
     public UtilitiesPanel()
     {
         BackColor = AppTheme.ContentBackground;
@@ -28,6 +36,28 @@ public class UtilitiesPanel : UserControl
     }
 
     private void BuildUI()
+    {
+        var tabs = new TabControl
+        {
+            Dock = DockStyle.Fill,
+            Font = AppTheme.FontDefault,
+            Padding = new Point(12, 6)
+        };
+
+        // Backup/Restore tab
+        var backupPage = new TabPage("  Backup & Restore  ");
+        BuildBackupTab(backupPage);
+        tabs.TabPages.Add(backupPage);
+
+        // Ideas tab
+        var ideasPage = new TabPage("  Ideas  ");
+        BuildIdeasTab(ideasPage);
+        tabs.TabPages.Add(ideasPage);
+
+        Controls.Add(tabs);
+    }
+
+    private void BuildBackupTab(TabPage page)
     {
         var toolbar = new Panel
         {
@@ -80,9 +110,102 @@ public class UtilitiesPanel : UserControl
         LogLine("Tip: close pgAdmin and any other database tools before restoring.",
                 Color.FromArgb(234, 179, 8));
 
-        Controls.Add(_log);
-        Controls.Add(_progressBar);
-        Controls.Add(toolbar);
+        page.Controls.Add(_log);
+        page.Controls.Add(_progressBar);
+        page.Controls.Add(toolbar);
+    }
+
+    private void BuildIdeasTab(TabPage page)
+    {
+        var toolbar = new Panel
+        {
+            Dock      = DockStyle.Top,
+            Height    = 80,
+            BackColor = AppTheme.Surface,
+            Padding   = new Padding(8)
+        };
+
+        var lblTitle = new Label
+        {
+            Text      = "Capture ideas to develop later",
+            Font      = AppTheme.FontSmallBold,
+            ForeColor = AppTheme.TextPrimary,
+            Dock      = DockStyle.Top,
+            Height    = 24,
+            TextAlign = ContentAlignment.MiddleLeft
+        };
+
+        _txtNewIdea = new TextBox
+        {
+            Dock        = DockStyle.Top,
+            Font        = AppTheme.FontDefault,
+            BackColor   = AppTheme.ContentBackground,
+            ForeColor   = AppTheme.TextPrimary,
+            Height      = 28,
+            Multiline   = false,
+            BorderStyle = BorderStyle.FixedSingle,
+            Margin      = new Padding(0, 4, 0, 4)
+        };
+
+        var btnPanel = new Panel { Dock = DockStyle.Top, Height = 36, Padding = new Padding(0, 4, 0, 0) };
+        _btnAddIdea = MakeButton("Add Idea", AppTheme.ButtonSuccess);
+        _btnAddIdea.Click += OnAddIdea;
+        btnPanel.Controls.Add(_btnAddIdea);
+
+        toolbar.Controls.Add(btnPanel);
+        toolbar.Controls.Add(_txtNewIdea);
+        toolbar.Controls.Add(lblTitle);
+
+        var splitContainer = new SplitContainer
+        {
+            Dock        = DockStyle.Fill,
+            Orientation = Orientation.Vertical,
+            Panel1MinSize = 300,
+            Panel2MinSize = 200
+        };
+
+        // Left panel: list of ideas
+        _lstIdeas = new ListBox
+        {
+            Dock            = DockStyle.Fill,
+            Font            = AppTheme.FontDefault,
+            BackColor       = AppTheme.ContentBackground,
+            ForeColor       = AppTheme.TextPrimary,
+            BorderStyle     = BorderStyle.None,
+            IntegralHeight  = false
+        };
+        _lstIdeas.SelectedIndexChanged += OnIdeasSelected;
+        splitContainer.Panel1.Controls.Add(_lstIdeas);
+
+        // Right panel: buttons
+        var btnPanel2 = new Panel
+        {
+            Dock      = DockStyle.Fill,
+            BackColor = AppTheme.Surface,
+            Padding   = new Padding(8)
+        };
+
+        _btnMarkCollected = MakeButton("Mark Collected", Color.FromArgb(34, 197, 94));
+        _btnDeleteIdea    = MakeButton("Delete Idea",   AppTheme.ButtonDanger);
+
+        _btnMarkCollected.Click += OnMarkCollected;
+        _btnDeleteIdea.Click    += OnDeleteIdea;
+
+        _btnMarkCollected.Dock = DockStyle.Top;
+        _btnMarkCollected.Height = 40;
+        _btnMarkCollected.Margin = new Padding(0, 0, 0, 8);
+
+        _btnDeleteIdea.Dock = DockStyle.Top;
+        _btnDeleteIdea.Height = 40;
+
+        btnPanel2.Controls.Add(_btnDeleteIdea);
+        btnPanel2.Controls.Add(_btnMarkCollected);
+        splitContainer.Panel2.Controls.Add(btnPanel2);
+
+        page.Controls.Add(splitContainer);
+        page.Controls.Add(toolbar);
+
+        LoadIdeas();
     }
 
     private static Button MakeButton(string text, Color back) => new()
@@ -320,4 +443,111 @@ public class UtilitiesPanel : UserControl
         _btnRestore.Enabled    = enabled;
         _btnOpenFolder.Enabled = enabled;
     }
+
+    // ── Ideas ─────────────────────────────────────────────────────────────────
+    private void LoadIdeas()
+    {
+        _lstIdeas.Items.Clear();
+        try
+        {
+            using var db = new BocceDbContext();
+            var ideas = db.NewIdeas.OrderByDescending(i => i.DateCreated).ToList();
+            foreach (var idea in ideas)
+            {
+                string marker = idea.DateCollected.HasValue ? "✓" : "○";
+                _lstIdeas.Items.Add(new IdeaItem(idea.Id, $"{marker} {idea.Idea}"));
+            }
+        }
+        catch { }
+    }
+
+    private void OnAddIdea(object? sender, EventArgs e)
+    {
+        string idea = _txtNewIdea.Text.Trim();
+        if (string.IsNullOrEmpty(idea)) return;
+
+        try
+        {
+            using var db = new BocceDbContext();
+            db.NewIdeas.Add(new BocceManager.Data.Entities.NewIdea
+            {
+                Idea = idea,
+                DateCreated = DateTime.UtcNow
+            });
+            db.SaveChanges();
+
+            _txtNewIdea.Clear();
+            LoadIdeas();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error saving idea:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void OnIdeasSelected(object? sender, EventArgs e)
+    {
+        _btnMarkCollected.Enabled = _lstIdeas.SelectedIndex >= 0 && !(_lstIdeas.SelectedItem is IdeaItem item && GetIdea(item.Id)?.DateCollected.HasValue == true);
+        _btnDeleteIdea.Enabled = _lstIdeas.SelectedIndex >= 0;
+    }
+
+    private void OnMarkCollected(object? sender, EventArgs e)
+    {
+        if (_lstIdeas.SelectedItem is not IdeaItem item) return;
+
+        try
+        {
+            using var db = new BocceDbContext();
+            var idea = db.NewIdeas.Find(item.Id);
+            if (idea != null)
+            {
+                idea.DateCollected = DateTime.UtcNow;
+                db.SaveChanges();
+                LoadIdeas();
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error updating idea:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void OnDeleteIdea(object? sender, EventArgs e)
+    {
+        if (_lstIdeas.SelectedItem is not IdeaItem item) return;
+
+        if (MessageBox.Show("Delete this idea?", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return;
+
+        try
+        {
+            using var db = new BocceDbContext();
+            var idea = db.NewIdeas.Find(item.Id);
+            if (idea != null)
+            {
+                db.NewIdeas.Remove(idea);
+                db.SaveChanges();
+                LoadIdeas();
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error deleting idea:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private BocceManager.Data.Entities.NewIdea? GetIdea(int id)
+    {
+        try
+        {
+            using var db = new BocceDbContext();
+            return db.NewIdeas.Find(id);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private sealed record IdeaItem(int Id, string Text) { public override string ToString() => Text; }
 }

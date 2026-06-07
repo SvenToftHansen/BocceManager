@@ -3,6 +3,7 @@ using System;
 using BocceManager.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BocceManager.Data.Migrations
 {
     [DbContext(typeof(BocceDbContext))]
-    partial class BocceDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260606235458_AddTeamFoundToLookingForTeam")]
+    partial class AddTeamFoundToLookingForTeam
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -679,7 +682,7 @@ namespace BocceManager.Data.Migrations
                     b.Property<int>("PlayerId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("SeasonId")
+                    b.Property<int?>("TeamFound")
                         .HasColumnType("integer");
 
                     b.Property<int?>("TeamId")
@@ -688,8 +691,6 @@ namespace BocceManager.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("PlayerId");
-
-                    b.HasIndex("SeasonId");
 
                     b.HasIndex("TeamId");
 
@@ -744,29 +745,6 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("TeamId");
 
                     b.ToTable("MatchTeamResults");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.NewIdea", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime?>("DateCollected")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("DateCreated")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Idea")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("NewIdeas");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.PendingPlayer", b =>
@@ -1896,11 +1874,6 @@ namespace BocceManager.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("BocceManager.Data.Entities.Season", "Season")
-                        .WithMany()
-                        .HasForeignKey("SeasonId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
                     b.HasOne("BocceManager.Data.Entities.Team", "Team")
                         .WithMany()
                         .HasForeignKey("TeamId")
@@ -1909,8 +1882,6 @@ namespace BocceManager.Data.Migrations
                     b.Navigation("League");
 
                     b.Navigation("Player");
-
-                    b.Navigation("Season");
 
                     b.Navigation("Team");
                 });

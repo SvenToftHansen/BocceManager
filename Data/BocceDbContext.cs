@@ -85,6 +85,9 @@ public class BocceDbContext : DbContext
     public DbSet<GlAccount>    GlAccounts    => Set<GlAccount>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
 
+    // Ideas
+    public DbSet<NewIdea> NewIdeas => Set<NewIdea>();
+
     protected override void OnConfiguring(DbContextOptionsBuilder options)
     {
         if (!string.IsNullOrEmpty(DbPath))
@@ -158,6 +161,10 @@ public class BocceDbContext : DbContext
         model.Entity<LookingForTeam>()
             .HasOne(e => e.Player).WithMany()
             .HasForeignKey(e => e.PlayerId).OnDelete(DeleteBehavior.Restrict);
+        // LookingForTeam.Season: cascade delete when season is deleted
+        model.Entity<LookingForTeam>()
+            .HasOne(e => e.Season).WithMany()
+            .HasForeignKey(e => e.SeasonId).OnDelete(DeleteBehavior.Cascade);
         // LookingForTeam.TeamId: cleared (not deleted) when the team is deleted
         model.Entity<LookingForTeam>()
             .HasOne(e => e.Team).WithMany()

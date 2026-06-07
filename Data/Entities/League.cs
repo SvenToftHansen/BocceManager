@@ -28,17 +28,20 @@ public class SpareList
     public Player Player { get; set; } = null!;
 }
 
-// One row per player who is looking for a team in a league.
-// TeamId is set when they are placed on a team; they stay in the list until explicitly removed.
+// One row per player who is looking for a team in a league/season.
+// TeamId is set when they are placed on a team (historical tracking of placement).
+// SeasonId binds the player to a specific season for team search purposes (defaults to current/2027).
 public class LookingForTeam
 {
     public int Id { get; set; }
     public int LeagueId { get; set; }
     public int PlayerId { get; set; }
+    public int? SeasonId { get; set; }
     public int? TeamId { get; set; }
 
     public League League { get; set; } = null!;
     public Player Player { get; set; } = null!;
+    public Season? Season { get; set; }
     public Team? Team { get; set; }
 }
 

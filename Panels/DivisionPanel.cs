@@ -1,6 +1,7 @@
 ﻿using BocceManager.Data;
 using BocceManager.Data.Entities;
 using BocceManager.Services;
+using BocceManager.UI.Controls;
 using BocceManager.UI.Theme;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,14 +17,14 @@ public class DivisionPanel : UserControl
     private int? _selectedLeagueId;
     private int? _selectedSeasonId;
     private int? _selectedDivisionId;
-    private int? _leagueIdToRestore;
-    private int? _seasonIdToRestore;
     private int? _currentTeamId;
 
     // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    private ComboBox _leagueCombo   = null!;
-    private ComboBox _seasonCombo   = null!;
-    private ComboBox _divisionCombo = null!;
+    // ── Left panel ────────────────────────────────────────────────────────────
+    private TextBox  _txtSearch    = null!;
+    private ListBox  _lstDivisions = null!;
+    private List<(int Id, string Display)> _allDivisions = [];
+
     private TabControl _tabs = null!;
 
     // â”€â”€ Editor tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -36,9 +37,9 @@ public class DivisionPanel : UserControl
     private Label         _lblCreated    = null!;
 
     // â”€â”€ Parameters tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    private NumericUpDown _numTeamsInDiv  = null!;
-    private NumericUpDown _numPlayersMin  = null!;
-    private NumericUpDown _numPlayersMax  = null!;
+    private ThemedNumericUpDown _numTeamsInDiv  = null!;
+    private ThemedNumericUpDown _numPlayersMin  = null!;
+    private ThemedNumericUpDown _numPlayersMax  = null!;
 
     // â”€â”€ Teams tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private DataGridView _teamsGrid      = null!;
@@ -67,12 +68,12 @@ public class DivisionPanel : UserControl
         Dock = DockStyle.Fill;
         BuildUI();
         AppParameterService.DefaultsChanged += OnDefaultsChanged;
-        LoadLeagueList();
+        LoadContext();
     }
 
     private void OnDefaultsChanged(object? sender, DefaultsChangedEventArgs e)
     {
-        LoadLeagueList();
+        LoadContext();
     }
 
     protected override void Dispose(bool disposing)
@@ -91,9 +92,18 @@ public class DivisionPanel : UserControl
             if (d == null) return;
             var s = db.Seasons.Find(d.SeasonId);
             if (s == null) return;
-            SelectLeagueInCombo(s.LeagueId);
-            SelectSeasonInCombo(d.SeasonId);
-            SelectDivisionInCombo(divisionId);
+
+            var currentLeague = AppParameterService.GetDefaultLeagueId(db);
+            var currentSeason = AppParameterService.GetDefaultSeasonId(db);
+            if (currentLeague != s.LeagueId)
+                AppParameterService.SetDefaultLeagueId(db, s.LeagueId);
+            if (currentSeason != d.SeasonId)
+                AppParameterService.SetDefaultSeasonId(db, d.SeasonId);
+
+            _selectedLeagueId = s.LeagueId;
+            _selectedSeasonId = d.SeasonId;
+            LoadDivisionList();
+            SelectInList(divisionId);
         }
         catch { }
     }
@@ -102,49 +112,122 @@ public class DivisionPanel : UserControl
 
     private void BuildUI()
     {
-        var header  = BuildHeader();
-        var toolbar = BuildSaveToolbar();
-        var tabs    = BuildTabs();
-        Controls.Add(tabs);
-        Controls.Add(toolbar);
-        Controls.Add(header);
-    }
-
-    private Panel BuildHeader()
-    {
-        var panel = new Panel
+        var split = new SplitContainer
         {
-            Dock = DockStyle.Top, Height = 54,
-            BackColor = AppTheme.Surface, Padding = new Padding(12, 8, 12, 8)
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Vertical,
+            Panel1MinSize = 0,
+            Panel2MinSize = 0,
+            BackColor = AppTheme.ContentBackground
         };
 
-        int x = 12;
+        void Apply()
+        {
+            if (split.Width <= 1) return;
+            const int preferred = 220, desiredLeft = 180, desiredRight = 400;
+            int maxTotal = Math.Max(0, split.Width - 1);
+            int leftMin  = desiredLeft;
+            int rightMin = desiredRight;
+            if (leftMin + rightMin > maxTotal)
+            {
+                if (maxTotal == 0) { leftMin = 0; rightMin = 0; }
+                else { double r = desiredLeft / (double)(desiredLeft + desiredRight); leftMin = (int)Math.Floor(maxTotal * r); rightMin = maxTotal - leftMin; }
+            }
+            split.Panel1MinSize   = leftMin;
+            split.Panel2MinSize   = rightMin;
+            int maxLeft = split.Width - rightMin;
+            if (maxLeft < leftMin) maxLeft = leftMin;
+            int dist = Math.Max(leftMin, Math.Min(preferred, maxLeft));
+            split.FixedPanel      = FixedPanel.Panel1;
+            split.IsSplitterFixed = true;
+            if (dist > 0) split.SplitterDistance = dist;
+        }
 
-        var lblL = NavLabel("League:", x, 17); panel.Controls.Add(lblL); x += lblL.PreferredWidth + 6;
-        _leagueCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Font = AppTheme.FontDefault, Width = 200, Location = new Point(x, 13) };
-        _leagueCombo.SelectedIndexChanged += OnLeagueSelected;
-        panel.Controls.Add(_leagueCombo); x += 208;
+        split.SizeChanged   += (_, _) => Apply();
+        split.HandleCreated += (_, _) => BeginInvoke(new Action(Apply));
 
-        var lblS = NavLabel("Season:", x, 17); panel.Controls.Add(lblS); x += lblS.PreferredWidth + 6;
-        _seasonCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Font = AppTheme.FontDefault, Width = 210, Location = new Point(x, 13) };
-        _seasonCombo.SelectedIndexChanged += OnSeasonSelected;
-        panel.Controls.Add(_seasonCombo); x += 218;
+        BuildLeftPanel(split.Panel1);
+        BuildRightPanel(split.Panel2);
+        Controls.Add(split);
+    }
 
-        var lblD = NavLabel("Division:", x, 17); panel.Controls.Add(lblD); x += lblD.PreferredWidth + 6;
-        _divisionCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Font = AppTheme.FontDefault, Width = 230, Location = new Point(x, 13) };
-        _divisionCombo.SelectedIndexChanged += OnDivisionSelected;
-        panel.Controls.Add(_divisionCombo); x += 238;
+    private void BuildLeftPanel(SplitterPanel panel)
+    {
+        panel.BackColor = AppTheme.Surface;
+        panel.Padding = new Padding(8, 8, 8, 8);
+
+        var lblTitle = new Label
+        {
+            Dock = DockStyle.Top,
+            Text = "Divisions",
+            Font = AppTheme.FontSmallBold,
+            ForeColor = AppTheme.TextPrimary,
+            Height = 22,
+            TextAlign = ContentAlignment.MiddleLeft
+        };
+
+        _txtSearch = new TextBox
+        {
+            Dock = DockStyle.Top,
+            Font = AppTheme.FontDefault,
+            ForeColor = AppTheme.TextSecondary,
+            BackColor = AppTheme.ContentBackground,
+            Text = "Search...",
+            Height = 28
+        };
+        _txtSearch.Enter += (_, _) => { if (_txtSearch.Text == "Search...") { _txtSearch.Text = ""; _txtSearch.ForeColor = AppTheme.TextPrimary; } };
+        _txtSearch.Leave += (_, _) => { if (string.IsNullOrEmpty(_txtSearch.Text)) { _txtSearch.Text = "Search..."; _txtSearch.ForeColor = AppTheme.TextSecondary; } };
+        _txtSearch.TextChanged += (_, _) => FilterDivisionList();
+
+        _lstDivisions = new ListBox
+        {
+            Dock = DockStyle.Fill,
+            Font = AppTheme.FontDefault,
+            BackColor = AppTheme.ContentBackground,
+            ForeColor = AppTheme.TextPrimary,
+            BorderStyle = BorderStyle.None,
+            IntegralHeight = false
+        };
+        _lstDivisions.SelectedIndexChanged += OnListDivisionSelected;
 
         var btnNew = new Button
         {
-            Text = "+ New Division", Location = new Point(x, 12), Size = new Size(130, 30),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }
+            Dock = DockStyle.Bottom,
+            Text = "+ New Division",
+            Height = 32,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = AppTheme.ButtonSuccess,
+            ForeColor = Color.White,
+            Font = AppTheme.FontButton,
+            Cursor = Cursors.Hand,
+            FlatAppearance = { BorderSize = 0 }
         };
         btnNew.Click += (_, _) => StartNewDivision();
-        panel.Controls.Add(btnNew);
 
-        return panel;
+        panel.Controls.Add(_lstDivisions);
+        panel.Controls.Add(_txtSearch);
+        panel.Controls.Add(lblTitle);
+        panel.Controls.Add(btnNew);
+    }
+
+    private void BuildRightPanel(SplitterPanel panel)
+    {
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 54f));
+
+        var tabs    = BuildTabs();
+        var toolbar = BuildSaveToolbar();
+        toolbar.Dock = DockStyle.Fill;
+
+        layout.Controls.Add(tabs,    0, 0);
+        layout.Controls.Add(toolbar, 0, 1);
+        panel.Controls.Add(layout);
     }
 
     private TabControl BuildTabs()
@@ -460,143 +543,82 @@ public class DivisionPanel : UserControl
 
     // â”€â”€ Data Loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    private void LoadLeagueList()
+    private void LoadContext()
     {
-        _isLoadingData = true;
-        try
-        {
-            _leagueCombo.SelectedIndexChanged -= OnLeagueSelected;
-            _leagueCombo.Items.Clear();
-
-            int? defaultLeagueId = null;
-            try
-            {
-                using var db = new BocceDbContext();
-                foreach (var l in db.Leagues.OrderBy(l => l.Name).ToList())
-                    _leagueCombo.Items.Add(new IntItem(l.Id, l.Name + (l.IsActive ? "" : " (inactive)")));
-
-                defaultLeagueId = AppParameterService.GetDefaultLeagueId(db);
-            }
-            catch { }
-
-            _leagueCombo.SelectedIndexChanged += OnLeagueSelected;
-
-            // Restore default from database
-            if (defaultLeagueId.HasValue)
-            {
-                int idx = _leagueCombo.Items.Cast<IntItem>().ToList().FindIndex(item => item.Id == defaultLeagueId);
-                if (idx >= 0)
-                    _leagueCombo.SelectedIndex = idx;
-                else
-                    ClearEditor();
-            }
-            else
-                ClearEditor();
-        }
-        finally
-        {
-            _isLoadingData = false;
-        }
-    }
-
-    private void OnLeagueSelected(object? sender, EventArgs e)
-    {
-        if (_leagueCombo.SelectedItem is IntItem item)
-        {
-            _selectedLeagueId = item.Id;
-            _leagueIdToRestore = item.Id;  // Save for persistence across reloads
-            LoadSeasonList(item.Id);
-        }
-        else ClearEditor();
-    }
-
-    private void LoadSeasonList(int leagueId)
-    {
-        _isLoadingData = true;
-        try
-        {
-            _seasonCombo.SelectedIndexChanged -= OnSeasonSelected;
-            _seasonCombo.Items.Clear();
-
-            int? defaultSeasonId = null;
-            try
-            {
-                using var db = new BocceDbContext();
-                foreach (var s in db.Seasons.Where(s => s.LeagueId == leagueId)
-                    .OrderByDescending(s => s.IsCurrent).ThenByDescending(s => s.StartDate).ToList())
-                {
-                    _seasonCombo.Items.Add(new IntItem(s.Id,
-                        s.Name + (s.IsCurrent ? "  \u2605" : "") + (s.IsActive ? "" : " (inactive)")));
-                }
-
-                defaultSeasonId = AppParameterService.GetDefaultSeasonId(db);
-            }
-            catch { }
-
-            _seasonCombo.SelectedIndexChanged += OnSeasonSelected;
-            if (_seasonCombo.Items.Count > 0)
-            {
-                // Try to select default season; fall back to first
-                if (defaultSeasonId.HasValue)
-                {
-                    int idx = _seasonCombo.Items.Cast<IntItem>().ToList().FindIndex(item => item.Id == defaultSeasonId);
-                    _seasonCombo.SelectedIndex = idx >= 0 ? idx : 0;
-                }
-                else
-                {
-                    _seasonCombo.SelectedIndex = 0;
-                }
-            }
-            else
-            {
-                // No seasons: clear divisions too
-                _divisionCombo.SelectedIndexChanged -= OnDivisionSelected;
-                _divisionCombo.Items.Clear();
-                _divisionCombo.SelectedIndexChanged += OnDivisionSelected;
-                ClearEditor();
-            }
-        }
-        finally
-        {
-            _isLoadingData = false;
-        }
-    }
-
-    private void OnSeasonSelected(object? sender, EventArgs e)
-    {
-        if (_seasonCombo.SelectedItem is IntItem item)
-        {
-            _selectedSeasonId = item.Id;
-            LoadSlotCombos();
-            LoadDivisionList(item.Id);
-        }
-        else ClearEditor();
-    }
-
-    private void LoadDivisionList(int seasonId)
-    {
-        _divisionCombo.SelectedIndexChanged -= OnDivisionSelected;
-        _divisionCombo.Items.Clear();
         try
         {
             using var db = new BocceDbContext();
-            foreach (var d in db.Divisions.Where(d => d.SeasonId == seasonId)
-                .OrderBy(d => d.SortName).ThenBy(d => d.Name).ToList())
-            {
-                _divisionCombo.Items.Add(new IntItem(d.Id,
-                    d.Name + (d.IsActive ? "" : " (inactive)")));
-            }
+            _selectedLeagueId = AppParameterService.GetDefaultLeagueId(db);
+            _selectedSeasonId = AppParameterService.GetDefaultSeasonId(db);
         }
         catch { }
-        _divisionCombo.SelectedIndexChanged += OnDivisionSelected;
-        if (_divisionCombo.Items.Count > 0) _divisionCombo.SelectedIndex = 0;
-        else ClearEditor();
+        LoadSlotCombos();
+        LoadDivisionList();
     }
 
-    private void OnDivisionSelected(object? sender, EventArgs e)
+    private void LoadDivisionList()
     {
-        if (_divisionCombo.SelectedItem is IntItem item) LoadDivision(item.Id);
-        else ClearEditor();
+        _allDivisions.Clear();
+        if (_selectedLeagueId.HasValue && _selectedSeasonId.HasValue)
+        {
+            try
+            {
+                using var db = new BocceDbContext();
+                var season = db.Seasons.Find(_selectedSeasonId.Value);
+                if (season != null && season.LeagueId == _selectedLeagueId.Value)
+                {
+                    _allDivisions = db.Divisions
+                        .Where(d => d.SeasonId == _selectedSeasonId.Value)
+                        .OrderBy(d => d.SortName).ThenBy(d => d.Name)
+                        .Select(d => new { d.Id, Display = d.Name + (d.IsActive ? "" : " (inactive)") })
+                        .AsEnumerable()
+                        .Select(d => (d.Id, d.Display))
+                        .ToList();
+                }
+            }
+            catch { }
+        }
+        FilterDivisionList();
+        if (_lstDivisions.Items.Count > 0 && _lstDivisions.SelectedIndex < 0)
+            _lstDivisions.SelectedIndex = 0;
+        else if (_lstDivisions.Items.Count == 0)
+            ClearEditor();
+    }
+
+    private void FilterDivisionList()
+    {
+        var query = _txtSearch.Text == "Search..." ? "" : _txtSearch.Text;
+        var prev  = _lstDivisions.SelectedItem is ListItem sel ? sel.Id : (int?)null;
+
+        _isLoadingData = true;
+        try
+        {
+            _lstDivisions.BeginUpdate();
+            _lstDivisions.Items.Clear();
+            foreach (var (id, display) in _allDivisions)
+                if (SearchQueryService.MatchesAnyTerm(display, query))
+                    _lstDivisions.Items.Add(new ListItem(id, display));
+            _lstDivisions.EndUpdate();
+        }
+        finally { _isLoadingData = false; }
+
+        if (prev.HasValue) SelectInList(prev.Value);
+    }
+
+    private void SelectInList(int divisionId)
+    {
+        for (int i = 0; i < _lstDivisions.Items.Count; i++)
+            if (_lstDivisions.Items[i] is ListItem li && li.Id == divisionId)
+            { _lstDivisions.SelectedIndex = i; return; }
+    }
+
+    private void OnListDivisionSelected(object? sender, EventArgs e)
+    {
+        if (_isLoadingData) return;
+        if (_lstDivisions.SelectedItem is ListItem li)
+            LoadDivision(li.Id);
+        else
+            ClearEditor();
     }
 
     private void LoadSlotCombos()
@@ -751,12 +773,12 @@ public class DivisionPanel : UserControl
     {
         if (!_selectedSeasonId.HasValue)
         {
-            MessageBox.Show("Select a league and season first.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show("Select a season first.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
-        _divisionCombo.SelectedIndexChanged -= OnDivisionSelected;
-        _divisionCombo.SelectedIndex = -1;
-        _divisionCombo.SelectedIndexChanged += OnDivisionSelected;
+        _isLoadingData = true;
+        _lstDivisions.SelectedIndex = -1;
+        _isLoadingData = false;
         ClearEditor();
         _divisionMode = DivisionMode.Create;
         SetEditModeUI();
@@ -928,8 +950,8 @@ public class DivisionPanel : UserControl
         _btnDelete.Enabled  = true;
         _btnAddTeam.Enabled = true;
         MessageBox.Show("Division saved.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        LoadDivisionList(_selectedSeasonId!.Value);
-        SelectDivisionInCombo(savedId);
+        LoadDivisionList();
+        SelectInList(savedId);
         LoadTeams(savedId);
     }
 
@@ -1001,8 +1023,8 @@ public class DivisionPanel : UserControl
 
         MessageBox.Show("Division deleted.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
         _selectedDivisionId = null;
-        if (_selectedSeasonId.HasValue) LoadDivisionList(_selectedSeasonId.Value);
-        if (_divisionCombo.Items.Count == 0) ClearEditor();
+        LoadDivisionList();
+        if (_lstDivisions.Items.Count == 0) ClearEditor();
     }
 
     // â”€â”€ Teams â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1761,8 +1783,8 @@ public class DivisionPanel : UserControl
             if (team == null || division == null) return;
 
             currentPlayerCount = db.TeamPlayers.Count(tp => tp.TeamId == teamId);
-            maxPlayersPerTeam = (division.PlayersPerTeamMaximum ?? 0) > 0
-                ? division.PlayersPerTeamMaximum.Value
+            maxPlayersPerTeam = division.PlayersPerTeamMaximum > 0
+                ? division.PlayersPerTeamMaximum ?? 0
                 : (division.Season?.PlayersPerTeamMaximum ?? 0);
 
             if (maxPlayersPerTeam == 0)
@@ -1861,12 +1883,16 @@ public class DivisionPanel : UserControl
                         JoinedDate = DateOnly.FromDateTime(DateTime.Today)
                     });
 
-                    // Keep LookingForTeam history: assigned entries become inactive by setting TeamId.
-                    var lft = db.LookingForTeams.FirstOrDefault(l =>
-                        l.PlayerId == playerId &&
-                        (!_selectedLeagueId.HasValue || l.LeagueId == _selectedLeagueId.Value));
-                    if (lft != null)
-                        lft.TeamId = teamId;
+                    // Keep LookingForTeam history: assigned entries get TeamId set.
+                    if (_selectedSeasonId.HasValue)
+                    {
+                        var lft = db.LookingForTeams.FirstOrDefault(l =>
+                            l.PlayerId == playerId &&
+                            (!_selectedLeagueId.HasValue || l.LeagueId == _selectedLeagueId.Value) &&
+                            l.SeasonId == _selectedSeasonId.Value);
+                        if (lft != null)
+                            lft.TeamId = teamId;
+                    }
 
                     count++;
                 }
@@ -1928,6 +1954,7 @@ public class DivisionPanel : UserControl
                 var lft = db.LookingForTeams.FirstOrDefault(l =>
                     l.LeagueId == team.Division.Season.LeagueId &&
                     l.PlayerId == playerId &&
+                    l.SeasonId == team.Division.SeasonId &&
                     l.TeamId == teamId);
                 if (lft != null)
                 {
@@ -2108,26 +2135,6 @@ public class DivisionPanel : UserControl
 
     // â”€â”€ Navigation helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    private void SelectLeagueInCombo(int leagueId)
-    {
-        for (int i = 0; i < _leagueCombo.Items.Count; i++)
-            if (_leagueCombo.Items[i] is IntItem ci && ci.Id == leagueId)
-            { _leagueCombo.SelectedIndex = i; return; }
-    }
-
-    private void SelectSeasonInCombo(int seasonId)
-    {
-        for (int i = 0; i < _seasonCombo.Items.Count; i++)
-            if (_seasonCombo.Items[i] is IntItem ci && ci.Id == seasonId)
-            { _seasonCombo.SelectedIndex = i; return; }
-    }
-
-    private void SelectDivisionInCombo(int divisionId)
-    {
-        for (int i = 0; i < _divisionCombo.Items.Count; i++)
-            if (_divisionCombo.Items[i] is IntItem ci && ci.Id == divisionId)
-            { _divisionCombo.SelectedIndex = i; return; }
-    }
 
     // â”€â”€ Control factories â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -2139,19 +2146,13 @@ public class DivisionPanel : UserControl
         return $"{prefix}-{time24h}";
     }
 
-    private static Label NavLabel(string text, int x, int y) => new()
-    {
-        Text = text, Font = AppTheme.FontDefaultBold, ForeColor = AppTheme.TextPrimary,
-        AutoSize = true, Location = new Point(x, y)
-    };
-
     private static Label Lbl(string text, int x, int y) => new()
     {
         Text = text, Font = AppTheme.FontDefaultBold, ForeColor = AppTheme.TextPrimary,
         AutoSize = true, Location = new Point(x, y + 3)
     };
 
-    private static NumericUpDown Num(int x, int y, decimal min, decimal max, decimal def = 0) => new()
+    private static ThemedNumericUpDown Num(int x, int y, decimal min, decimal max, decimal def = 0) => new()
     {
         Location = new Point(x, y), Size = new Size(90, 26),
         Font = AppTheme.FontDefault, Minimum = min, Maximum = max, Value = def, DecimalPlaces = 0
@@ -2190,6 +2191,7 @@ public class DivisionPanel : UserControl
 
         // Load all available players
         List<(int Id, string Name)> allPlayers = [];
+        HashSet<int> lookingForTeam = [];
         try
         {
             using var db = new BocceDbContext();
@@ -2199,6 +2201,14 @@ public class DivisionPanel : UserControl
                 .ToList()
                 .Select(p => (p.Id, $"{p.LastName}, {p.FirstName}"))
                 .ToList();
+
+            if (_selectedSeasonId.HasValue)
+            {
+                lookingForTeam = db.LookingForTeams
+                    .Where(l => l.SeasonId == _selectedSeasonId.Value && !l.TeamId.HasValue)
+                    .Select(l => l.PlayerId)
+                    .ToHashSet();
+            }
         }
         catch { }
 
@@ -2263,7 +2273,11 @@ public class DivisionPanel : UserControl
 
                 bool matches = SearchQueryService.MatchesAnyTerm(name, query);
 
-                if (matches) cmbAvailable.Items.Add(new IntItem(id, name));
+                if (matches)
+                {
+                    string displayName = lookingForTeam.Contains(id) ? $"◆ {name}" : name;
+                    cmbAvailable.Items.Add(new IntItem(id, displayName));
+                }
             }
         }
         RefreshAvailable("");
@@ -2324,6 +2338,7 @@ public class DivisionPanel : UserControl
         return result;
     }
 
+    private sealed record ListItem(int Id, string Display) { public override string ToString() => Display; }
     private sealed record IntItem(int Id, string Name)    { public override string ToString() => Name; }
     private sealed record SlotItem(int Id, string Display) { public override string ToString() => Display; }
 }

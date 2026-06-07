@@ -1,6 +1,7 @@
-﻿using BocceManager.Data;
+using BocceManager.Data;
 using BocceManager.Data.Entities;
 using BocceManager.Services;
+using BocceManager.UI.Controls;
 using BocceManager.UI.Theme;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,55 +10,52 @@ namespace BocceManager.Panels;
 public class SeasonPanel : UserControl
 {
     private bool _isLoadingData = false;
-    private bool _isEditMode = false;
     private bool _isNewSeasonDraft = false;
     private bool _seasonNameCustomized = false;
     private bool _settingSeasonNameProgrammatically = false;
 
-    // â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── State ─────────────────────────────────────────────────────────────────
     private int? _selectedLeagueId;
     private int? _selectedSeasonId;
-    private int? _previousSeasonId;  // Track season before starting new season
-    private int? _leagueIdToRestore;
-    private int? _seasonIdToRestore;
+    private int? _previousSeasonId;
     private bool _isCopied;
     private int? _copySourceId;
 
-    // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    private ComboBox _leagueCombo = null!;
-    private ComboBox _seasonCombo = null!;
+    // ── Left panel ────────────────────────────────────────────────────────────
+    private TextBox _txtSearch   = null!;
+    private ListBox _lstSeasons  = null!;
 
-    // â”€â”€ Editor â€” basic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    private TextBox       _txtName           = null!;
-    private DateTimePicker _dtpStartDate     = null!;
-    private NumericUpDown _numWeeks          = null!;
-    private NumericUpDown _numGamesPerSeason = null!;
-    private DateTimePicker _dtpPlayoffStart  = null!;
-    private CheckBox      _chkIsCurrent      = null!;
-    private CheckBox      _chkActive         = null!;
-    private Label         _lblCreatedAt      = null!;
+    // ── Editor – basic ────────────────────────────────────────────────────────
+    private TextBox        _txtName           = null!;
+    private DateTimePicker _dtpStartDate      = null!;
+    private ThemedNumericUpDown _numWeeks          = null!;
+    private ThemedNumericUpDown _numGamesPerSeason = null!;
+    private DateTimePicker _dtpPlayoffStart   = null!;
+    private CheckBox       _chkIsCurrent      = null!;
+    private CheckBox       _chkActive         = null!;
+    private Label          _lblCreatedAt      = null!;
 
-    // â”€â”€ Editor â€” division defaults â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    private NumericUpDown _numMaxTeamsDiv    = null!;
+    // ── Editor – division defaults ────────────────────────────────────────────
+    private ThemedNumericUpDown _numMaxTeamsDiv = null!;
 
-    // â”€â”€ Editor â€” scoring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Editor – scoring ──────────────────────────────────────────────────────
     private ComboBox      _cmbGameInterval   = null!;
     private CheckBox      _chkTimeslotDriven = null!;
-    private NumericUpDown _numPlayersMin     = null!;
-    private NumericUpDown _numPlayersMax     = null!;
-    private NumericUpDown _numPtsWin         = null!;
-    private NumericUpDown _numPtsTie         = null!;
-    private NumericUpDown _numPtsLoss        = null!;
-    private NumericUpDown _numPtsNoShow      = null!;
-    private NumericUpDown _numPtsToWin       = null!;
-    private NumericUpDown _numGamesPerMatch  = null!;
+    private ThemedNumericUpDown _numPlayersMin     = null!;
+    private ThemedNumericUpDown _numPlayersMax     = null!;
+    private ThemedNumericUpDown _numPtsWin         = null!;
+    private ThemedNumericUpDown _numPtsTie         = null!;
+    private ThemedNumericUpDown _numPtsLoss        = null!;
+    private ThemedNumericUpDown _numPtsNoShow      = null!;
+    private ThemedNumericUpDown _numPtsToWin       = null!;
+    private ThemedNumericUpDown _numGamesPerMatch  = null!;
     private ComboBox      _cmbScoringMode    = null!;
 
-    // â”€â”€ Editor â€” playoff settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    private NumericUpDown _numTeamsPlayoffs     = null!;
+    // ── Editor – playoff settings ─────────────────────────────────────────────
+    private ThemedNumericUpDown _numTeamsPlayoffs     = null!;
     private CheckBox      _chkFirstPlace        = null!;
     private ComboBox      _cmbPlayoffType       = null!;
-    private NumericUpDown _numPlayoffGames      = null!;
+    private ThemedNumericUpDown _numPlayoffGames      = null!;
     private ComboBox      _cmbPlayoffScoring    = null!;
     private CheckBox      _chkPlayoffTiebreaker = null!;
 
@@ -66,15 +64,18 @@ public class SeasonPanel : UserControl
     private Button _btnDelete = null!;
     private Button _btnCancel = null!;
 
-    // â”€â”€ Divisions tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Divisions tab ─────────────────────────────────────────────────────────
     private DataGridView _divisionsGrid = null!;
 
-    // â”€â”€ Slots tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Slots tab ─────────────────────────────────────────────────────────────
     private CheckedListBox _daysList  = null!;
     private CheckedListBox _timesList = null!;
     private Button         _btnBuild  = null!;
 
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // All seasons for search filtering
+    private List<(int Id, string Display)> _allSeasons = [];
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     public SeasonPanel()
     {
@@ -82,12 +83,12 @@ public class SeasonPanel : UserControl
         Dock = DockStyle.Fill;
         BuildUI();
         AppParameterService.DefaultsChanged += OnDefaultsChanged;
-        LoadLeagueList();
+        LoadContext();
     }
 
     private void OnDefaultsChanged(object? sender, DefaultsChangedEventArgs e)
     {
-        LoadLeagueList();
+        LoadContext();
     }
 
     protected override void Dispose(bool disposing)
@@ -104,69 +105,144 @@ public class SeasonPanel : UserControl
             using var db = new BocceDbContext();
             var s = db.Seasons.Find(seasonId);
             if (s == null) return;
-            SelectLeagueInCombo(s.LeagueId);
-            SelectSeasonInCombo(seasonId);
+
+            // If season belongs to a different league, update default
+            var currentDefaultLeague = AppParameterService.GetDefaultLeagueId(db);
+            if (currentDefaultLeague != s.LeagueId)
+                AppParameterService.SetDefaultLeagueId(db, s.LeagueId);
+
+            // Reload for this league, then select the season
+            _selectedLeagueId = s.LeagueId;
+            LoadSeasonList();
+            SelectInList(seasonId);
         }
         catch { }
     }
 
-    // â”€â”€ Build UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Build UI ──────────────────────────────────────────────────────────────
 
     private void BuildUI()
     {
-        var header  = BuildHeader();
-        var toolbar = BuildSaveToolbar();
-        var tabs    = BuildTabs();
-        Controls.Add(tabs);
-        Controls.Add(toolbar);
-        Controls.Add(header);
+        var split = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Vertical,
+            Panel1MinSize = 0,
+            Panel2MinSize = 0,
+            BackColor = AppTheme.ContentBackground
+        };
+
+        void Apply()
+        {
+            if (split.Width <= 1) return;
+            const int preferred = 220, desiredLeft = 180, desiredRight = 400;
+            int maxTotal = Math.Max(0, split.Width - 1);
+            int leftMin  = desiredLeft;
+            int rightMin = desiredRight;
+            if (leftMin + rightMin > maxTotal)
+            {
+                if (maxTotal == 0) { leftMin = 0; rightMin = 0; }
+                else { double r = desiredLeft / (double)(desiredLeft + desiredRight); leftMin = (int)Math.Floor(maxTotal * r); rightMin = maxTotal - leftMin; }
+            }
+            split.Panel1MinSize   = leftMin;
+            split.Panel2MinSize   = rightMin;
+            int maxLeft = split.Width - rightMin;
+            if (maxLeft < leftMin) maxLeft = leftMin;
+            int dist = Math.Max(leftMin, Math.Min(preferred, maxLeft));
+            split.FixedPanel      = FixedPanel.Panel1;
+            split.IsSplitterFixed = true;
+            if (dist > 0) split.SplitterDistance = dist;
+        }
+
+        split.SizeChanged   += (_, _) => Apply();
+        split.HandleCreated += (_, _) => BeginInvoke(new Action(Apply));
+
+        BuildLeftPanel(split.Panel1);
+        BuildRightPanel(split.Panel2);
+
+        Controls.Add(split);
     }
 
-    private Panel BuildHeader()
+    private void BuildLeftPanel(SplitterPanel panel)
     {
-        var panel = new Panel
+        panel.BackColor = AppTheme.Surface;
+        panel.Padding = new Padding(8, 8, 8, 8);
+
+        var lblTitle = new Label
         {
-            Dock = DockStyle.Top, Height = 54,
-            BackColor = AppTheme.Surface, Padding = new Padding(12, 8, 12, 8)
+            Dock = DockStyle.Top,
+            Text = "Seasons",
+            Font = AppTheme.FontSmallBold,
+            ForeColor = AppTheme.TextPrimary,
+            Height = 22,
+            TextAlign = ContentAlignment.MiddleLeft
         };
 
-        int x = 12;
-        var lblLeague = NavLabel("League:", x, 17); panel.Controls.Add(lblLeague);
-        x += lblLeague.PreferredWidth + 8;
-
-        _leagueCombo = new ComboBox
+        _txtSearch = new TextBox
         {
-            DropDownStyle = ComboBoxStyle.DropDownList,
-            Font = AppTheme.FontDefault, Width = 260, Location = new Point(x, 13)
+            Dock = DockStyle.Top,
+            Font = AppTheme.FontDefault,
+            ForeColor = AppTheme.TextSecondary,
+            BackColor = AppTheme.ContentBackground,
+            Text = "Search...",
+            Height = 28,
+            Margin = new Padding(0, 0, 0, 6)
         };
-        _leagueCombo.SelectedIndexChanged += OnLeagueSelected;
-        panel.Controls.Add(_leagueCombo);
-        x += 268;
+        _txtSearch.Enter += (_, _) => { if (_txtSearch.Text == "Search...") { _txtSearch.Text = ""; _txtSearch.ForeColor = AppTheme.TextPrimary; } };
+        _txtSearch.Leave += (_, _) => { if (string.IsNullOrEmpty(_txtSearch.Text)) { _txtSearch.Text = "Search..."; _txtSearch.ForeColor = AppTheme.TextSecondary; } };
+        _txtSearch.TextChanged += (_, _) => FilterSeasonList();
 
-        var lblSeason = NavLabel("Season:", x, 17); panel.Controls.Add(lblSeason);
-        x += lblSeason.PreferredWidth + 8;
-
-        _seasonCombo = new ComboBox
+        _lstSeasons = new ListBox
         {
-            DropDownStyle = ComboBoxStyle.DropDownList,
-            Font = AppTheme.FontDefault, Width = 290, Location = new Point(x, 13)
+            Dock = DockStyle.Fill,
+            Font = AppTheme.FontDefault,
+            BackColor = AppTheme.ContentBackground,
+            ForeColor = AppTheme.TextPrimary,
+            BorderStyle = BorderStyle.None,
+            IntegralHeight = false
         };
-        _seasonCombo.SelectedIndexChanged += OnSeasonSelected;
-        panel.Controls.Add(_seasonCombo);
-        x += 298;
+        _lstSeasons.SelectedIndexChanged += OnListSeasonSelected;
 
         var btnNew = new Button
         {
-            Text = "+ New Season", Location = new Point(x, 12),
-            Size = new Size(130, 30), FlatStyle = FlatStyle.Flat,
-            BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand,
+            Dock = DockStyle.Bottom,
+            Text = "+ New Season",
+            Height = 32,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = AppTheme.ButtonSuccess,
+            ForeColor = Color.White,
+            Font = AppTheme.FontButton,
+            Cursor = Cursors.Hand,
             FlatAppearance = { BorderSize = 0 }
         };
         btnNew.Click += (_, _) => StartNewSeason();
-        panel.Controls.Add(btnNew);
 
-        return panel;
+        panel.Controls.Add(_lstSeasons);
+        panel.Controls.Add(_txtSearch);
+        panel.Controls.Add(lblTitle);
+        panel.Controls.Add(btnNew);
+    }
+
+    private void BuildRightPanel(SplitterPanel panel)
+    {
+        var toolbar = BuildSaveToolbar();
+        var tabs = BuildTabs();
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2,
+            Padding = Padding.Empty, Margin = Padding.Empty,
+            CellBorderStyle = TableLayoutPanelCellBorderStyle.None
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, toolbar.Height));
+        tabs.Dock = DockStyle.Fill;
+        toolbar.Dock = DockStyle.Fill;
+        layout.Controls.Add(tabs, 0, 0);
+        layout.Controls.Add(toolbar, 0, 1);
+
+        panel.Controls.Add(layout);
     }
 
     private TabControl BuildTabs()
@@ -182,7 +258,7 @@ public class SeasonPanel : UserControl
         return tabs;
     }
 
-    // â”€â”€ Editor Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Editor Tab ────────────────────────────────────────────────────────────
 
     private TabPage BuildEditorTab()
     {
@@ -194,7 +270,7 @@ public class SeasonPanel : UserControl
         var cc = new List<Control>();
         void Add(params Control[] items) => cc.AddRange(items);
 
-        // â”€â”€ Basic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Basic ──────────────────────────────────────────────────────────
         Add(Lbl("Name *", lx, y));
         _txtName = new TextBox { Location = new Point(ix, y), Size = new Size(iw, 26), Font = AppTheme.FontDefault, BackColor = AppTheme.ContentBackground, ForeColor = AppTheme.TextPrimary };
         _txtName.TextChanged += OnSeasonNameTextChanged;
@@ -213,13 +289,13 @@ public class SeasonPanel : UserControl
         _numGamesPerSeason = Num(ix, y, 0, 999);
         Add(_numGamesPerSeason, Hint("Total games each team plays", ix + 100, y + 4)); y += 44;
 
-        // â”€â”€ Status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Status ────────────────────────────────────────────────────────
         Add(Sep(lx, y, iw + ix - lx)); y += 10;
         Add(SecHdr("Status", lx, y)); y += 34;
 
         Add(Lbl("Is Current Season", lx, y));
         _chkIsCurrent = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary };
-        Add(_chkIsCurrent, Hint("Only one season per league can be current (\u2605)", ix + 26, y + 4)); y += 38;
+        Add(_chkIsCurrent, Hint("Only one season per league can be current (★)", ix + 26, y + 4)); y += 38;
 
         Add(Lbl("Active", lx, y));
         _chkActive = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary, Checked = true };
@@ -234,7 +310,7 @@ public class SeasonPanel : UserControl
         return page;
     }
 
-    // â”€â”€ Parameters Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Parameters Tab ────────────────────────────────────────────────────────
 
     private TabPage BuildParametersTab()
     {
@@ -246,7 +322,7 @@ public class SeasonPanel : UserControl
         var cc = new List<Control>();
         void Add(params Control[] items) => cc.AddRange(items);
 
-        // â”€â”€ Division Defaults â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Division Defaults ─────────────────────────────────────────────
         Add(SecHdr("Division Defaults", lx, y)); y += 34;
 
         Add(Lbl("Max Teams / Division", lx, y));
@@ -255,7 +331,7 @@ public class SeasonPanel : UserControl
 
         Add(Sep(lx, y, iw + ix - lx)); y += 10;
 
-        // â”€â”€ Scoring Parameters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Scoring Parameters ────────────────────────────────────────────
         Add(SecHdr("Scoring Parameters", lx, y)); y += 34;
 
         Add(Lbl("Game Interval", lx, y));
@@ -313,7 +389,7 @@ public class SeasonPanel : UserControl
             Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted
         }); y += 32;
 
-        // â”€â”€ Playoff Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Playoff Settings ──────────────────────────────────────────────
         Add(Sep(lx, y, iw + ix - lx)); y += 10;
         Add(SecHdr("Playoff Settings", lx, y)); y += 34;
 
@@ -355,13 +431,13 @@ public class SeasonPanel : UserControl
         return page;
     }
 
-    // â”€â”€ Save Toolbar (visible below all tabs) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Save Toolbar ──────────────────────────────────────────────────────────
 
     private Panel BuildSaveToolbar()
     {
         var toolbar = new Panel
         {
-            Dock = DockStyle.Bottom, Height = 54,
+            Height = 54,
             BackColor = AppTheme.Surface, Padding = new Padding(12, 10, 12, 10)
         };
 
@@ -406,7 +482,7 @@ public class SeasonPanel : UserControl
         return toolbar;
     }
 
-    // â”€â”€ Divisions Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Divisions Tab ─────────────────────────────────────────────────────────
 
     private TabPage BuildDivisionsTab()
     {
@@ -485,7 +561,7 @@ public class SeasonPanel : UserControl
         return page;
     }
 
-    // â”€â”€ Slots Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Slots Tab ─────────────────────────────────────────────────────────────
 
     private TabPage BuildSlotsTab()
     {
@@ -524,7 +600,7 @@ public class SeasonPanel : UserControl
         _btnBuild.Click += OnBuildDivisions;
         var bHint = new Label
         {
-            Text = "Creates one division per Day Ã— Time combination. Existing combinations are skipped.",
+            Text = "Creates one division per Day × Time combination. Existing combinations are skipped.",
             Location = new Point(285, 18), AutoSize = true,
             Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted
         };
@@ -535,130 +611,65 @@ public class SeasonPanel : UserControl
         return page;
     }
 
-    // â”€â”€ Data Loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Data Loading ──────────────────────────────────────────────────────────
 
-    private void LoadLeagueList()
-    {
-        _leagueCombo.SelectedIndexChanged -= OnLeagueSelected;
-        _leagueCombo.Items.Clear();
-
-        int? defaultLeagueId = null;
-        int? defaultSeasonId = null;
-        try
-        {
-            using var db = new BocceDbContext();
-            foreach (var l in db.Leagues.OrderBy(l => l.Name).ToList())
-                _leagueCombo.Items.Add(new IntItem(l.Id, l.Name + (l.IsActive ? "" : " (inactive)")));
-
-            defaultLeagueId = AppParameterService.GetDefaultLeagueId(db);
-            defaultSeasonId = AppParameterService.GetDefaultSeasonId(db);
-
-            // If default league has no seasons but we have a default season, find the league with that season
-            if (defaultLeagueId.HasValue && defaultSeasonId.HasValue)
-            {
-                var defaultLeagueHasSeasons = db.Seasons.Any(s => s.LeagueId == defaultLeagueId && s.IsActive);
-                if (!defaultLeagueHasSeasons)
-                {
-                    var leagueWithDefaultSeason = db.Seasons.FirstOrDefault(s => s.Id == defaultSeasonId)?.LeagueId;
-                    if (leagueWithDefaultSeason.HasValue)
-                        defaultLeagueId = leagueWithDefaultSeason;
-                }
-            }
-        }
-        catch { }
-
-        _leagueCombo.SelectedIndexChanged += OnLeagueSelected;
-
-        // Restore default league
-        if (defaultLeagueId.HasValue)
-        {
-            int idx = _leagueCombo.Items.Cast<IntItem>().ToList().FindIndex(item => item.Id == defaultLeagueId);
-            if (idx >= 0)
-                _leagueCombo.SelectedIndex = idx;
-            else
-                ClearEditor();
-        }
-        else
-            ClearEditor();
-    }
-
-    private int? GetSeasonListDefaultSeasonId()
+    private void LoadContext()
     {
         try
         {
             using var db = new BocceDbContext();
-            var defaultSeasonId = AppParameterService.GetDefaultSeasonId(db);
-            if (defaultSeasonId.HasValue && _seasonCombo.Items.Cast<IntItem>().Any(item => item.Id == defaultSeasonId))
-                return defaultSeasonId;
-
-            // Fallback: if only 1 season, pick that one
-            if (_seasonCombo.Items.Count == 1)
-                return (_seasonCombo.Items[0] as IntItem)?.Id;
-
-            // Fallback: pick first current season if available
-            var seasonsInCombo = _seasonCombo.Items.Cast<IntItem>().ToList();
-            if (seasonsInCombo.Count > 0)
-            {
-                using var checkDb = new BocceDbContext();
-                var currentSeason = seasonsInCombo.FirstOrDefault(item =>
-                    checkDb.Seasons.Any(s => s.Id == item.Id && s.IsCurrent));
-                if (currentSeason != null)
-                    return currentSeason.Id;
-
-                return seasonsInCombo.First().Id;
-            }
+            _selectedLeagueId = AppParameterService.GetDefaultLeagueId(db);
         }
-        catch { }
-        return null;
+        catch { _selectedLeagueId = null; }
+
+        LoadSeasonList();
     }
 
-    private void OnLeagueSelected(object? sender, EventArgs e)
-    {
-        if (_leagueCombo.SelectedItem is IntItem item)
-        {
-            _selectedLeagueId = item.Id;
-            _leagueIdToRestore = item.Id;  // Save for persistence across reloads
-            LoadSeasonList(item.Id);
-        }
-        else ClearEditor();
-    }
-
-    private void LoadSeasonList(int leagueId)
+    private void LoadSeasonList()
     {
         _isLoadingData = true;
         try
         {
-            _seasonCombo.SelectedIndexChanged -= OnSeasonSelected;
-            _seasonCombo.Items.Clear();
+            _allSeasons.Clear();
 
-            int? defaultSeasonId = null;
+            if (_selectedLeagueId.HasValue)
+            {
+                try
+                {
+                    using var db = new BocceDbContext();
+                    _allSeasons = db.Seasons
+                        .Where(s => s.LeagueId == _selectedLeagueId.Value)
+                        .OrderByDescending(s => s.StartDate)
+                        .ThenBy(s => s.Name)
+                        .Select(s => new { s.Id, s.Name, s.IsCurrent, s.IsActive })
+                        .AsEnumerable()
+                        .Select(s => (s.Id, s.Name + (s.IsCurrent ? "  ★" : "") + (s.IsActive ? "" : " (inactive)")))
+                        .ToList();
+                }
+                catch { }
+            }
+
+            FilterSeasonList();
+
+            // Auto-select default season or first item
+            int? toSelect = null;
             try
             {
                 using var db = new BocceDbContext();
-                foreach (var s in db.Seasons.Where(s => s.LeagueId == leagueId)
-                    .OrderByDescending(s => s.StartDate).ThenBy(s => s.Name).ToList())
-                {
-                    var label = s.Name + (s.IsCurrent ? "  \u2605" : "") + (s.IsActive ? "" : " (inactive)");
-                    _seasonCombo.Items.Add(new IntItem(s.Id, label));
-                }
-
-                defaultSeasonId = AppParameterService.GetDefaultSeasonId(db);
+                var defaultSeasonId = AppParameterService.GetDefaultSeasonId(db);
+                if (defaultSeasonId.HasValue && _allSeasons.Any(s => s.Id == defaultSeasonId.Value))
+                    toSelect = defaultSeasonId;
+                else if (_selectedSeasonId.HasValue && _allSeasons.Any(s => s.Id == _selectedSeasonId.Value))
+                    toSelect = _selectedSeasonId;
+                else if (_allSeasons.Count > 0)
+                    toSelect = _allSeasons[0].Id;
             }
             catch { }
 
-            _seasonCombo.SelectedIndexChanged += OnSeasonSelected;
-            if (_seasonCombo.Items.Count > 0)
-            {
-                // Auto-select: default, or current, or first season
-                var seasonToSelect = GetSeasonListDefaultSeasonId();
-                if (seasonToSelect.HasValue)
-                {
-                    int idx = _seasonCombo.Items.Cast<IntItem>().ToList().FindIndex(item => item.Id == seasonToSelect);
-                    if (idx >= 0)
-                        _seasonCombo.SelectedIndex = idx;
-                }
-            }
-            else ClearEditor();
+            if (toSelect.HasValue)
+                SelectInList(toSelect.Value);
+            else
+                ClearEditor();
         }
         finally
         {
@@ -666,22 +677,56 @@ public class SeasonPanel : UserControl
         }
     }
 
-    private void OnSeasonSelected(object? sender, EventArgs e)
+    private void FilterSeasonList()
     {
-        if (_seasonCombo.SelectedItem is IntItem item)
+        var query = _txtSearch.Text == "Search..." ? "" : _txtSearch.Text;
+
+        _isLoadingData = true;
+        _lstSeasons.SelectedIndexChanged -= OnListSeasonSelected;
+        _lstSeasons.BeginUpdate();
+
+        var prevId = _selectedSeasonId;
+        _lstSeasons.Items.Clear();
+
+        foreach (var (id, display) in _allSeasons)
         {
-            _selectedSeasonId = item.Id;
-            _seasonIdToRestore = item.Id;  // Save for persistence across reloads
-            LoadSeason(item.Id);
+            if (SearchQueryService.MatchesAnyTerm(display, query))
+                _lstSeasons.Items.Add(new ListItem(id, display));
         }
-        else ClearEditor();
+
+        _lstSeasons.EndUpdate();
+        _lstSeasons.SelectedIndexChanged += OnListSeasonSelected;
+        _isLoadingData = false;
+
+        if (prevId.HasValue)
+            SelectInList(prevId.Value);
+    }
+
+    private void SelectInList(int seasonId)
+    {
+        for (int i = 0; i < _lstSeasons.Items.Count; i++)
+        {
+            if (_lstSeasons.Items[i] is ListItem li && li.Id == seasonId)
+            {
+                _lstSeasons.SelectedIndex = i;
+                return;
+            }
+        }
+    }
+
+    private void OnListSeasonSelected(object? sender, EventArgs e)
+    {
+        if (_isLoadingData) return;
+        if (_lstSeasons.SelectedItem is ListItem li)
+            LoadSeason(li.Id);
+        else
+            ClearEditor();
     }
 
     private void LoadSeason(int seasonId)
     {
         _selectedSeasonId = seasonId;
         _isCopied = false; _copySourceId = null;
-        _isEditMode = false;
         _isNewSeasonDraft = false;
         _seasonNameCustomized = false;
 
@@ -718,10 +763,10 @@ public class SeasonPanel : UserControl
             _numGamesPerMatch.Value  = s.GamesPerMatch;
             SelStr(_cmbScoringMode, s.ScoringMode);
 
-            _numTeamsPlayoffs.Value     = s.TeamsInPlayoffs;
-            _chkFirstPlace.Checked      = s.FirstPlaceGuaranteed;
+            _numTeamsPlayoffs.Value      = s.TeamsInPlayoffs;
+            _chkFirstPlace.Checked       = s.FirstPlaceGuaranteed;
             SelStr(_cmbPlayoffType, s.PlayoffType);
-            _numPlayoffGames.Value      = s.PlayoffGamesPerMatch;
+            _numPlayoffGames.Value       = s.PlayoffGamesPerMatch;
             SelStr(_cmbPlayoffScoring, s.PlayoffScoringMode);
             _chkPlayoffTiebreaker.Checked = s.PlayoffTiebreakerEnd;
         }
@@ -729,7 +774,7 @@ public class SeasonPanel : UserControl
 
         LoadDivisions(seasonId);
         LoadSeasonSlots(seasonId);
-        SetEditModeUI(false);  // Start in read-only mode
+        SetEditModeUI(false);
     }
 
     private void ClearEditor()
@@ -824,22 +869,21 @@ public class SeasonPanel : UserControl
             if (_timesList.Items[i] is SlotItem ti) _timesList.SetItemChecked(i, configuredTimes.Contains(ti.Id));
     }
 
-    // â”€â”€ New Season â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── New Season ────────────────────────────────────────────────────────────
 
     private void StartNewSeason()
     {
         if (!_selectedLeagueId.HasValue)
         {
-            MessageBox.Show("Select a league first.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show("Select a league in the top bar first.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
-        _previousSeasonId = _selectedSeasonId;  // Save current season before creating new one
-        _seasonCombo.SelectedIndexChanged -= OnSeasonSelected;
-        _seasonCombo.SelectedIndex = -1;
-        _seasonCombo.SelectedIndexChanged += OnSeasonSelected;
+        _previousSeasonId = _selectedSeasonId;
+        _lstSeasons.SelectedIndexChanged -= OnListSeasonSelected;
+        _lstSeasons.ClearSelected();
+        _lstSeasons.SelectedIndexChanged += OnListSeasonSelected;
         ClearEditor();
-        _isEditMode = true;
         _isNewSeasonDraft = true;
         _seasonNameCustomized = false;
         SetEditModeUI(true);
@@ -952,7 +996,6 @@ public class SeasonPanel : UserControl
         SelStr(_cmbPlayoffScoring, source.PlayoffScoringMode);
         _chkPlayoffTiebreaker.Checked = source.PlayoffTiebreakerEnd;
 
-        // Copy play days and play times from the source season
         using (var db = new BocceDbContext())
         {
             var sourceDays  = db.SeasonDaySlots .Where(s => s.SeasonId == source.Id).Select(s => s.DaySlotId) .ToHashSet();
@@ -971,85 +1014,62 @@ public class SeasonPanel : UserControl
         _copySourceId = source.Id;
     }
 
-    // â”€â”€ Save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-    // â”€â”€ Edit Mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Edit Mode ─────────────────────────────────────────────────────────────
 
     private void EnterEditMode()
     {
         if (_selectedSeasonId == null) return;
-        _isEditMode = true;
         SetEditModeUI(true);
     }
 
     private void ExitEditMode()
     {
-        _isEditMode = false;
-
-        // If canceling from new season creation, restore previous season
         if (!_selectedSeasonId.HasValue && _previousSeasonId.HasValue)
         {
             _selectedSeasonId = _previousSeasonId;
-            _seasonCombo.SelectedIndexChanged -= OnSeasonSelected;
-            // Find and select the previous season in the combo
-            for (int i = 0; i < _seasonCombo.Items.Count; i++)
-            {
-                if (_seasonCombo.Items[i] is IntItem ii && ii.Id == _previousSeasonId.Value)
-                {
-                    _seasonCombo.SelectedIndex = i;
-                    break;
-                }
-            }
-            _seasonCombo.SelectedIndexChanged += OnSeasonSelected;
             _previousSeasonId = null;
+            SelectInList(_selectedSeasonId.Value);
         }
 
         SetEditModeUI(false);
-        // Reload to discard changes
         if (_selectedSeasonId.HasValue)
             LoadSeason(_selectedSeasonId.Value);
     }
 
     private void SetEditModeUI(bool editMode)
     {
-        // Controls editable in edit mode
-        _txtName.ReadOnly = !editMode;
-        _dtpStartDate.Enabled = editMode;
-        _numWeeks.Enabled = editMode;
-        _numGamesPerSeason.Enabled = editMode;
-        _dtpPlayoffStart.Enabled = editMode;
-        _chkIsCurrent.Enabled = editMode;
-        _chkActive.Enabled = editMode;
-        _numMaxTeamsDiv.Enabled = editMode;
-        _cmbGameInterval.Enabled = editMode;
-        _chkTimeslotDriven.Enabled = editMode;
-        _numPlayersMin.Enabled = editMode;
-        _numPlayersMax.Enabled = editMode;
-        _numPtsWin.Enabled = editMode;
-        _numPtsTie.Enabled = editMode;
-        _numPtsLoss.Enabled = editMode;
-        _numPtsNoShow.Enabled = editMode;
-        _numPtsToWin.Enabled = editMode;
-        _numGamesPerMatch.Enabled = editMode;
-        _cmbScoringMode.Enabled = editMode;
-
-        // Playoff settings editable in edit mode
-        _numTeamsPlayoffs.Enabled = editMode;
-        _chkFirstPlace.Enabled = editMode;
-        _cmbPlayoffType.Enabled = editMode;
-        _numPlayoffGames.Enabled = editMode;
-        _cmbPlayoffScoring.Enabled = editMode;
+        _txtName.ReadOnly           = !editMode;
+        _dtpStartDate.Enabled       = editMode;
+        _numWeeks.Enabled           = editMode;
+        _numGamesPerSeason.Enabled  = editMode;
+        _dtpPlayoffStart.Enabled    = editMode;
+        _chkIsCurrent.Enabled       = editMode;
+        _chkActive.Enabled          = editMode;
+        _numMaxTeamsDiv.Enabled     = editMode;
+        _cmbGameInterval.Enabled    = editMode;
+        _chkTimeslotDriven.Enabled  = editMode;
+        _numPlayersMin.Enabled      = editMode;
+        _numPlayersMax.Enabled      = editMode;
+        _numPtsWin.Enabled          = editMode;
+        _numPtsTie.Enabled          = editMode;
+        _numPtsLoss.Enabled         = editMode;
+        _numPtsNoShow.Enabled       = editMode;
+        _numPtsToWin.Enabled        = editMode;
+        _numGamesPerMatch.Enabled   = editMode;
+        _cmbScoringMode.Enabled     = editMode;
+        _numTeamsPlayoffs.Enabled   = editMode;
+        _chkFirstPlace.Enabled      = editMode;
+        _cmbPlayoffType.Enabled     = editMode;
+        _numPlayoffGames.Enabled    = editMode;
+        _cmbPlayoffScoring.Enabled  = editMode;
         _chkPlayoffTiebreaker.Enabled = editMode;
 
-        // Day/Time slots editable in edit mode
-        _daysList.Enabled = editMode;
+        _daysList.Enabled  = editMode;
         _timesList.Enabled = editMode;
-        _btnBuild.Enabled = !editMode && _selectedSeasonId.HasValue;
+        _btnBuild.Enabled  = !editMode && _selectedSeasonId.HasValue;
 
-        // Divisions grid Active column and build button
         _divisionsGrid.Columns["DivAct"].ReadOnly = editMode;
 
-        // Button visibility: Edit/Delete in view mode, Save/Cancel in edit mode
         _btnEdit.Visible   = !editMode && _selectedSeasonId.HasValue;
         _btnDelete.Visible = !editMode && _selectedSeasonId.HasValue;
         _btnDelete.Enabled = !editMode && _selectedSeasonId.HasValue;
@@ -1057,7 +1077,7 @@ public class SeasonPanel : UserControl
         _btnCancel.Visible = editMode;
     }
 
-    // â”€â”€ Save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Save ──────────────────────────────────────────────────────────────────
 
     private void SaveSeason()
     {
@@ -1069,7 +1089,7 @@ public class SeasonPanel : UserControl
         }
         if (!_selectedLeagueId.HasValue)
         {
-            MessageBox.Show("Select a league first.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show("Select a league in the top bar first.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
@@ -1093,7 +1113,6 @@ public class SeasonPanel : UserControl
             db.SaveChanges();
             savedId = season.Id;
 
-            // Persist day/time slot configuration for this season
             var selDayIds  = _daysList.CheckedItems.Cast<SlotItem>().Select(s => s.Id).ToHashSet();
             var selTimeIds = _timesList.CheckedItems.Cast<SlotItem>().Select(s => s.Id).ToHashSet();
             db.SeasonDaySlots.RemoveRange(db.SeasonDaySlots.Where(s => s.SeasonId == savedId));
@@ -1104,7 +1123,6 @@ public class SeasonPanel : UserControl
                 db.SeasonTimeSlots.Add(new SeasonTimeSlot { SeasonId = savedId, TimeSlotId = id });
             db.SaveChanges();
 
-            // Enforce one-current-per-league
             if (season.IsCurrent)
             {
                 var others = db.Seasons
@@ -1114,7 +1132,6 @@ public class SeasonPanel : UserControl
                 { foreach (var o in others) o.IsCurrent = false; db.SaveChanges(); }
             }
 
-            // Auto-mark current if only season
             if (db.Seasons.Count(s => s.LeagueId == _selectedLeagueId.Value) == 1 && !season.IsCurrent)
             {
                 season.IsCurrent = true;
@@ -1130,7 +1147,7 @@ public class SeasonPanel : UserControl
             return;
         }
 
-        _selectedSeasonId  = savedId;
+        _selectedSeasonId = savedId;
 
         string divMsg = "";
         if (isNew)
@@ -1152,11 +1169,10 @@ public class SeasonPanel : UserControl
 
         MessageBox.Show("Season saved." + divMsg, "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
-        // Exit edit mode and return to view
         ExitEditMode();
 
-        LoadSeasonList(_selectedLeagueId!.Value);
-        SelectSeasonInCombo(savedId);
+        LoadSeasonList();
+        SelectInList(savedId);
         LoadDivisions(savedId);
         LoadSeasonSlots(savedId);
     }
@@ -1190,7 +1206,7 @@ public class SeasonPanel : UserControl
         s.PlayoffTiebreakerEnd  = _chkPlayoffTiebreaker.Checked;
     }
 
-    // â”€â”€ Division helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Division helpers ──────────────────────────────────────────────────────
 
     private (int divs, int teams, int players, int lft) CopySeasonData(int sourceSeasonId, int newSeasonId)
     {
@@ -1198,7 +1214,6 @@ public class SeasonPanel : UserControl
         {
             using var db = new BocceDbContext();
 
-            // Load source divisions with their teams and players
             var sourceDivs = db.Divisions
                 .Where(d => d.SeasonId == sourceSeasonId)
                 .ToList();
@@ -1208,11 +1223,9 @@ public class SeasonPanel : UserControl
                 .Where(t => sourceDivs.Select(d => d.Id).Contains(t.DivisionId))
                 .ToList();
 
-            // Maps old IDs â†’ new IDs so we can rewire LookingForTeam
             var divMap  = new Dictionary<int, int>();
             var teamMap = new Dictionary<int, int>();
 
-            // Copy divisions
             foreach (var src in sourceDivs)
             {
                 var newDiv = new Division
@@ -1229,11 +1242,10 @@ public class SeasonPanel : UserControl
                     IsActive              = true
                 };
                 db.Divisions.Add(newDiv);
-                db.SaveChanges(); // flush to get newDiv.Id
+                db.SaveChanges();
                 divMap[src.Id] = newDiv.Id;
             }
 
-            // Copy teams into the new divisions
             int playerCount = 0;
             foreach (var srcTeam in sourceTeams)
             {
@@ -1248,10 +1260,9 @@ public class SeasonPanel : UserControl
                     IsActive    = srcTeam.IsActive
                 };
                 db.Teams.Add(newTeam);
-                db.SaveChanges(); // flush to get newTeam.Id
+                db.SaveChanges();
                 teamMap[srcTeam.Id] = newTeam.Id;
 
-                // Copy player assignments
                 foreach (var tp in srcTeam.TeamPlayers)
                 {
                     db.TeamPlayers.Add(new TeamPlayer
@@ -1265,15 +1276,11 @@ public class SeasonPanel : UserControl
                     playerCount++;
                 }
 
-                // Copy captain reference
                 if (srcTeam.CaptainPlayerId.HasValue)
                     newTeam.CaptainPlayerId = srcTeam.CaptainPlayerId;
             }
             db.SaveChanges();
 
-            // Update LookingForTeam entries that were placed on old teams
-            // so they point to the equivalent new teams.
-            // Entries with TeamId == null (still unplaced) already carry forward as-is.
             int lftUpdated = 0;
             var lftEntries = db.LookingForTeams
                 .Where(l => l.TeamId.HasValue && teamMap.Keys.Contains(l.TeamId.Value))
@@ -1307,7 +1314,6 @@ public class SeasonPanel : UserControl
             var days    = db.DaySlots.Where(d => dayIds.Contains(d.Id)).OrderBy(d => d.DayNbr).ToList();
             var times   = db.TimeSlots.Where(t => timeIds.Contains(t.Id)).OrderBy(t => t.SortOrder).ToList();
 
-            // Existing combos to skip
             var existingCombos = db.Divisions
                 .Where(d => d.SeasonId == seasonId && d.DaySlotId != null && d.TimeSlotId != null)
                 .Select(d => new { d.DaySlotId, d.TimeSlotId })
@@ -1347,7 +1353,8 @@ public class SeasonPanel : UserControl
 
     private void OnDivisionActiveChanged(object? sender, DataGridViewCellEventArgs e)
     {
-        if (e.ColumnIndex != _divisionsGrid.Columns["DivAct"].Index || e.RowIndex < 0) return;
+        var col = _divisionsGrid.Columns["DivAct"];
+        if (col == null || e.ColumnIndex != col.Index || e.RowIndex < 0) return;
         var row = _divisionsGrid.Rows[e.RowIndex];
         if (row.Cells["DivId"].Value == null || row.Cells["DivId"].Value == DBNull.Value) return;
         int divId    = Convert.ToInt32(row.Cells["DivId"].Value);
@@ -1378,7 +1385,6 @@ public class SeasonPanel : UserControl
         var selDayIds  = _daysList.CheckedItems.Cast<SlotItem>().Select(s => s.Id).ToHashSet();
         var selTimeIds = _timesList.CheckedItems.Cast<SlotItem>().Select(s => s.Id).ToHashSet();
 
-        // â”€â”€ Find orphaned divisions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         var orphans = new List<(int Id, string Name, int Teams, int Players)>();
         try
         {
@@ -1403,7 +1409,6 @@ public class SeasonPanel : UserControl
             return;
         }
 
-        // â”€â”€ Warn and confirm deletion of orphans â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         if (orphans.Count > 0)
         {
             var sb = new System.Text.StringBuilder();
@@ -1448,7 +1453,6 @@ public class SeasonPanel : UserControl
             }
         }
 
-        // â”€â”€ Create new divisions for uncovered combinations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         int n = BuildDivisionsFromSlots(seasonId);
 
         var msg = orphans.Count > 0 ? $"{orphans.Count} division(s) removed." : "";
@@ -1516,7 +1520,7 @@ public class SeasonPanel : UserControl
         if (_selectedSeasonId.HasValue) LoadDivisions(_selectedSeasonId.Value);
     }
 
-    // â”€â”€ Delete Season â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Delete Season ─────────────────────────────────────────────────────────
 
     private void DeleteSeason()
     {
@@ -1554,15 +1558,11 @@ public class SeasonPanel : UserControl
 
             var divisionIds = season.Divisions.Select(d => d.Id).ToList();
 
-            // Clear team captain FKs first (Restrict constraint)
             foreach (var div in season.Divisions)
-            {
                 foreach (var team in div.Teams)
                     team.CaptainPlayerId = null;
-            }
             db.SaveChanges();
 
-            // Schedule data: Games > MatchTeamResults > Matches > ScheduleWeeks
             var weekIds = db.ScheduleWeeks.Where(w => divisionIds.Contains(w.DivisionId))
                                           .Select(w => w.Id).ToList();
             if (weekIds.Count > 0)
@@ -1575,7 +1575,6 @@ public class SeasonPanel : UserControl
             }
             db.ScheduleWeeks.RemoveRange(db.ScheduleWeeks.Where(w => divisionIds.Contains(w.DivisionId)));
 
-            // Playoff data
             var playoffMatchIds = db.PlayoffMatches.Where(pm => pm.SeasonId == seasonId)
                                                    .Select(pm => pm.Id).ToList();
             foreach (var pmId in playoffMatchIds)
@@ -1583,7 +1582,6 @@ public class SeasonPanel : UserControl
             db.PlayoffMatches.RemoveRange(db.PlayoffMatches.Where(pm => pm.SeasonId == seasonId));
             db.PlayoffRounds.RemoveRange(db.PlayoffRounds.Where(pr => pr.SeasonId == seasonId));
 
-            // Division and team data
             foreach (var div in season.Divisions)
             {
                 db.DivisionParameters.RemoveRange(db.DivisionParameters.Where(x => x.DivisionId == div.Id));
@@ -1597,14 +1595,12 @@ public class SeasonPanel : UserControl
             }
             db.Divisions.RemoveRange(season.Divisions);
 
-            // Season-level data
             db.SeasonParameters.RemoveRange(db.SeasonParameters.Where(x => x.SeasonId == seasonId));
             db.SeasonDaySlots.RemoveRange(db.SeasonDaySlots.Where(x => x.SeasonId == seasonId));
             db.SeasonTimeSlots.RemoveRange(db.SeasonTimeSlots.Where(x => x.SeasonId == seasonId));
             db.SeasonCourts.RemoveRange(db.SeasonCourts.Where(x => x.SeasonId == seasonId));
             db.SeasonFees.RemoveRange(db.SeasonFees.Where(x => x.SeasonId == seasonId));
 
-            // Team applicants
             var applicantIds = db.TeamApplicants.Where(ta => ta.SeasonId == seasonId)
                                                 .Select(ta => ta.Id).ToList();
             if (applicantIds.Count > 0)
@@ -1629,27 +1625,11 @@ public class SeasonPanel : UserControl
 
         MessageBox.Show("Season deleted.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
         _selectedSeasonId = null;
-        LoadSeasonList(_selectedLeagueId!.Value);
-        if (_seasonCombo.Items.Count == 0) ClearEditor();
+        LoadSeasonList();
+        if (_lstSeasons.Items.Count == 0) ClearEditor();
     }
 
-    // â”€â”€ Navigation helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-    private void SelectLeagueInCombo(int leagueId)
-    {
-        for (int i = 0; i < _leagueCombo.Items.Count; i++)
-            if (_leagueCombo.Items[i] is IntItem ci && ci.Id == leagueId)
-            { _leagueCombo.SelectedIndex = i; return; }
-    }
-
-    private void SelectSeasonInCombo(int seasonId)
-    {
-        for (int i = 0; i < _seasonCombo.Items.Count; i++)
-            if (_seasonCombo.Items[i] is IntItem ci && ci.Id == seasonId)
-            { _seasonCombo.SelectedIndex = i; return; }
-    }
-
-    // â”€â”€ Date prompt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Date prompt ───────────────────────────────────────────────────────────
 
     private DateOnly? PromptDate(string caption, string message, DateOnly defaultDate)
     {
@@ -1670,13 +1650,7 @@ public class SeasonPanel : UserControl
         return form.ShowDialog(this) == DialogResult.OK ? DateOnly.FromDateTime(dtp.Value) : null;
     }
 
-    // â”€â”€ Control factories â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-    private static Label NavLabel(string text, int x, int y) => new()
-    {
-        Text = text, Font = AppTheme.FontDefaultBold, ForeColor = AppTheme.TextPrimary,
-        AutoSize = true, Location = new Point(x, y)
-    };
+    // ── Control factories ─────────────────────────────────────────────────────
 
     private static Label Lbl(string text, int x, int y) => new()
     {
@@ -1684,7 +1658,7 @@ public class SeasonPanel : UserControl
         AutoSize = true, Location = new Point(x, y + 3)
     };
 
-    private static NumericUpDown Num(int x, int y, decimal min, decimal max, decimal def = 0) => new()
+    private static ThemedNumericUpDown Num(int x, int y, decimal min, decimal max, decimal def = 0) => new()
     {
         Location = new Point(x, y), Size = new Size(90, 26),
         Font = AppTheme.FontDefault, Minimum = min, Maximum = max, Value = def, DecimalPlaces = 0
@@ -1749,8 +1723,7 @@ public class SeasonPanel : UserControl
         return layout;
     }
 
-    private sealed record IntItem(int Id, string Name)    { public override string ToString() => Name; }
+    private sealed record ListItem(int Id, string Name)    { public override string ToString() => Name; }
     private sealed record StrItem(string Key, string Label) { public override string ToString() => Label; }
     private sealed record SlotItem(int Id, string Display)  { public override string ToString() => Display; }
 }
-

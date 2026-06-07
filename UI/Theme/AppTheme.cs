@@ -24,6 +24,10 @@ public static class AppTheme
     public static Color Separator         { get; private set; }
     public static Color Accent            { get; private set; }
 
+    // ── Disabled State ─────────────────────────────────────────────────────────
+    public static Color DisabledBackground { get; private set; }
+    public static Color DisabledText       { get; private set; }
+
     // ── Grid ──────────────────────────────────────────────────────────────────
     public static Color GridHeaderBackground { get; private set; }
     public static Color GridHeaderText       { get; private set; }
@@ -106,6 +110,8 @@ public static class AppTheme
                 ButtonDanger         = C(192, 57,  43);
                 EditModeBackground   = C(70,  60,  35);
                 CreateModeBackground = C(50,  70,  45);
+                DisabledBackground   = ContentBackground;
+                DisabledText         = TextPrimary;
                 break;
 
             case ThemePreset.Classic:
@@ -130,6 +136,8 @@ public static class AppTheme
                 ButtonDanger         = C(180, 0,   0);
                 EditModeBackground   = C(255, 253, 220);
                 CreateModeBackground = C(220, 255, 220);
+                DisabledBackground   = ContentBackground;
+                DisabledText         = TextPrimary;
                 break;
 
             case ThemePreset.BocceGreen:
@@ -154,6 +162,8 @@ public static class AppTheme
                 ButtonDanger         = C(192, 57,  43);
                 EditModeBackground   = C(255, 253, 235);
                 CreateModeBackground = C(230, 255, 240);
+                DisabledBackground   = ContentBackground;
+                DisabledText         = TextPrimary;
                 break;
 
             case ThemePreset.MidnightBlue:
@@ -178,6 +188,8 @@ public static class AppTheme
                 ButtonDanger         = C(180, 50,  80);
                 EditModeBackground   = C(45,  55,  95);
                 CreateModeBackground = C(35,  65,  50);
+                DisabledBackground   = ContentBackground;
+                DisabledText         = TextPrimary;
                 break;
 
             case ThemePreset.Slate:
@@ -202,6 +214,8 @@ public static class AppTheme
                 ButtonDanger         = C(192, 57,  43);
                 EditModeBackground   = C(255, 250, 215);
                 CreateModeBackground = C(230, 255, 235);
+                DisabledBackground   = ContentBackground;
+                DisabledText         = TextPrimary;
                 break;
 
             case ThemePreset.HighContrast:
@@ -226,6 +240,8 @@ public static class AppTheme
                 ButtonDanger         = C(255, 0,   0);
                 EditModeBackground   = C(255, 255, 0);
                 CreateModeBackground = C(0,   255, 0);
+                DisabledBackground   = ContentBackground;
+                DisabledText         = TextPrimary;
                 break;
 
             default: // Light
@@ -250,6 +266,8 @@ public static class AppTheme
                 ButtonDanger         = C(231, 76,  60);
                 EditModeBackground   = C(255, 254, 230);
                 CreateModeBackground = C(230, 255, 235);
+                DisabledBackground   = ContentBackground;
+                DisabledText         = TextPrimary;
                 break;
         }
 
@@ -267,6 +285,51 @@ public static class AppTheme
         FontStatValue      = new Font(family, 20f,  FontStyle.Bold);
         FontStatLabel      = new Font(family, 8f);
         FontGridHeader     = new Font(family, 9.5f, FontStyle.Bold);
+    }
+
+    public static void ApplyDisabledStyle(Control control)
+    {
+        if (control.Enabled)
+            return;
+
+        control.BackColor = DisabledBackground;
+        control.ForeColor = DisabledText;
+
+        if (control is TextBox tb)
+        {
+            tb.ReadOnly = true;
+        }
+        else if (control is Button btn)
+        {
+            btn.FlatStyle = FlatStyle.Flat;
+            btn.BackColor = DisabledBackground;
+            btn.ForeColor = DisabledText;
+            btn.FlatAppearance.BorderColor = DisabledText;
+        }
+        else if (control is CheckBox chk)
+        {
+            chk.FlatStyle = FlatStyle.Flat;
+            chk.ForeColor = DisabledText;
+        }
+    }
+
+    public static void ApplyDisabledStylesToAll(Control container)
+    {
+        foreach (Control control in GetAllControls(container))
+        {
+            if (!control.Enabled)
+                ApplyDisabledStyle(control);
+        }
+    }
+
+    private static IEnumerable<Control> GetAllControls(Control container)
+    {
+        foreach (Control control in container.Controls)
+        {
+            yield return control;
+            foreach (var child in GetAllControls(control))
+                yield return child;
+        }
     }
 
     private static Color C(int r, int g, int b) => Color.FromArgb(r, g, b);
