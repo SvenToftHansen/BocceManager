@@ -25,10 +25,8 @@ public class LeaguePanel : UserControl
     private ThemedNumericUpDown _numMin         = null!;
     private ThemedNumericUpDown _numMax         = null!;
     private ThemedNumericUpDown _numMaxTeams    = null!;
-    private Button        _btnEdit        = null!;
-    private Button        _btnSave        = null!;
+    private Button        _btnAdd         = null!;
     private Button        _btnDelete      = null!;
-    private Button        _btnCancel      = null!;
 
     // Seasons tab
     private DataGridView _seasonsGrid = null!;
@@ -131,20 +129,6 @@ public class LeaguePanel : UserControl
         };
         _lstLeagues.SelectedIndexChanged += OnListLeagueSelected;
 
-        var btnNew = new Button
-        {
-            Dock = DockStyle.Bottom,
-            Text = "+ New League",
-            Height = 32,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = AppTheme.ButtonSuccess,
-            ForeColor = Color.White,
-            Font = AppTheme.FontButton,
-            Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 0 }
-        };
-        btnNew.Click += (_, _) => StartNewLeague();
-
         // Search label
         var lblSearch = new Label
         {
@@ -159,7 +143,6 @@ public class LeaguePanel : UserControl
         panel.Controls.Add(_lstLeagues);
         panel.Controls.Add(_txtSearch);
         panel.Controls.Add(lblSearch);
-        panel.Controls.Add(btnNew);
     }
 
     private void BuildRightPanel(SplitterPanel panel)
@@ -292,44 +275,24 @@ public class LeaguePanel : UserControl
             Height = 54, BackColor = AppTheme.Surface, Padding = new Padding(12, 10, 12, 10)
         };
 
-        _btnEdit = new Button
+        _btnAdd = new Button
         {
-            Text = "Edit League", Location = new Point(12, 10), Size = new Size(130, 32),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
-            Visible = false
+            Text = "+ Add League", Location = new Point(12, 10), Size = new Size(140, 32),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }
         };
-        _btnEdit.Click += (_, _) => EnterEditMode();
+        _btnAdd.Click += (_, _) => AddLeague();
 
         _btnDelete = new Button
         {
-            Text = "Delete League", Location = new Point(150, 10), Size = new Size(140, 32),
+            Text = "Delete League", Location = new Point(160, 10), Size = new Size(140, 32),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 0 }, Enabled = false, Visible = false
+            FlatAppearance = { BorderSize = 0 }, Enabled = false
         };
         _btnDelete.Click += (_, _) => DeleteLeague();
 
-        _btnSave = new Button
-        {
-            Text = "Save League", Location = new Point(12, 10), Size = new Size(130, 32),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
-            Visible = false
-        };
-        _btnSave.Click += (_, _) => SaveLeague();
-
-        _btnCancel = new Button
-        {
-            Text = "Cancel", Location = new Point(150, 10), Size = new Size(140, 32),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 1, BorderColor = AppTheme.Separator },
-            Visible = false
-        };
-        _btnCancel.Click += (_, _) => ExitEditMode();
-
-        toolbar.Controls.AddRange([_btnEdit, _btnDelete, _btnSave, _btnCancel]);
+        toolbar.Controls.AddRange([_btnAdd, _btnDelete]);
         page.Controls.Add(MakeLayout(scroll, toolbar));
         return page;
     }
@@ -524,7 +487,7 @@ public class LeaguePanel : UserControl
         catch { }
 
         LoadSeasons(leagueId);
-        SetEditModeUI(false);
+        UpdateDeleteButtonState();
     }
 
     private void ClearEditorForm()
@@ -572,44 +535,18 @@ public class LeaguePanel : UserControl
 
     // ── New / Edit League ─────────────────────────────────────────────────────
 
-    private void StartNewLeague()
+    private void AddLeague()
     {
         _lstLeagues.SelectedIndexChanged -= OnListLeagueSelected;
         _lstLeagues.ClearSelected();
         _lstLeagues.SelectedIndexChanged += OnListLeagueSelected;
         ClearEditorForm();
-        SetEditModeUI(true);
         _txtName.Focus();
     }
 
-    private void EnterEditMode()
+    private void UpdateDeleteButtonState()
     {
-        if (_selectedLeagueId == null) return;
-        SetEditModeUI(true);
-    }
-
-    private void ExitEditMode()
-    {
-        SetEditModeUI(false);
-        if (_selectedLeagueId.HasValue)
-            LoadLeague(_selectedLeagueId.Value);
-    }
-
-    private void SetEditModeUI(bool editMode)
-    {
-        _txtName.ReadOnly        = !editMode;
-        _txtDescription.ReadOnly = !editMode;
-        _rtbRules.ReadOnly       = !editMode;
-        _chkActive.Enabled       = editMode;
-        _numMin.Enabled          = editMode;
-        _numMax.Enabled          = editMode;
-        _numMaxTeams.Enabled     = editMode;
-
-        _btnEdit.Visible   = !editMode && _selectedLeagueId.HasValue;
-        _btnDelete.Visible = !editMode && _selectedLeagueId.HasValue;
-        _btnDelete.Enabled = !editMode && _selectedLeagueId.HasValue;
-        _btnSave.Visible   = editMode;
-        _btnCancel.Visible = editMode;
+        _btnDelete.Enabled = _selectedLeagueId.HasValue;
     }
 
     // ── Save ──────────────────────────────────────────────────────────────────
@@ -681,8 +618,6 @@ public class LeaguePanel : UserControl
 
         MessageBox.Show("League saved.", "Golden Vista Bocce League Master",
             MessageBoxButtons.OK, MessageBoxIcon.Information);
-
-        ExitEditMode();
 
         if (!isNew && (oldMin != newMin || oldMax != newMax))
             OfferPropagate(savedId, oldMin, oldMax, newMin, newMax);
