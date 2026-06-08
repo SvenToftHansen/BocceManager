@@ -59,10 +59,8 @@ public class SeasonPanel : UserControl
     private ComboBox      _cmbPlayoffScoring    = null!;
     private CheckBox      _chkPlayoffTiebreaker = null!;
 
-    private Button _btnEdit   = null!;
-    private Button _btnSave   = null!;
+    private Button _btnAdd    = null!;
     private Button _btnDelete = null!;
-    private Button _btnCancel = null!;
 
     // ── Divisions tab ─────────────────────────────────────────────────────────
     private DataGridView _divisionsGrid = null!;
@@ -203,24 +201,9 @@ public class SeasonPanel : UserControl
         };
         _lstSeasons.SelectedIndexChanged += OnListSeasonSelected;
 
-        var btnNew = new Button
-        {
-            Dock = DockStyle.Bottom,
-            Text = "+ New Season",
-            Height = 32,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = AppTheme.ButtonSuccess,
-            ForeColor = Color.White,
-            Font = AppTheme.FontButton,
-            Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 0 }
-        };
-        btnNew.Click += (_, _) => StartNewSeason();
-
         panel.Controls.Add(_lstSeasons);
         panel.Controls.Add(_txtSearch);
         panel.Controls.Add(lblTitle);
-        panel.Controls.Add(btnNew);
     }
 
     private void BuildRightPanel(SplitterPanel panel)
@@ -441,44 +424,24 @@ public class SeasonPanel : UserControl
             BackColor = AppTheme.Surface, Padding = new Padding(12, 10, 12, 10)
         };
 
-        _btnEdit = new Button
+        _btnAdd = new Button
         {
-            Text = "Edit Season", Location = new Point(12, 10), Size = new Size(130, 32),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
-            Visible = false
+            Text = "+ Add Season", Location = new Point(12, 10), Size = new Size(140, 32),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }
         };
-        _btnEdit.Click += (_, _) => EnterEditMode();
+        _btnAdd.Click += (_, _) => AddSeason();
 
         _btnDelete = new Button
         {
-            Text = "Delete Season", Location = new Point(150, 10), Size = new Size(140, 32),
+            Text = "Delete Season", Location = new Point(160, 10), Size = new Size(140, 32),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 0 }, Enabled = false, Visible = false
+            FlatAppearance = { BorderSize = 0 }, Enabled = false
         };
         _btnDelete.Click += (_, _) => DeleteSeason();
 
-        _btnSave = new Button
-        {
-            Text = "Save Season", Location = new Point(12, 10), Size = new Size(130, 32),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
-            Visible = false
-        };
-        _btnSave.Click += (_, _) => SaveSeason();
-
-        _btnCancel = new Button
-        {
-            Text = "Cancel", Location = new Point(150, 10), Size = new Size(140, 32),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 1, BorderColor = AppTheme.Separator },
-            Visible = false
-        };
-        _btnCancel.Click += (_, _) => ExitEditMode();
-
-        toolbar.Controls.AddRange([_btnEdit, _btnDelete, _btnSave, _btnCancel]);
+        toolbar.Controls.AddRange([_btnAdd, _btnDelete]);
         return toolbar;
     }
 
@@ -774,7 +737,7 @@ public class SeasonPanel : UserControl
 
         LoadDivisions(seasonId);
         LoadSeasonSlots(seasonId);
-        SetEditModeUI(false);
+        UpdateDeleteButtonState();
     }
 
     private void ClearEditor()
@@ -869,9 +832,9 @@ public class SeasonPanel : UserControl
             if (_timesList.Items[i] is SlotItem ti) _timesList.SetItemChecked(i, configuredTimes.Contains(ti.Id));
     }
 
-    // ── New Season ────────────────────────────────────────────────────────────
+    // ── Add Season ────────────────────────────────────────────────────────────
 
-    private void StartNewSeason()
+    private void AddSeason()
     {
         if (!_selectedLeagueId.HasValue)
         {
@@ -886,7 +849,6 @@ public class SeasonPanel : UserControl
         ClearEditor();
         _isNewSeasonDraft = true;
         _seasonNameCustomized = false;
-        SetEditModeUI(true);
         ApplyDefaultSeasonNameForNewDraft();
 
         try
@@ -1014,67 +976,10 @@ public class SeasonPanel : UserControl
         _copySourceId = source.Id;
     }
 
-    // ── Edit Mode ─────────────────────────────────────────────────────────────
 
-    private void EnterEditMode()
+    private void UpdateDeleteButtonState()
     {
-        if (_selectedSeasonId == null) return;
-        SetEditModeUI(true);
-    }
-
-    private void ExitEditMode()
-    {
-        if (!_selectedSeasonId.HasValue && _previousSeasonId.HasValue)
-        {
-            _selectedSeasonId = _previousSeasonId;
-            _previousSeasonId = null;
-            SelectInList(_selectedSeasonId.Value);
-        }
-
-        SetEditModeUI(false);
-        if (_selectedSeasonId.HasValue)
-            LoadSeason(_selectedSeasonId.Value);
-    }
-
-    private void SetEditModeUI(bool editMode)
-    {
-        _txtName.ReadOnly           = !editMode;
-        _dtpStartDate.Enabled       = editMode;
-        _numWeeks.Enabled           = editMode;
-        _numGamesPerSeason.Enabled  = editMode;
-        _dtpPlayoffStart.Enabled    = editMode;
-        _chkIsCurrent.Enabled       = editMode;
-        _chkActive.Enabled          = editMode;
-        _numMaxTeamsDiv.Enabled     = editMode;
-        _cmbGameInterval.Enabled    = editMode;
-        _chkTimeslotDriven.Enabled  = editMode;
-        _numPlayersMin.Enabled      = editMode;
-        _numPlayersMax.Enabled      = editMode;
-        _numPtsWin.Enabled          = editMode;
-        _numPtsTie.Enabled          = editMode;
-        _numPtsLoss.Enabled         = editMode;
-        _numPtsNoShow.Enabled       = editMode;
-        _numPtsToWin.Enabled        = editMode;
-        _numGamesPerMatch.Enabled   = editMode;
-        _cmbScoringMode.Enabled     = editMode;
-        _numTeamsPlayoffs.Enabled   = editMode;
-        _chkFirstPlace.Enabled      = editMode;
-        _cmbPlayoffType.Enabled     = editMode;
-        _numPlayoffGames.Enabled    = editMode;
-        _cmbPlayoffScoring.Enabled  = editMode;
-        _chkPlayoffTiebreaker.Enabled = editMode;
-
-        _daysList.Enabled  = editMode;
-        _timesList.Enabled = editMode;
-        _btnBuild.Enabled  = !editMode && _selectedSeasonId.HasValue;
-
-        _divisionsGrid.Columns["DivAct"].ReadOnly = editMode;
-
-        _btnEdit.Visible   = !editMode && _selectedSeasonId.HasValue;
-        _btnDelete.Visible = !editMode && _selectedSeasonId.HasValue;
-        _btnDelete.Enabled = !editMode && _selectedSeasonId.HasValue;
-        _btnSave.Visible   = editMode;
-        _btnCancel.Visible = editMode;
+        _btnDelete.Enabled = _selectedSeasonId.HasValue;
     }
 
     // ── Save ──────────────────────────────────────────────────────────────────
@@ -1169,12 +1074,14 @@ public class SeasonPanel : UserControl
 
         MessageBox.Show("Season saved." + divMsg, "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
-        ExitEditMode();
+        _isNewSeasonDraft = false;
+        _previousSeasonId = null;
 
         LoadSeasonList();
         SelectInList(savedId);
         LoadDivisions(savedId);
         LoadSeasonSlots(savedId);
+        UpdateDeleteButtonState();
     }
 
     private void ApplyEditorToSeason(Season s)
