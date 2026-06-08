@@ -11,6 +11,7 @@ public class SeasonPanel : UserControl
 {
     private bool _isLoadingData = false;
     private bool _isDirty = false;
+    private bool _isCreatingNew = false;
     private bool _isNewSeasonDraft = false;
     private bool _seasonNameCustomized = false;
     private bool _settingSeasonNameProgrammatically = false;
@@ -62,6 +63,7 @@ public class SeasonPanel : UserControl
 
     private Button _btnAdd    = null!;
     private Button _btnSave   = null!;
+    private Button _btnCancel = null!;
     private Button _btnDelete = null!;
 
     // ── Divisions tab ─────────────────────────────────────────────────────────
@@ -466,6 +468,16 @@ public class SeasonPanel : UserControl
         };
         _btnSave.Click += (_, _) => SaveSeason();
 
+        _btnCancel = new Button
+        {
+            Text = "Cancel", Location = new Point(308, 10), Size = new Size(140, 32),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand,
+            FlatAppearance = { BorderSize = 1, BorderColor = AppTheme.Separator },
+            Visible = false
+        };
+        _btnCancel.Click += (_, _) => CancelAddSeason();
+
         _btnDelete = new Button
         {
             Text = "Delete Season", Location = new Point(308, 10), Size = new Size(140, 32),
@@ -475,7 +487,7 @@ public class SeasonPanel : UserControl
         };
         _btnDelete.Click += (_, _) => DeleteSeason();
 
-        toolbar.Controls.AddRange([_btnAdd, _btnSave, _btnDelete]);
+        toolbar.Controls.AddRange([_btnAdd, _btnSave, _btnCancel, _btnDelete]);
         return toolbar;
     }
 
@@ -775,6 +787,9 @@ public class SeasonPanel : UserControl
         LoadSeasonSlots(seasonId);
         UpdateDeleteButtonState();
         ClearDirty();
+        _isCreatingNew = false;
+        _btnCancel.Visible = false;
+        _btnDelete.Visible = true;
     }
 
     private void ClearEditor()
@@ -783,6 +798,7 @@ public class SeasonPanel : UserControl
         _isCopied = false; _copySourceId = null;
         _isNewSeasonDraft = false;
         _seasonNameCustomized = false;
+        _isCreatingNew = false;
 
         _txtName.Text = "";
         _dtpStartDate.Value = DateTime.Today;
@@ -805,6 +821,7 @@ public class SeasonPanel : UserControl
         _chkPlayoffTiebreaker.Checked = true;
 
         _btnDelete.Enabled = false;
+        _btnCancel.Visible = false;
         _divisionsGrid.Rows.Clear();
         LoadSeasonSlots(null);
         ClearDirty();
@@ -880,6 +897,7 @@ public class SeasonPanel : UserControl
             return;
         }
 
+        _isCreatingNew = true;
         _previousSeasonId = _selectedSeasonId;
         _lstSeasons.SelectedIndexChanged -= OnListSeasonSelected;
         _lstSeasons.ClearSelected();
@@ -888,6 +906,8 @@ public class SeasonPanel : UserControl
         _isNewSeasonDraft = true;
         _seasonNameCustomized = false;
         ApplyDefaultSeasonNameForNewDraft();
+        _btnCancel.Visible = true;
+        _btnDelete.Visible = false;
 
         try
         {
@@ -909,6 +929,24 @@ public class SeasonPanel : UserControl
         catch { }
 
         _txtName.Focus();
+    }
+
+    private void CancelAddSeason()
+    {
+        _isCreatingNew = false;
+        _btnCancel.Visible = false;
+        _btnDelete.Visible = _selectedSeasonId.HasValue;
+        ClearEditor();
+        if (_previousSeasonId.HasValue)
+        {
+            _selectedSeasonId = _previousSeasonId;
+            SelectInList(_previousSeasonId.Value);
+            LoadSeason(_previousSeasonId.Value);
+        }
+        else
+        {
+            LoadSeasonList();
+        }
     }
 
     private void OnSeasonStartDateChanged(object? sender, EventArgs e)
@@ -1129,6 +1167,9 @@ public class SeasonPanel : UserControl
 
         _isNewSeasonDraft = false;
         _previousSeasonId = null;
+        _isCreatingNew = false;
+        _btnCancel.Visible = false;
+        _btnDelete.Visible = true;
         ClearDirty();
 
         LoadSeasonList();

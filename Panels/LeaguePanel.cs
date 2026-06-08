@@ -12,6 +12,7 @@ public class LeaguePanel : UserControl
     private int? _selectedLeagueId;
     private bool _isLoadingData = false;
     private bool _isDirty = false;
+    private bool _isCreatingNew = false;
 
     // Left panel
     private TextBox _txtSearch  = null!;
@@ -28,6 +29,7 @@ public class LeaguePanel : UserControl
     private ThemedNumericUpDown _numMaxTeams    = null!;
     private Button        _btnAdd         = null!;
     private Button        _btnSave        = null!;
+    private Button        _btnCancel      = null!;
     private Button        _btnDelete      = null!;
 
     // Seasons tab
@@ -301,6 +303,16 @@ public class LeaguePanel : UserControl
         };
         _btnSave.Click += (_, _) => SaveLeague();
 
+        _btnCancel = new Button
+        {
+            Text = "Cancel", Location = new Point(308, 10), Size = new Size(140, 32),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand,
+            FlatAppearance = { BorderSize = 1, BorderColor = AppTheme.Separator },
+            Visible = false
+        };
+        _btnCancel.Click += (_, _) => CancelAddLeague();
+
         _btnDelete = new Button
         {
             Text = "Delete League", Location = new Point(308, 10), Size = new Size(140, 32),
@@ -310,7 +322,7 @@ public class LeaguePanel : UserControl
         };
         _btnDelete.Click += (_, _) => DeleteLeague();
 
-        toolbar.Controls.AddRange([_btnAdd, _btnSave, _btnDelete]);
+        toolbar.Controls.AddRange([_btnAdd, _btnSave, _btnCancel, _btnDelete]);
         page.Controls.Add(MakeLayout(scroll, toolbar));
         return page;
     }
@@ -507,11 +519,15 @@ public class LeaguePanel : UserControl
         LoadSeasons(leagueId);
         UpdateDeleteButtonState();
         ClearDirty();
+        _isCreatingNew = false;
+        _btnCancel.Visible = false;
+        _btnDelete.Visible = true;
     }
 
     private void ClearEditorForm()
     {
         _selectedLeagueId    = null;
+        _isCreatingNew = false;
         _txtName.Text        = "";
         _txtDescription.Text = "";
         _rtbRules.Text       = "";
@@ -521,6 +537,7 @@ public class LeaguePanel : UserControl
         _numMax.Value        = 0;
         _numMaxTeams.Value   = 0;
         _btnDelete.Enabled   = false;
+        _btnCancel.Visible   = false;
         _seasonsGrid.Rows.Clear();
         ClearDirty();
     }
@@ -557,11 +574,23 @@ public class LeaguePanel : UserControl
 
     private void AddLeague()
     {
+        _isCreatingNew = true;
         _lstLeagues.SelectedIndexChanged -= OnListLeagueSelected;
         _lstLeagues.ClearSelected();
         _lstLeagues.SelectedIndexChanged += OnListLeagueSelected;
         ClearEditorForm();
+        _btnCancel.Visible = true;
+        _btnDelete.Visible = false;
         _txtName.Focus();
+    }
+
+    private void CancelAddLeague()
+    {
+        _isCreatingNew = false;
+        _btnCancel.Visible = false;
+        _btnDelete.Visible = _selectedLeagueId.HasValue;
+        ClearEditorForm();
+        LoadLeagueList();
     }
 
     private void UpdateDeleteButtonState()
@@ -653,6 +682,9 @@ public class LeaguePanel : UserControl
             MessageBoxButtons.OK, MessageBoxIcon.Information);
 
         ClearDirty();
+        _isCreatingNew = false;
+        _btnCancel.Visible = false;
+        _btnDelete.Visible = true;
 
         if (!isNew && (oldMin != newMin || oldMax != newMax))
             OfferPropagate(savedId, oldMin, oldMax, newMin, newMax);
