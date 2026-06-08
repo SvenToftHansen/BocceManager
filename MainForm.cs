@@ -342,6 +342,8 @@ public partial class MainForm : Form
             header.Text = "\u25BC  " + (string)header.Tag!;
             _openGroupIndex = index;
         }
+
+        pnlNav.Refresh();
     }
 
     private void ExpandGroupContaining(NavSection section)
@@ -378,6 +380,7 @@ public partial class MainForm : Form
         pnlContent.Controls.Add(_currentPanel);
 
         lblCtxPageTitle.Text = SectionTitle(section);
+        pnlNav.Refresh();
     }
 
     private static UserControl CreatePanel(NavSection section) => section switch

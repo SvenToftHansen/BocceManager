@@ -262,7 +262,7 @@ public class SeasonPanel : UserControl
 
     private TabPage BuildEditorTab()
     {
-        var page   = new TabPage("  Editor  ");
+        var page   = new TabPage("  Editor  ") { BackColor = AppTheme.ContentBackground };
         var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.ContentBackground };
 
         const int lx = 20, ix = 220, iw = 440;
@@ -314,7 +314,7 @@ public class SeasonPanel : UserControl
 
     private TabPage BuildParametersTab()
     {
-        var page   = new TabPage("  Parameters  ");
+        var page   = new TabPage("  Parameters  ") { BackColor = AppTheme.ContentBackground };
         var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.ContentBackground };
 
         const int lx = 20, ix = 220, iw = 440;
