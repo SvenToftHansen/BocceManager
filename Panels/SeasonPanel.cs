@@ -10,6 +10,7 @@ namespace BocceManager.Panels;
 public class SeasonPanel : UserControl
 {
     private bool _isLoadingData = false;
+    private bool _isDirty = false;
     private bool _isNewSeasonDraft = false;
     private bool _seasonNameCustomized = false;
     private bool _settingSeasonNameProgrammatically = false;
@@ -60,6 +61,7 @@ public class SeasonPanel : UserControl
     private CheckBox      _chkPlayoffTiebreaker = null!;
 
     private Button _btnAdd    = null!;
+    private Button _btnSave   = null!;
     private Button _btnDelete = null!;
 
     // ── Divisions tab ─────────────────────────────────────────────────────────
@@ -266,10 +268,12 @@ public class SeasonPanel : UserControl
 
         Add(Lbl("Weeks in Season", lx, y));
         _numWeeks = Num(ix, y, 0, 99);
+        _numWeeks.ValueChanged += (_, _) => MarkDirty();
         Add(_numWeeks, Hint("Required before divisions can be auto-built", ix + 100, y + 4)); y += 44;
 
         Add(Lbl("Games per Season", lx, y));
         _numGamesPerSeason = Num(ix, y, 0, 999);
+        _numGamesPerSeason.ValueChanged += (_, _) => MarkDirty();
         Add(_numGamesPerSeason, Hint("Total games each team plays", ix + 100, y + 4)); y += 44;
 
         // ── Status ────────────────────────────────────────────────────────
@@ -278,10 +282,12 @@ public class SeasonPanel : UserControl
 
         Add(Lbl("Is Current Season", lx, y));
         _chkIsCurrent = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary };
+        _chkIsCurrent.CheckedChanged += (_, _) => MarkDirty();
         Add(_chkIsCurrent, Hint("Only one season per league can be current (★)", ix + 26, y + 4)); y += 38;
 
         Add(Lbl("Active", lx, y));
         _chkActive = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary, Checked = true };
+        _chkActive.CheckedChanged += (_, _) => MarkDirty();
         Add(_chkActive); y += 38;
 
         Add(Lbl("Created", lx, y));
@@ -310,6 +316,7 @@ public class SeasonPanel : UserControl
 
         Add(Lbl("Max Teams / Division", lx, y));
         _numMaxTeamsDiv = Num(ix, y, 0, 99);
+        _numMaxTeamsDiv.ValueChanged += (_, _) => MarkDirty();
         Add(_numMaxTeamsDiv, Hint("0 = use league default  |  Divisions inherit this unless they set their own value", ix + 100, y + 4)); y += 44;
 
         Add(Sep(lx, y, iw + ix - lx)); y += 10;
@@ -321,42 +328,52 @@ public class SeasonPanel : UserControl
         _cmbGameInterval = StrCombo(ix, y, 300,
             ("weekly",              "Weekly - same day each week"),
             ("schedule_determined", "Schedule Determined"));
+        _cmbGameInterval.SelectedIndexChanged += (_, _) => MarkDirty();
         Add(_cmbGameInterval); y += 44;
 
         Add(Lbl("Timeslot Driven", lx, y));
         _chkTimeslotDriven = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary, Checked = true };
+        _chkTimeslotDriven.CheckedChanged += (_, _) => MarkDirty();
         Add(_chkTimeslotDriven, Hint("Divisions play at fixed day/time slots", ix + 26, y + 4)); y += 38;
 
         Add(Lbl("Players / Team Min", lx, y));
         _numPlayersMin = Num(ix, y, 0, 99);
+        _numPlayersMin.ValueChanged += (_, _) => MarkDirty();
         Add(_numPlayersMin); y += 38;
 
         Add(Lbl("Players / Team Max", lx, y));
         _numPlayersMax = Num(ix, y, 0, 99);
+        _numPlayersMax.ValueChanged += (_, _) => MarkDirty();
         Add(_numPlayersMax); y += 38;
 
         Add(Lbl("Points for Win", lx, y));
         _numPtsWin = Num(ix, y, -99, 99, 2);
+        _numPtsWin.ValueChanged += (_, _) => MarkDirty();
         Add(_numPtsWin); y += 38;
 
         Add(Lbl("Points for Tie", lx, y));
         _numPtsTie = Num(ix, y, -99, 99, 1);
+        _numPtsTie.ValueChanged += (_, _) => MarkDirty();
         Add(_numPtsTie); y += 38;
 
         Add(Lbl("Points for Loss", lx, y));
         _numPtsLoss = Num(ix, y, -99, 99, 0);
+        _numPtsLoss.ValueChanged += (_, _) => MarkDirty();
         Add(_numPtsLoss); y += 38;
 
         Add(Lbl("Points for No Show", lx, y));
         _numPtsNoShow = Num(ix, y, -99, 99, -1);
+        _numPtsNoShow.ValueChanged += (_, _) => MarkDirty();
         Add(_numPtsNoShow); y += 38;
 
         Add(Lbl("Points to Win Game", lx, y));
         _numPtsToWin = Num(ix, y, 1, 99, 12);
+        _numPtsToWin.ValueChanged += (_, _) => MarkDirty();
         Add(_numPtsToWin); y += 38;
 
         Add(Lbl("Games per Match", lx, y));
         _numGamesPerMatch = Num(ix, y, 1, 99, 2);
+        _numGamesPerMatch.ValueChanged += (_, _) => MarkDirty();
         Add(_numGamesPerMatch); y += 38;
 
         Add(Lbl("Scoring Mode", lx, y));
@@ -364,6 +381,7 @@ public class SeasonPanel : UserControl
             ("games_mode",       "Games Mode"),
             ("match_score_mode", "Match Score Mode"),
             ("match_play",       "Match Play"));
+        _cmbScoringMode.SelectedIndexChanged += (_, _) => MarkDirty();
         Add(_cmbScoringMode); y += 28;
         Add(new Label
         {
@@ -378,24 +396,29 @@ public class SeasonPanel : UserControl
 
         Add(Lbl("Teams in Playoffs", lx, y));
         _numTeamsPlayoffs = Num(ix, y, 0, 99, 0);
+        _numTeamsPlayoffs.ValueChanged += (_, _) => MarkDirty();
         Add(_numTeamsPlayoffs, Hint("0 = no playoffs", ix + 100, y + 4)); y += 38;
 
         Add(Lbl("Playoff Start Date", lx, y));
         _dtpPlayoffStart = new DateTimePicker { Location = new Point(ix, y), Width = 200, Format = DateTimePickerFormat.Short, Font = AppTheme.FontDefault, ShowCheckBox = true, Checked = false };
+        _dtpPlayoffStart.ValueChanged += (_, _) => MarkDirty();
         Add(_dtpPlayoffStart, Hint("Optional - uncheck if not yet known", ix + 212, y + 4)); y += 44;
 
         Add(Lbl("First Place Guaranteed", lx, y));
         _chkFirstPlace = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary, Checked = true };
+        _chkFirstPlace.CheckedChanged += (_, _) => MarkDirty();
         Add(_chkFirstPlace); y += 38;
 
         Add(Lbl("Playoff Type", lx, y));
         _cmbPlayoffType = StrCombo(ix, y, 200,
             ("ladder",      "Ladder"),
             ("round_robin", "Round Robin"));
+        _cmbPlayoffType.SelectedIndexChanged += (_, _) => MarkDirty();
         Add(_cmbPlayoffType); y += 44;
 
         Add(Lbl("Playoff Games / Match", lx, y));
         _numPlayoffGames = Num(ix, y, 1, 99, 2);
+        _numPlayoffGames.ValueChanged += (_, _) => MarkDirty();
         Add(_numPlayoffGames); y += 38;
 
         Add(Lbl("Playoff Scoring Mode", lx, y));
@@ -403,10 +426,12 @@ public class SeasonPanel : UserControl
             ("match_play",       "Match Play"),
             ("games_mode",       "Games Mode"),
             ("match_score_mode", "Match Score Mode"));
+        _cmbPlayoffScoring.SelectedIndexChanged += (_, _) => MarkDirty();
         Add(_cmbPlayoffScoring); y += 44;
 
         Add(Lbl("Playoff Tiebreaker End", lx, y));
         _chkPlayoffTiebreaker = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary, Checked = true };
+        _chkPlayoffTiebreaker.CheckedChanged += (_, _) => MarkDirty();
         Add(_chkPlayoffTiebreaker); y += 50;
 
         scroll.Controls.AddRange([.. cc]);
@@ -432,16 +457,25 @@ public class SeasonPanel : UserControl
         };
         _btnAdd.Click += (_, _) => AddSeason();
 
+        _btnSave = new Button
+        {
+            Text = "Save Changes", Location = new Point(160, 10), Size = new Size(140, 32),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
+            Enabled = false
+        };
+        _btnSave.Click += (_, _) => SaveSeason();
+
         _btnDelete = new Button
         {
-            Text = "Delete Season", Location = new Point(160, 10), Size = new Size(140, 32),
+            Text = "Delete Season", Location = new Point(308, 10), Size = new Size(140, 32),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand,
             FlatAppearance = { BorderSize = 0 }, Enabled = false
         };
         _btnDelete.Click += (_, _) => DeleteSeason();
 
-        toolbar.Controls.AddRange([_btnAdd, _btnDelete]);
+        toolbar.Controls.AddRange([_btnAdd, _btnSave, _btnDelete]);
         return toolbar;
     }
 
@@ -541,11 +575,13 @@ public class SeasonPanel : UserControl
 
         var daysPanel = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground };
         _daysList = new CheckedListBox { Dock = DockStyle.Fill, CheckOnClick = true, Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary, BorderStyle = BorderStyle.FixedSingle };
+        _daysList.ItemCheck += (_, _) => MarkDirty();
         daysPanel.Controls.Add(_daysList);
         daysPanel.Controls.Add(new Label { Text = "Play Days", Dock = DockStyle.Top, Height = 28, Font = AppTheme.FontSectionHeading, ForeColor = AppTheme.Accent });
 
         var timesPanel = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground, Padding = new Padding(20, 0, 0, 0) };
         _timesList = new CheckedListBox { Dock = DockStyle.Fill, CheckOnClick = true, Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary, BorderStyle = BorderStyle.FixedSingle };
+        _timesList.ItemCheck += (_, _) => MarkDirty();
         timesPanel.Controls.Add(_timesList);
         timesPanel.Controls.Add(new Label { Text = "Play Times", Dock = DockStyle.Top, Height = 28, Font = AppTheme.FontSectionHeading, ForeColor = AppTheme.Accent });
 
@@ -738,6 +774,7 @@ public class SeasonPanel : UserControl
         LoadDivisions(seasonId);
         LoadSeasonSlots(seasonId);
         UpdateDeleteButtonState();
+        ClearDirty();
     }
 
     private void ClearEditor()
@@ -770,6 +807,7 @@ public class SeasonPanel : UserControl
         _btnDelete.Enabled = false;
         _divisionsGrid.Rows.Clear();
         LoadSeasonSlots(null);
+        ClearDirty();
     }
 
     private void LoadDivisions(int seasonId)
@@ -876,6 +914,7 @@ public class SeasonPanel : UserControl
     private void OnSeasonStartDateChanged(object? sender, EventArgs e)
     {
         ApplyDefaultSeasonNameForNewDraft();
+        MarkDirty();
     }
 
     private void OnSeasonNameTextChanged(object? sender, EventArgs e)
@@ -883,6 +922,7 @@ public class SeasonPanel : UserControl
         if (!_isNewSeasonDraft || _settingSeasonNameProgrammatically)
             return;
         _seasonNameCustomized = true;
+        MarkDirty();
     }
 
     private void ApplyDefaultSeasonNameForNewDraft()
@@ -982,6 +1022,19 @@ public class SeasonPanel : UserControl
         _btnDelete.Enabled = _selectedSeasonId.HasValue;
     }
 
+    private void MarkDirty()
+    {
+        if (_isLoadingData) return;
+        _isDirty = true;
+        _btnSave.Enabled = true;
+    }
+
+    private void ClearDirty()
+    {
+        _isDirty = false;
+        _btnSave.Enabled = false;
+    }
+
     // ── Save ──────────────────────────────────────────────────────────────────
 
     private void SaveSeason()
@@ -1076,6 +1129,7 @@ public class SeasonPanel : UserControl
 
         _isNewSeasonDraft = false;
         _previousSeasonId = null;
+        ClearDirty();
 
         LoadSeasonList();
         SelectInList(savedId);

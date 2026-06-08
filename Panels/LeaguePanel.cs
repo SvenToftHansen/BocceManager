@@ -11,6 +11,7 @@ public class LeaguePanel : UserControl
 {
     private int? _selectedLeagueId;
     private bool _isLoadingData = false;
+    private bool _isDirty = false;
 
     // Left panel
     private TextBox _txtSearch  = null!;
@@ -26,6 +27,7 @@ public class LeaguePanel : UserControl
     private ThemedNumericUpDown _numMax         = null!;
     private ThemedNumericUpDown _numMaxTeams    = null!;
     private Button        _btnAdd         = null!;
+    private Button        _btnSave        = null!;
     private Button        _btnDelete      = null!;
 
     // Seasons tab
@@ -191,6 +193,7 @@ public class LeaguePanel : UserControl
             Location = new Point(inputX, y), Size = new Size(inputW, 26),
             Font = AppTheme.FontDefault, BackColor = AppTheme.ContentBackground, ForeColor = AppTheme.TextPrimary
         };
+        _txtName.TextChanged += (_, _) => MarkDirty();
         y += 44;
 
         // Description
@@ -200,6 +203,7 @@ public class LeaguePanel : UserControl
             Location = new Point(inputX, y), Size = new Size(inputW, 26),
             Font = AppTheme.FontDefault, BackColor = AppTheme.ContentBackground, ForeColor = AppTheme.TextPrimary
         };
+        _txtDescription.TextChanged += (_, _) => MarkDirty();
         y += 44;
 
         // Rule Additions / Changes
@@ -216,6 +220,7 @@ public class LeaguePanel : UserControl
             Font = AppTheme.FontDefault, BackColor = AppTheme.ContentBackground, ForeColor = AppTheme.TextPrimary,
             BorderStyle = BorderStyle.FixedSingle, ScrollBars = RichTextBoxScrollBars.Vertical
         };
+        _rtbRules.TextChanged += (_, _) => MarkDirty();
         var lblRulesHint = new Label
         {
             Text = "Optional - captures any rule variations or additions specific to this league, " +
@@ -229,18 +234,21 @@ public class LeaguePanel : UserControl
         // Players Per Team Minimum
         var lblMin = Lbl("Players / Team Min", y);
         _numMin = NumericBox(inputX, y);
+        _numMin.ValueChanged += (_, _) => MarkDirty();
         var lblMinHint = Hint("  Seasons and Divisions inherit this unless overridden.", inputX + 100, y + 4);
         y += 44;
 
         // Players Per Team Maximum
         var lblMax = Lbl("Players / Team Max", y);
         _numMax = NumericBox(inputX, y);
+        _numMax.ValueChanged += (_, _) => MarkDirty();
         var lblMaxHint = Hint("  Seasons and Divisions inherit this unless overridden.", inputX + 100, y + 4);
         y += 44;
 
         // Max Teams in Division
         var lblMaxTeams = Lbl("Max Teams / Division", y);
         _numMaxTeams = NumericBox(inputX, y);
+        _numMaxTeams.ValueChanged += (_, _) => MarkDirty();
         var lblMaxTeamsHint = Hint("  Seasons and Divisions inherit this unless overridden. 0 = no limit.", inputX + 100, y + 4);
         y += 44;
 
@@ -251,6 +259,7 @@ public class LeaguePanel : UserControl
             Location = new Point(inputX, y), AutoSize = true,
             Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary, Checked = true
         };
+        _chkActive.CheckedChanged += (_, _) => MarkDirty();
         y += 38;
 
         // Created (read-only)
@@ -283,16 +292,25 @@ public class LeaguePanel : UserControl
         };
         _btnAdd.Click += (_, _) => AddLeague();
 
+        _btnSave = new Button
+        {
+            Text = "Save Changes", Location = new Point(160, 10), Size = new Size(140, 32),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
+            Enabled = false
+        };
+        _btnSave.Click += (_, _) => SaveLeague();
+
         _btnDelete = new Button
         {
-            Text = "Delete League", Location = new Point(160, 10), Size = new Size(140, 32),
+            Text = "Delete League", Location = new Point(308, 10), Size = new Size(140, 32),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand,
             FlatAppearance = { BorderSize = 0 }, Enabled = false
         };
         _btnDelete.Click += (_, _) => DeleteLeague();
 
-        toolbar.Controls.AddRange([_btnAdd, _btnDelete]);
+        toolbar.Controls.AddRange([_btnAdd, _btnSave, _btnDelete]);
         page.Controls.Add(MakeLayout(scroll, toolbar));
         return page;
     }
@@ -488,6 +506,7 @@ public class LeaguePanel : UserControl
 
         LoadSeasons(leagueId);
         UpdateDeleteButtonState();
+        ClearDirty();
     }
 
     private void ClearEditorForm()
@@ -503,6 +522,7 @@ public class LeaguePanel : UserControl
         _numMaxTeams.Value   = 0;
         _btnDelete.Enabled   = false;
         _seasonsGrid.Rows.Clear();
+        ClearDirty();
     }
 
     private void LoadSeasons(int leagueId)
@@ -547,6 +567,19 @@ public class LeaguePanel : UserControl
     private void UpdateDeleteButtonState()
     {
         _btnDelete.Enabled = _selectedLeagueId.HasValue;
+    }
+
+    private void MarkDirty()
+    {
+        if (_isLoadingData) return;
+        _isDirty = true;
+        _btnSave.Enabled = true;
+    }
+
+    private void ClearDirty()
+    {
+        _isDirty = false;
+        _btnSave.Enabled = false;
     }
 
     // ── Save ──────────────────────────────────────────────────────────────────
@@ -618,6 +651,8 @@ public class LeaguePanel : UserControl
 
         MessageBox.Show("League saved.", "Golden Vista Bocce League Master",
             MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+        ClearDirty();
 
         if (!isNew && (oldMin != newMin || oldMax != newMax))
             OfferPropagate(savedId, oldMin, oldMax, newMin, newMax);
