@@ -875,34 +875,20 @@ public class PlayerPanel : UserControl
                     .Take(2)  // Current + next
                     .ToList();
 
-                if (seasons.Count > 0)
+                foreach (var season in seasons)
                 {
-                    var leagueLabel = new Label
+                    var chk = new CheckBox
                     {
-                        Text = $"{league.Name}:",
-                        Font = AppTheme.FontSmallBold,
-                        ForeColor = AppTheme.TextPrimary,
+                        Text = $"{league.Name} - {season.Name}" + (season.IsCurrent ? " ★" : ""),
                         Location = new Point(4, yPos),
-                        AutoSize = true
+                        AutoSize = true,
+                        Font = AppTheme.FontSmall,
+                        ForeColor = AppTheme.TextPrimary
                     };
-                    _pnlLookingForTeamsCheckboxes.Controls.Add(leagueLabel);
-                    yPos += 20;
-
-                    foreach (var season in seasons)
-                    {
-                        var chk = new CheckBox
-                        {
-                            Text = $"{season.Name}" + (season.IsCurrent ? " ★" : ""),
-                            Location = new Point(16, yPos),
-                            AutoSize = true,
-                            Font = AppTheme.FontSmall,
-                            ForeColor = AppTheme.TextPrimary
-                        };
-                        chk.CheckedChanged += (_, _) => MarkDirty();
-                        _pnlLookingForTeamsCheckboxes.Controls.Add(chk);
-                        _lookingForTeamCheckboxes[$"{league.Id}_{season.Id}"] = chk;
-                        yPos += 22;
-                    }
+                    chk.CheckedChanged += (_, _) => MarkDirty();
+                    _pnlLookingForTeamsCheckboxes.Controls.Add(chk);
+                    _lookingForTeamCheckboxes[$"{league.Id}_{season.Id}"] = chk;
+                    yPos += 22;
                 }
             }
 
