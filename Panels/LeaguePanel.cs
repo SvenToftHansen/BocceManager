@@ -594,7 +594,7 @@ public class LeaguePanel : UserControl
                     s.Id, s.Name, s.StartDate, s.WeeksInSeason, s.IsCurrent,
                     Divisions = db.Divisions.Count(d => d.SeasonId == s.Id),
                     Teams     = db.Teams.Count(t => t.Division.SeasonId == s.Id),
-                    s.IsActive
+                    s.Status
                 }).ToList();
 
             foreach (var s in rows)
@@ -602,7 +602,7 @@ public class LeaguePanel : UserControl
                     s.Id, s.Name,
                     s.StartDate?.ToString("yyyy-MM-dd") ?? "-",
                     s.WeeksInSeason > 0 ? s.WeeksInSeason.ToString() : "-",
-                    s.Divisions, s.Teams, s.IsCurrent, s.IsActive);
+                    s.Divisions, s.Teams, s.IsCurrent, s.Status);
             _seasonsGrid.ClearSelection();
         }
         catch { }
@@ -641,6 +641,7 @@ public class LeaguePanel : UserControl
         if (_isLoadingData || _btnSave == null) return;
         _isDirty = true;
         _btnSave.Enabled = true;
+        UpdateButtonVisibility();
     }
 
     private void ClearDirty()
@@ -648,6 +649,23 @@ public class LeaguePanel : UserControl
         if (_btnSave == null) return;
         _isDirty = false;
         _btnSave.Enabled = false;
+        UpdateButtonVisibility();
+    }
+
+    private void UpdateButtonVisibility()
+    {
+        if (_isDirty || _isCreatingNew)
+        {
+            _btnAdd.Visible = false;
+            _btnCancel.Visible = true;
+            _btnDelete.Visible = false;
+        }
+        else
+        {
+            _btnAdd.Visible = true;
+            _btnCancel.Visible = false;
+            _btnDelete.Visible = true;
+        }
     }
 
     // ── Save ──────────────────────────────────────────────────────────────────

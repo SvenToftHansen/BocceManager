@@ -8,7 +8,7 @@ namespace BocceManager.Panels;
 
 public class PlayerPanel : UserControl
 {
-    private enum PlayerMode { View, Edit, Create }
+    private enum PlayerMode { View, Create }
 
     private sealed class PlayerListItem
     {
@@ -57,6 +57,7 @@ public class PlayerPanel : UserControl
     private bool _isDirty = false;
     private bool _isCreatingNew = false;
     private bool _isLoadingData = false;
+    private bool _isSavingAndReloading = false;
 
     private TextBox _txtSearch = null!;
     private ListBox _lstPlayers = null!;
@@ -241,7 +242,7 @@ public class PlayerPanel : UserControl
         };
 
         _btnEdit = MakeButton("Edit Player", AppTheme.Accent, Color.White, new Point(12, 10), 120);
-        _btnEdit.Click += (_, _) => SetMode(PlayerMode.Edit);
+        // Edit button hidden - all fields always editable
 
         _btnSave = MakeButton("Save Player", AppTheme.Accent, Color.White, new Point(12, 10), 120);
         _btnSave.Click += (_, _) => SavePlayer();
@@ -556,6 +557,7 @@ public class PlayerPanel : UserControl
     private void OnPlayerSelectedFromLookup()
     {
         if (_mode == PlayerMode.Create) return;
+        if (_isSavingAndReloading) return;  // Skip check during save reload
         if (_lstPlayers.SelectedItem is not PlayerListItem item) return;
 
         // Check for unsaved changes
@@ -715,15 +717,13 @@ public class PlayerPanel : UserControl
         if (_selectedPlayerId.HasValue)
             PopulateLeagueSelectionFromPlayer(_selectedPlayerId.Value);
 
-        _btnNew.Visible = true;
-        _btnEdit.Visible = false;
-        _btnDelete.Visible = hasSelection;
+        _btnEdit.Visible = false;  // Edit button hidden - fields always editable
 
-        _btnSave.Visible = true;
-        _btnSave.Enabled = _isCreatingNew;
+        _btnSave.Visible = true;  // Always visible so user can make changes and save
+        _btnSave.Enabled = _isCreatingNew || _isDirty;
         _btnSave.Text = mode == PlayerMode.Create ? "Create Player" : "Save Player";
 
-        _btnCancel.Visible = _isCreatingNew;
+        UpdateButtonVisibility();
 
         _txtSearch.Enabled = true;
         _lstPlayers.Enabled = true;
@@ -743,6 +743,7 @@ public class PlayerPanel : UserControl
         if (_isLoadingData || _btnSave == null) return;
         _isDirty = true;
         _btnSave.Enabled = true;
+        UpdateButtonVisibility();
     }
 
     private void ClearDirty()
@@ -750,6 +751,25 @@ public class PlayerPanel : UserControl
         if (_btnSave == null) return;
         _isDirty = false;
         _btnSave.Enabled = false;
+        UpdateButtonVisibility();
+    }
+
+    private void UpdateButtonVisibility()
+    {
+        if (_isDirty || _isCreatingNew)
+        {
+            _btnNew.Visible = false;
+            _btnCancel.Visible = true;
+            _btnDelete.Visible = false;
+            _btnSave.Enabled = true;
+        }
+        else
+        {
+            _btnNew.Visible = true;
+            _btnCancel.Visible = false;
+            _btnDelete.Visible = _selectedPlayerId.HasValue;
+            _btnSave.Enabled = false;
+        }
     }
 
     private bool HasDefaultLeagueContext()
@@ -791,7 +811,7 @@ public class PlayerPanel : UserControl
     private List<(int LeagueId, int SeasonId)> GetCheckedLookingForTeamEntries()
     {
         var result = new List<(int, int)>();
-        for (int i = 0; i < _lstLookingForTeams.CheckedItems.Count; i++)
+        for (int i = 0; i < _lstLookingForTeams.Items.Count; i++)
         {
             if (_lstLookingForTeams.GetItemChecked(i) && i < _lookingForTeamItems.Count)
                 result.Add(_lookingForTeamItems[i]);
@@ -901,6 +921,7 @@ public class PlayerPanel : UserControl
 
     private void SavePlayer()
     {
+        System.Diagnostics.Debug.WriteLine("SavePlayer called");
         string firstName = _txtFirstName.Text.Trim();
         string lastName = _txtLastName.Text.Trim();
 
@@ -937,7 +958,7 @@ public class PlayerPanel : UserControl
                 db.SaveChanges();
                 _selectedPlayerId = player.Id;
             }
-            else if (_mode == PlayerMode.Edit && _selectedPlayerId.HasValue)
+            else if (_mode == PlayerMode.View && _selectedPlayerId.HasValue)
             {
                 var player = db.Players.FirstOrDefault(p => p.Id == _selectedPlayerId.Value);
                 if (player == null)
@@ -962,12 +983,24 @@ public class PlayerPanel : UserControl
                 return;
             }
 
-            LoadPlayerLookup(_selectedPlayerId);
-            if (_selectedPlayerId.HasValue)
-                LoadPlayerForView(_selectedPlayerId.Value);
+            try
+            {
+                _isSavingAndReloading = true;
+                LoadPlayerLookup(_selectedPlayerId);
+                if (_selectedPlayerId.HasValue)
+                    LoadPlayerForView(_selectedPlayerId.Value);
+            }
+            finally
+            {
+                _isSavingAndReloading = false;
+            }
+
+            MessageBox.Show("Player saved.", "Players", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            SetMode(PlayerMode.View);
         }
         catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"SavePlayer exception: {ex.Message}\n{ex.StackTrace}");
             MessageBox.Show($"Unable to save player.\n\n{ex.Message}", "Players", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }

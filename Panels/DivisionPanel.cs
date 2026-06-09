@@ -558,6 +558,7 @@ public class DivisionPanel : UserControl
         if (_isLoadingData || _btnSave == null) return;
         _isDirty = true;
         _btnSave.Enabled = true;
+        UpdateButtonVisibility();
     }
 
     private void ClearDirty()
@@ -565,6 +566,23 @@ public class DivisionPanel : UserControl
         if (_btnSave == null) return;
         _isDirty = false;
         _btnSave.Enabled = false;
+        UpdateButtonVisibility();
+    }
+
+    private void UpdateButtonVisibility()
+    {
+        if (_isDirty || _isCreatingNew)
+        {
+            _btnAdd.Visible = false;
+            _btnCancel.Visible = true;
+            _btnDelete.Visible = false;
+        }
+        else
+        {
+            _btnAdd.Visible = true;
+            _btnCancel.Visible = false;
+            _btnDelete.Visible = true;
+        }
     }
 
     private void LoadDivisionList()
@@ -1082,6 +1100,19 @@ public class DivisionPanel : UserControl
         catch { }
         _teamsGrid.SelectionChanged += OnTeamSelected;
         ClearPlayersPanel();
+        UpdateTeamButtonsState();
+    }
+
+    private void UpdateTeamButtonsState()
+    {
+        bool hasTeams = _teamsGrid.Rows.Count > 0;
+        bool teamSelected = _teamsGrid.SelectedRows.Count > 0;
+
+        _btnAddTeam.Enabled = _selectedDivisionId.HasValue;
+        _btnBuildTeams.Enabled = _selectedDivisionId.HasValue;
+        _btnDeleteTeam.Enabled = teamSelected;
+        _btnDeleteAllTeams.Enabled = hasTeams;
+        _btnAddPlayer.Enabled = teamSelected;
     }
 
     private void OnTeamSelected(object? sender, EventArgs e)
@@ -1090,6 +1121,7 @@ public class DivisionPanel : UserControl
         {
             _currentTeamId = null;
             ClearPlayersPanel();
+            UpdateTeamButtonsState();
             return;
         }
         var row = _teamsGrid.SelectedRows[0];
@@ -1099,6 +1131,7 @@ public class DivisionPanel : UserControl
         string displayName = row.Cells["TmDisplay"].Value?.ToString() ?? "";
         _lblTeamTitle.Text = $"Players - Team {displayName}";
         LoadPlayersForTeam(_currentTeamId.Value);
+        UpdateTeamButtonsState();
     }
 
     private void OnTeamCellClick(object? sender, DataGridViewCellEventArgs e)

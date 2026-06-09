@@ -34,7 +34,7 @@ public class SeasonPanel : UserControl
     private ThemedNumericUpDown _numGamesPerSeason = null!;
     private DateTimePicker _dtpPlayoffStart   = null!;
     private CheckBox       _chkIsCurrent      = null!;
-    private CheckBox       _chkActive         = null!;
+    private ComboBox       _cmbStatus         = null!;
     private Label          _lblCreatedAt      = null!;
 
     // ── Editor – division defaults ────────────────────────────────────────────
@@ -287,10 +287,11 @@ public class SeasonPanel : UserControl
         _chkIsCurrent.CheckedChanged += (_, _) => MarkDirty();
         Add(_chkIsCurrent, Hint("Only one season per league can be current (★)", ix + 26, y + 4)); y += 38;
 
-        Add(Lbl("Active", lx, y));
-        _chkActive = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary, Checked = true };
-        _chkActive.CheckedChanged += (_, _) => MarkDirty();
-        Add(_chkActive); y += 38;
+        Add(Lbl("Status", lx, y));
+        _cmbStatus = new ComboBox { Location = new Point(ix, y), Width = 200, DropDownStyle = ComboBoxStyle.DropDownList, Font = AppTheme.FontDefault };
+        _cmbStatus.Items.AddRange(["Setup", "League Play", "Playoff Play", "Completed"]);
+        _cmbStatus.SelectedIndexChanged += (_, _) => MarkDirty();
+        Add(_cmbStatus, Hint("Controls which operations are allowed", ix + 210, y + 4)); y += 44;
 
         Add(Lbl("Created", lx, y));
         _lblCreatedAt = new Label { Location = new Point(ix, y + 3), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextSecondary };
@@ -657,9 +658,9 @@ public class SeasonPanel : UserControl
                         .Where(s => s.LeagueId == _selectedLeagueId.Value)
                         .OrderByDescending(s => s.StartDate)
                         .ThenBy(s => s.Name)
-                        .Select(s => new { s.Id, s.Name, s.IsCurrent, s.IsActive })
+                        .Select(s => new { s.Id, s.Name, s.IsCurrent, s.Status })
                         .AsEnumerable()
-                        .Select(s => (s.Id, s.Name + (s.IsCurrent ? "  ★" : "") + (s.IsActive ? "" : " (inactive)")))
+                        .Select(s => (s.Id, s.Name + (s.IsCurrent ? "  ★" : "") + (s.Status == "Completed" ? " (completed)" : "")))
                         .ToList();
                 }
                 catch { }
@@ -796,7 +797,7 @@ public class SeasonPanel : UserControl
 
             bool onlyOne = db.Seasons.Count(x => x.LeagueId == s.LeagueId) == 1;
             _chkIsCurrent.Checked    = s.IsCurrent || onlyOne;
-            _chkActive.Checked       = s.IsActive;
+            SelStr(_cmbStatus, s.Status ?? "Setup");
             _lblCreatedAt.Text       = s.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
 
             _numMaxTeamsDiv.Value = s.MaxTeamsInDivision;
@@ -846,7 +847,7 @@ public class SeasonPanel : UserControl
         _dtpStartDate.Value = DateTime.Today;
         _numWeeks.Value = 0; _numGamesPerSeason.Value = 0;
         _dtpPlayoffStart.Checked = false;
-        _chkIsCurrent.Checked = false; _chkActive.Checked = true; _lblCreatedAt.Text = "";
+        _chkIsCurrent.Checked = false; _cmbStatus.SelectedIndex = 0; _lblCreatedAt.Text = "";
 
         _numMaxTeamsDiv.Value = 0;
         if (_cmbGameInterval.Items.Count > 0) _cmbGameInterval.SelectedIndex = 0;
@@ -1056,7 +1057,7 @@ public class SeasonPanel : UserControl
             _dtpPlayoffStart.Value = source.PlayoffStartDate.Value.AddYears(1).ToDateTime(TimeOnly.MinValue);
 
         _chkIsCurrent.Checked = false;
-        _chkActive.Checked    = true;
+        _cmbStatus.SelectedIndex = 0; // Default to "Setup"
 
         _numMaxTeamsDiv.Value = source.MaxTeamsInDivision;
         SelStr(_cmbGameInterval, source.GameInterval);
@@ -1107,6 +1108,7 @@ public class SeasonPanel : UserControl
         if (_isLoadingData || _btnSave == null) return;
         _isDirty = true;
         _btnSave.Enabled = true;
+        UpdateButtonVisibility();
     }
 
     private void ClearDirty()
@@ -1114,6 +1116,23 @@ public class SeasonPanel : UserControl
         if (_btnSave == null) return;
         _isDirty = false;
         _btnSave.Enabled = false;
+        UpdateButtonVisibility();
+    }
+
+    private void UpdateButtonVisibility()
+    {
+        if (_isDirty || _isCreatingNew)
+        {
+            _btnAdd.Visible = false;
+            _btnCancel.Visible = true;
+            _btnDelete.Visible = false;
+        }
+        else
+        {
+            _btnAdd.Visible = true;
+            _btnCancel.Visible = false;
+            _btnDelete.Visible = true;
+        }
     }
 
     // ── Save ──────────────────────────────────────────────────────────────────
@@ -1259,7 +1278,7 @@ public class SeasonPanel : UserControl
         s.PlayoffStartDate     = _dtpPlayoffStart.Checked ? DateOnly.FromDateTime(_dtpPlayoffStart.Value) : null;
         s.MaxTeamsInDivision   = (int)_numMaxTeamsDiv.Value;
         s.IsCurrent        = _chkIsCurrent.Checked;
-        s.IsActive         = _chkActive.Checked;
+        s.Status           = StrVal(_cmbStatus) ?? "Setup";
         s.GameInterval     = StrVal(_cmbGameInterval)  ?? "weekly";
         s.TimeslotDriven   = _chkTimeslotDriven.Checked;
         s.PlayersPerTeamMinimum = _numPlayersMin.Value > 0 ? (int)_numPlayersMin.Value : (int?)null;

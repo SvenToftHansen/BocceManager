@@ -142,13 +142,16 @@ public class PropagateDialog : Form
             string indent = t.EntityType == "Division" ? "    " : "";
             var row = new DataGridViewRow();
             row.CreateCells(_grid);
-            row.Cells["Check"].Value  = true;
-            row.Cells["Type"].Value   = t.EntityType;
-            row.Cells["Name"].Value   = indent + t.Name + (t.ParentName.Length > 0 ? $"  ({t.ParentName})" : "");
-            row.Cells["CurMin"].Value = AppParameterService.Fmt(t.CurrentMin);
-            row.Cells["CurMax"].Value = AppParameterService.Fmt(t.CurrentMax);
-            if (newMin.HasValue) row.Cells["NewMin"].Value = newMin.ToString();
-            if (newMax.HasValue) row.Cells["NewMax"].Value = newMax.ToString();
+            row.Cells[0].Value = true;  // Check column (index 0)
+            row.Cells[1].Value = t.EntityType;  // Type (index 1)
+            row.Cells[2].Value = indent + t.Name + (t.ParentName.Length > 0 ? $"  ({t.ParentName})" : "");  // Name (index 2)
+            row.Cells[3].Value = AppParameterService.Fmt(t.CurrentMin);  // CurMin (index 3)
+            row.Cells[4].Value = AppParameterService.Fmt(t.CurrentMax);  // CurMax (index 4)
+
+            int colIdx = 5;
+            if (newMin.HasValue) row.Cells[colIdx++].Value = newMin.ToString();  // NewMin (index 5)
+            if (newMax.HasValue) row.Cells[colIdx].Value = newMax.ToString();    // NewMax (index 5 or 6)
+
             row.Tag = t;
             _grid.Rows.Add(row);
         }
@@ -224,7 +227,7 @@ public class PropagateDialog : Form
     private void SetAll(bool value)
     {
         foreach (DataGridViewRow row in _grid.Rows)
-            row.Cells["Check"].Value = value;
+            row.Cells[0].Value = value;  // Check column (index 0)
     }
 
     private void CollectApproved()
@@ -232,7 +235,7 @@ public class PropagateDialog : Form
         var result = new List<PropagateTarget>();
         foreach (DataGridViewRow row in _grid.Rows)
         {
-            if (row.Cells["Check"].Value is true && row.Tag is PropagateTarget t)
+            if (row.Cells[0].Value is true && row.Tag is PropagateTarget t)  // Check column (index 0)
                 result.Add(t);
         }
         ApprovedTargets = result;
