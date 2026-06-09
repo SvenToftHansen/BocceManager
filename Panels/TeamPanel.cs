@@ -474,10 +474,14 @@ public class TeamPanel : UserControl
             catch { }
         }
 
-        _cmbDivision.SelectedIndex = _selectedDivisionId.HasValue ? FindDivisionIndex(_selectedDivisionId.Value) : 0;
         _cmbDivisionEditor.SelectedIndex = 0;
         _cmbDivision.SelectedIndexChanged += OnDivisionSelected;
         _cmbDivisionEditor.SelectedIndexChanged += OnEditorDivisionChanged;
+
+        // Auto-select first division if available
+        int divIndex = _selectedDivisionId.HasValue ? FindDivisionIndex(_selectedDivisionId.Value) : 1;
+        if (divIndex == 0 && _cmbDivision.Items.Count > 1) divIndex = 1; // Skip placeholder
+        _cmbDivision.SelectedIndex = divIndex;
         _isLoadingData = false;
     }
 
@@ -671,7 +675,7 @@ public class TeamPanel : UserControl
 
         try
         {
-            _teamMode = TeamMode.View;
+            _teamMode = TeamMode.Edit;
             SetEditModeUI();
         }
         catch (Exception ex)
@@ -1137,6 +1141,7 @@ public class TeamPanel : UserControl
         {
             bool isEditMode = _teamMode == TeamMode.Edit;
             bool isCreateMode = _teamMode == TeamMode.Create;
+            bool hasTeams = _lstTeams.Items.Count > 0;
 
             Color bgColor = isCreateMode ? AppTheme.CreateModeBackground
                           : isEditMode ? AppTheme.EditModeBackground
@@ -1160,12 +1165,22 @@ public class TeamPanel : UserControl
             if (_btnAddPlayer != null) _btnAddPlayer.Enabled = (isEditMode || isCreateMode) && _selectedTeamId.HasValue;
             if (_btnRemovePlayer != null) _btnRemovePlayer.Enabled = (isEditMode || isCreateMode) && _lstTeamPlayers?.SelectedRows.Count > 0;
 
+            // Add New Team button - only available when there's room for more teams
+            if (_btnNew != null)
+            {
+                bool canAddTeam = _selectedDivisionId.HasValue && (ResolveMaxTeams((int)_selectedDivisionId.Value) == 0 || _lstTeams.Items.Count < ResolveMaxTeams((int)_selectedDivisionId.Value));
+                _btnNew.Enabled = canAddTeam;
+            }
+
+            // Edit/Delete buttons only visible in view mode when a team is selected
             if (_btnEdit != null) _btnEdit.Visible = !isEditMode && !isCreateMode && _selectedTeamId.HasValue;
             if (_btnDelete != null)
             {
-                _btnDelete.Visible = !isEditMode && !isCreateMode && _selectedTeamId.HasValue;
+                _btnDelete.Visible = !isEditMode && !isCreateMode && hasTeams;
                 _btnDelete.Enabled = !isEditMode && !isCreateMode && _selectedTeamId.HasValue;
             }
+
+            // Save/Cancel buttons visible in edit/create modes
             if (_btnSave != null) _btnSave.Visible = isEditMode || isCreateMode;
             if (_btnCancel != null) _btnCancel.Visible = isEditMode || isCreateMode;
         }
