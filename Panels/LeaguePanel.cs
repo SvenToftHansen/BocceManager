@@ -600,13 +600,14 @@ public class LeaguePanel : UserControl
 
     private void MarkDirty()
     {
-        if (_isLoadingData) return;
+        if (_isLoadingData || _btnSave == null) return;
         _isDirty = true;
         _btnSave.Enabled = true;
     }
 
     private void ClearDirty()
     {
+        if (_btnSave == null) return;
         _isDirty = false;
         _btnSave.Enabled = false;
     }
