@@ -202,17 +202,28 @@ public class UtilitiesPanel : UserControl
         btnPanel2.Controls.Add(_btnMarkCollected);
         splitContainer.Panel2.Controls.Add(btnPanel2);
 
-        // Defer min sizes and splitter distance until after layout
+        // Defer splitter distance until after layout
         void ApplySplitLayout()
         {
             if (splitContainer.Width <= 1) return;
-            splitContainer.Panel1MinSize = 300;
-            splitContainer.Panel2MinSize = 200;
-            int maxLeft = splitContainer.Width - 200;
-            int dist = Math.Max(300, Math.Min(400, maxLeft));
+            const int desiredLeft = 350, desiredRight = 200;
+            int maxTotal = Math.Max(0, splitContainer.Width - 1);
+            int leftMin = desiredLeft;
+            int rightMin = desiredRight;
+            if (leftMin + rightMin > maxTotal)
+            {
+                if (maxTotal == 0) { leftMin = 0; rightMin = 0; }
+                else { double r = desiredLeft / (double)(desiredLeft + desiredRight); leftMin = (int)Math.Floor(maxTotal * r); rightMin = maxTotal - leftMin; }
+            }
+            splitContainer.Panel1MinSize = leftMin;
+            splitContainer.Panel2MinSize = rightMin;
+            int maxLeft = splitContainer.Width - rightMin;
+            if (maxLeft < leftMin) maxLeft = leftMin;
+            int dist = Math.Max(leftMin, Math.Min(350, maxLeft));
             splitContainer.FixedPanel = FixedPanel.Panel1;
             splitContainer.IsSplitterFixed = true;
-            if (dist > 0) splitContainer.SplitterDistance = dist;
+            if (dist > 0 && dist >= splitContainer.Panel1MinSize && dist <= splitContainer.Width - splitContainer.Panel2MinSize)
+                splitContainer.SplitterDistance = dist;
         }
         splitContainer.HandleCreated += (_, _) => BeginInvoke(new Action(ApplySplitLayout));
         splitContainer.SizeChanged += (_, _) => ApplySplitLayout();
