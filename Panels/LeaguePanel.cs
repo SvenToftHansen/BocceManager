@@ -10,6 +10,7 @@ namespace BocceManager.Panels;
 public class LeaguePanel : UserControl
 {
     private int? _selectedLeagueId;
+    private int? _previousLeagueId;
     private bool _isLoadingData = false;
     private bool _isDirty = false;
     private bool _isCreatingNew = false;
@@ -490,8 +491,40 @@ public class LeaguePanel : UserControl
     private void OnListLeagueSelected(object? sender, EventArgs e)
     {
         if (_isLoadingData) return;
+
+        // Check for unsaved changes
+        if (_isDirty)
+        {
+            var result = MessageBox.Show(
+                "You have unsaved changes. Do you want to discard them?",
+                "Unsaved Changes",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (result == DialogResult.No)
+            {
+                // Restore previous selection
+                _isLoadingData = true;
+                try
+                {
+                    if (_previousLeagueId.HasValue)
+                        _lstLeagues.SelectedItem = _lstLeagues.Items.Cast<ListItem>().FirstOrDefault(x => x.Id == _previousLeagueId.Value);
+                    else
+                        _lstLeagues.SelectedIndex = -1;
+                }
+                finally
+                {
+                    _isLoadingData = false;
+                }
+                return;
+            }
+        }
+
         if (_lstLeagues.SelectedItem is ListItem li)
+        {
+            _previousLeagueId = _selectedLeagueId;
             LoadLeague(li.Id);
+        }
         else
             ClearEditorForm();
     }

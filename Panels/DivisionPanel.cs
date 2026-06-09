@@ -17,6 +17,7 @@ public class DivisionPanel : UserControl
     private int? _selectedLeagueId;
     private int? _selectedSeasonId;
     private int? _selectedDivisionId;
+    private int? _previousDivisionId;
     private int? _currentTeamId;
 
     // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -619,8 +620,40 @@ public class DivisionPanel : UserControl
     private void OnListDivisionSelected(object? sender, EventArgs e)
     {
         if (_isLoadingData) return;
+
+        // Check for unsaved changes
+        if (_isDirty)
+        {
+            var result = MessageBox.Show(
+                "You have unsaved changes. Do you want to discard them?",
+                "Unsaved Changes",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (result == DialogResult.No)
+            {
+                // Restore previous selection
+                _isLoadingData = true;
+                try
+                {
+                    if (_previousDivisionId.HasValue)
+                        _lstDivisions.SelectedItem = _lstDivisions.Items.Cast<ListItem>().FirstOrDefault(x => x.Id == _previousDivisionId.Value);
+                    else
+                        _lstDivisions.SelectedIndex = -1;
+                }
+                finally
+                {
+                    _isLoadingData = false;
+                }
+                return;
+            }
+        }
+
         if (_lstDivisions.SelectedItem is ListItem li)
+        {
+            _previousDivisionId = _selectedDivisionId;
             LoadDivision(li.Id);
+        }
         else
             ClearEditor();
     }

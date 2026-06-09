@@ -52,6 +52,7 @@ public class PlayerPanel : UserControl
     private const int PreferredLookupWidth = 330;
 
     private int? _selectedPlayerId;
+    private int? _previousPlayerId;
     private PlayerMode _mode = PlayerMode.View;
     private bool _isDirty = false;
     private bool _isCreatingNew = false;
@@ -557,6 +558,40 @@ public class PlayerPanel : UserControl
         if (_mode == PlayerMode.Create) return;
         if (_lstPlayers.SelectedItem is not PlayerListItem item) return;
 
+        // Check for unsaved changes
+        if (_isDirty)
+        {
+            var result = MessageBox.Show(
+                "You have unsaved changes. Do you want to discard them?",
+                "Unsaved Changes",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (result == DialogResult.No)
+            {
+                // Restore previous selection
+                _isLoadingData = true;
+                try
+                {
+                    if (_previousPlayerId.HasValue)
+                    {
+                        var prevItem = _lstPlayers.Items.Cast<PlayerListItem>()
+                            .FirstOrDefault(x => x.Id == _previousPlayerId.Value);
+                        if (prevItem != null)
+                            _lstPlayers.SelectedItem = prevItem;
+                    }
+                    else
+                        _lstPlayers.SelectedIndex = -1;
+                }
+                finally
+                {
+                    _isLoadingData = false;
+                }
+                return;
+            }
+        }
+
+        _previousPlayerId = _selectedPlayerId;
         LoadPlayerForView(item.Id);
     }
 

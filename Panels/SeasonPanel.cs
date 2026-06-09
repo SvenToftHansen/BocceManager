@@ -728,8 +728,40 @@ public class SeasonPanel : UserControl
     private void OnListSeasonSelected(object? sender, EventArgs e)
     {
         if (_isLoadingData) return;
+
+        // Check for unsaved changes
+        if (_isDirty)
+        {
+            var result = MessageBox.Show(
+                "You have unsaved changes. Do you want to discard them?",
+                "Unsaved Changes",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (result == DialogResult.No)
+            {
+                // Restore previous selection
+                _isLoadingData = true;
+                try
+                {
+                    if (_previousSeasonId.HasValue)
+                        _lstSeasons.SelectedItem = _lstSeasons.Items.Cast<ListItem>().FirstOrDefault(x => x.Id == _previousSeasonId.Value);
+                    else
+                        _lstSeasons.SelectedIndex = -1;
+                }
+                finally
+                {
+                    _isLoadingData = false;
+                }
+                return;
+            }
+        }
+
         if (_lstSeasons.SelectedItem is ListItem li)
+        {
+            _previousSeasonId = _selectedSeasonId;
             LoadSeason(li.Id);
+        }
         else
             ClearEditor();
     }
