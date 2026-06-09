@@ -888,6 +888,9 @@ public class PlayerPanel : UserControl
 
     private void PopulateLeagueSelectionFromPlayer(int playerId)
     {
+        if (_lookingForTeamCheckboxes.Count == 0 && _spareListCheckboxes.Count == 0)
+            return;
+
         try
         {
             using var db = new BocceDbContext();
@@ -900,7 +903,7 @@ public class PlayerPanel : UserControl
 
             // Get player's current SpareList entries
             var playerSpare = db.SpareLists
-                .Where(s => s.PlayerId == playerId)
+                .Where(s => s.PlayerId == playerId && s.IsActive)
                 .Select(s => s.LeagueId)
                 .ToList();
 
@@ -919,7 +922,10 @@ public class PlayerPanel : UserControl
                     chk.Checked = true;
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error populating league selections: {ex.Message}");
+        }
     }
 
     private void SavePlayer()

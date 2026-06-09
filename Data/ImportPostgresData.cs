@@ -179,7 +179,6 @@ public class ImportPostgresData
                     Phone = string.IsNullOrWhiteSpace(phone) ? null : phone,
                     LotNumber = string.IsNullOrWhiteSpace(lotNumber) ? null : lotNumber,
                     IsActive = true,
-                    LookingForTeam = false,
                     CreatedAt = DateTime.UtcNow
                 };
 

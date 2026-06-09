@@ -10,7 +10,6 @@ public class Player
     public string? LotNumber { get; set; }
     public int? PartnerPlayerId { get; set; }
     public bool IsActive { get; set; } = true;
-    public bool LookingForTeam { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public string FullName => $"{FirstName} {LastName}";
