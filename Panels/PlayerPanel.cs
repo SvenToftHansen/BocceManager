@@ -53,6 +53,9 @@ public class PlayerPanel : UserControl
 
     private int? _selectedPlayerId;
     private PlayerMode _mode = PlayerMode.View;
+    private bool _isDirty = false;
+    private bool _isCreatingNew = false;
+    private bool _isLoadingData = false;
 
     private TextBox _txtSearch = null!;
     private ListBox _lstPlayers = null!;
@@ -288,22 +291,27 @@ public class PlayerPanel : UserControl
 
         var lblFirstName = MakeLabel("First Name *", y);
         _txtFirstName = MakeInput(inputX, y, inputW);
+        _txtFirstName.TextChanged += (_, _) => MarkDirty();
         y += 42;
 
         var lblLastName = MakeLabel("Last Name *", y);
         _txtLastName = MakeInput(inputX, y, inputW);
+        _txtLastName.TextChanged += (_, _) => MarkDirty();
         y += 42;
 
         var lblEmail = MakeLabel("Email", y);
         _txtEmail = MakeInput(inputX, y, inputW);
+        _txtEmail.TextChanged += (_, _) => MarkDirty();
         y += 42;
 
         var lblPhone = MakeLabel("Phone", y);
         _txtPhone = MakeInput(inputX, y, inputW);
+        _txtPhone.TextChanged += (_, _) => MarkDirty();
         y += 42;
 
         var lblLot = MakeLabel("Lot Number", y);
         _txtLotNumber = MakeInput(inputX, y, 180);
+        _txtLotNumber.TextChanged += (_, _) => MarkDirty();
         y += 42;
 
         var lblPartner = MakeLabel("Spouse / Partner", y);
@@ -316,6 +324,7 @@ public class PlayerPanel : UserControl
             AutoCompleteMode = AutoCompleteMode.SuggestAppend,
             AutoCompleteSource = AutoCompleteSource.ListItems
         };
+        _cmbPartner.SelectedIndexChanged += (_, _) => MarkDirty();
         y += 42;
 
         var lblActive = MakeLabel("Active", y);
@@ -327,6 +336,7 @@ public class PlayerPanel : UserControl
             ForeColor = AppTheme.TextPrimary,
             Checked = true
         };
+        _chkIsActive.CheckedChanged += (_, _) => MarkDirty();
         y += 38;
 
         var lblCreated = MakeLabel("Created", y);
@@ -575,22 +585,30 @@ public class PlayerPanel : UserControl
 
     private void LoadPlayerForView(int playerId)
     {
-        using var db = new BocceDbContext();
-        var p = db.Players.AsNoTracking().FirstOrDefault(x => x.Id == playerId);
-        if (p == null) return;
+        _isLoadingData = true;
+        try
+        {
+            using var db = new BocceDbContext();
+            var p = db.Players.AsNoTracking().FirstOrDefault(x => x.Id == playerId);
+            if (p == null) return;
 
-        _selectedPlayerId = p.Id;
-        _txtFirstName.Text = p.FirstName;
-        _txtLastName.Text = p.LastName;
-        _txtEmail.Text = p.Email ?? "";
-        _txtPhone.Text = p.Phone ?? "";
-        _txtLotNumber.Text = p.LotNumber ?? "";
-        _chkIsActive.Checked = p.IsActive;
-        _lblCreatedAt.Text = p.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+            _selectedPlayerId = p.Id;
+            _txtFirstName.Text = p.FirstName;
+            _txtLastName.Text = p.LastName;
+            _txtEmail.Text = p.Email ?? "";
+            _txtPhone.Text = p.Phone ?? "";
+            _txtLotNumber.Text = p.LotNumber ?? "";
+            _chkIsActive.Checked = p.IsActive;
+            _lblCreatedAt.Text = p.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
 
-        PopulatePartnerLookup(p.Id, p.PartnerPlayerId);
-        RefreshLeagueContextAndStatus(p.Id);
-        SetMode(PlayerMode.View);
+            PopulatePartnerLookup(p.Id, p.PartnerPlayerId);
+            RefreshLeagueContextAndStatus(p.Id);
+        }
+        finally
+        {
+            _isLoadingData = false;
+            SetMode(PlayerMode.View);
+        }
     }
 
     private void PopulatePartnerLookup(int? selfPlayerId, int? selectedPartnerId)
@@ -632,13 +650,20 @@ public class PlayerPanel : UserControl
 
     private void StartCreateMode()
     {
-        _selectedPlayerId = null;
-        ClearEditor();
-        PopulatePartnerLookup(null, null);
-        RefreshLeagueContextAndStatus(null);
-        BuildLeagueSelectionPanels();
-
-        SetMode(PlayerMode.Create);
+        _isLoadingData = true;
+        try
+        {
+            _selectedPlayerId = null;
+            ClearEditor();
+            PopulatePartnerLookup(null, null);
+            RefreshLeagueContextAndStatus(null);
+            BuildLeagueSelectionPanels();
+        }
+        finally
+        {
+            _isLoadingData = false;
+            SetMode(PlayerMode.Create);
+        }
     }
 
     private void ClearEditor()
@@ -658,6 +683,7 @@ public class PlayerPanel : UserControl
     private void SetMode(PlayerMode mode)
     {
         _mode = mode;
+        _isCreatingNew = (mode == PlayerMode.Create);
         bool editing = mode != PlayerMode.View;
         bool hasSelection = _selectedPlayerId.HasValue;
         bool hasDefaultLeague = HasDefaultLeagueContext();
@@ -688,16 +714,21 @@ public class PlayerPanel : UserControl
             _pnlSpareListCheckboxes.Visible = false;
         }
 
+        _btnNew.Visible = mode == PlayerMode.View;
         _btnEdit.Visible = mode == PlayerMode.View && hasSelection;
         _btnDelete.Visible = mode == PlayerMode.View && hasSelection;
 
         _btnSave.Visible = editing;
-        _btnCancel.Visible = editing;
+        _btnSave.Enabled = _isCreatingNew;
         _btnSave.Text = mode == PlayerMode.Create ? "Create Player" : "Save Player";
+
+        _btnCancel.Visible = editing;
 
         _txtSearch.Enabled = !editing;
         _lstPlayers.Enabled = !editing;
-        _btnNew.Enabled = !editing;
+
+        if (editing)
+            ClearDirty();
 
         _lblModeHint.Text = mode switch
         {
@@ -705,6 +736,20 @@ public class PlayerPanel : UserControl
             PlayerMode.Edit => "Edit the selected player and click Save Player.",
             _ => "Select a player from the left list, or create a new one."
         };
+    }
+
+    private void MarkDirty()
+    {
+        if (_isLoadingData || _btnSave == null) return;
+        _isDirty = true;
+        _btnSave.Enabled = true;
+    }
+
+    private void ClearDirty()
+    {
+        if (_btnSave == null) return;
+        _isDirty = false;
+        _btnSave.Enabled = false;
     }
 
     private bool HasDefaultLeagueContext()
@@ -863,6 +908,7 @@ public class PlayerPanel : UserControl
                             Font = AppTheme.FontSmall,
                             ForeColor = AppTheme.TextPrimary
                         };
+                        chk.CheckedChanged += (_, _) => MarkDirty();
                         _pnlLookingForTeamsCheckboxes.Controls.Add(chk);
                         _lookingForTeamCheckboxes[$"{league.Id}_{season.Id}"] = chk;
                         yPos += 22;
@@ -882,6 +928,7 @@ public class PlayerPanel : UserControl
                     Font = AppTheme.FontSmall,
                     ForeColor = AppTheme.TextPrimary
                 };
+                chk.CheckedChanged += (_, _) => MarkDirty();
                 _pnlSpareListCheckboxes.Controls.Add(chk);
                 _spareListCheckboxes[league.Id] = chk;
                 yPos += 22;
