@@ -1091,6 +1091,34 @@ public class SeasonPanel : UserControl
         }
 
         bool isNew = !_selectedSeasonId.HasValue;
+
+        // Check for duplicate season names in the same league
+        try
+        {
+            using var db = new BocceDbContext();
+            bool isDuplicate = db.Seasons
+                .Where(s => s.LeagueId == _selectedLeagueId.Value && s.Name == name)
+                .Any(s => !_selectedSeasonId.HasValue || s.Id != _selectedSeasonId.Value);
+
+            if (isDuplicate)
+            {
+                MessageBox.Show($"A season named \"{name}\" already exists in this league.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+                if (_selectedSeasonId.HasValue)
+                {
+                    // For editing: restore original values
+                    LoadSeason(_selectedSeasonId.Value);
+                }
+                // For new: do nothing, stays in edit mode
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Validation failed:\n\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
         int savedId;
 
         try

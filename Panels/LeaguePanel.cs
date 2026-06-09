@@ -625,6 +625,32 @@ public class LeaguePanel : UserControl
             return;
         }
 
+        // Check for duplicate league names
+        try
+        {
+            using var db = new BocceDbContext();
+            bool isDuplicate = db.Leagues
+                .Any(l => l.Name == name && (!_selectedLeagueId.HasValue || l.Id != _selectedLeagueId.Value));
+
+            if (isDuplicate)
+            {
+                MessageBox.Show($"A league named \"{name}\" already exists.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+                if (_selectedLeagueId.HasValue)
+                {
+                    // For editing: restore original values
+                    LoadLeague(_selectedLeagueId.Value);
+                }
+                // For new: do nothing, stays in edit mode
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Validation failed:\n\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
         int?  newMin = _numMin.Value > 0 ? (int)_numMin.Value : (int?)null;
         int?  newMax = _numMax.Value > 0 ? (int)_numMax.Value : (int?)null;
         int?  oldMin = null, oldMax = null;

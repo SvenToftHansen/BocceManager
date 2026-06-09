@@ -849,6 +849,33 @@ public class DivisionPanel : UserControl
             return;
         }
 
+        // Check for duplicate division names in the same season
+        try
+        {
+            using var db = new BocceDbContext();
+            bool isDuplicate = db.Divisions
+                .Where(d => d.SeasonId == _selectedSeasonId.Value && d.Name == name)
+                .Any(d => !_selectedDivisionId.HasValue || d.Id != _selectedDivisionId.Value);
+
+            if (isDuplicate)
+            {
+                MessageBox.Show($"A division named \"{name}\" already exists in this season.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+                if (_selectedDivisionId.HasValue)
+                {
+                    // For editing: restore original values
+                    LoadDivision(_selectedDivisionId.Value);
+                }
+                // For new: do nothing, stays in edit mode
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Validation failed:\n\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
         int savedId;
         try
         {
