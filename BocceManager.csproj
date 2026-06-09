@@ -14,7 +14,7 @@
     <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
     <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
     <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
-    <NoWarn>$(NoWarn);MSB3277;CA1416;CS8618;CS8625;CS8622</NoWarn>
+    <NoWarn>$(NoWarn);MSB3277;CA1416;CS8618;CS8625;CS8622;CS0414</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
