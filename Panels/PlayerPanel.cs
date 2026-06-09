@@ -399,7 +399,7 @@ public class PlayerPanel : UserControl
         _lstLookingForTeams = new CheckedListBox
         {
             Location = new Point(col1X, y),
-            Size = new Size(250, 100),
+            Size = new Size(420, 80),
             BackColor = AppTheme.ContentBackground,
             ForeColor = AppTheme.TextPrimary,
             Font = AppTheme.FontSmall,
@@ -409,11 +409,13 @@ public class PlayerPanel : UserControl
         _lstLookingForTeams.ItemCheck += (_, _) => MarkDirty();
         scroll.Controls.Add(_lstLookingForTeams);
 
+        y += 95;
+
         // Spare List listbox with checkboxes
         _lstSpareList = new CheckedListBox
         {
-            Location = new Point(col2X, y),
-            Size = new Size(250, 100),
+            Location = new Point(col1X, y),
+            Size = new Size(420, 80),
             BackColor = AppTheme.ContentBackground,
             ForeColor = AppTheme.TextPrimary,
             Font = AppTheme.FontSmall,
@@ -423,7 +425,7 @@ public class PlayerPanel : UserControl
         _lstSpareList.ItemCheck += (_, _) => MarkDirty();
         scroll.Controls.Add(_lstSpareList);
 
-        y += 110;
+        y += 95;
 
         _lblLeagueContext = new Label
         {
