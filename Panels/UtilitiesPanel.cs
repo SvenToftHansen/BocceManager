@@ -160,8 +160,8 @@ public class UtilitiesPanel : UserControl
         {
             Dock        = DockStyle.Fill,
             Orientation = Orientation.Vertical,
-            Panel1MinSize = 300,
-            Panel2MinSize = 200
+            Panel1MinSize = 0,
+            Panel2MinSize = 0
         };
 
         // Left panel: list of ideas
@@ -201,6 +201,21 @@ public class UtilitiesPanel : UserControl
         btnPanel2.Controls.Add(_btnDeleteIdea);
         btnPanel2.Controls.Add(_btnMarkCollected);
         splitContainer.Panel2.Controls.Add(btnPanel2);
+
+        // Defer min sizes and splitter distance until after layout
+        void ApplySplitLayout()
+        {
+            if (splitContainer.Width <= 1) return;
+            splitContainer.Panel1MinSize = 300;
+            splitContainer.Panel2MinSize = 200;
+            int maxLeft = splitContainer.Width - 200;
+            int dist = Math.Max(300, Math.Min(400, maxLeft));
+            splitContainer.FixedPanel = FixedPanel.Panel1;
+            splitContainer.IsSplitterFixed = true;
+            if (dist > 0) splitContainer.SplitterDistance = dist;
+        }
+        splitContainer.HandleCreated += (_, _) => BeginInvoke(new Action(ApplySplitLayout));
+        splitContainer.SizeChanged += (_, _) => ApplySplitLayout();
 
         page.Controls.Add(splitContainer);
         page.Controls.Add(toolbar);
