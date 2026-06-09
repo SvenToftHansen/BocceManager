@@ -626,14 +626,19 @@ public class SeasonPanel : UserControl
 
     private void LoadContext()
     {
+        _isLoadingData = true;
         try
         {
             using var db = new BocceDbContext();
             _selectedLeagueId = AppParameterService.GetDefaultLeagueId(db);
+
+            LoadSeasonList();
         }
         catch { _selectedLeagueId = null; }
-
-        LoadSeasonList();
+        finally
+        {
+            _isLoadingData = false;
+        }
     }
 
     private void LoadSeasonList()

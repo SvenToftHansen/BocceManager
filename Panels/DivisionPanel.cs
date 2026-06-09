@@ -536,15 +536,21 @@ public class DivisionPanel : UserControl
 
     private void LoadContext()
     {
+        _isLoadingData = true;
         try
         {
             using var db = new BocceDbContext();
             _selectedLeagueId = AppParameterService.GetDefaultLeagueId(db);
             _selectedSeasonId = AppParameterService.GetDefaultSeasonId(db);
+
+            LoadSlotCombos();
+            LoadDivisionList();
         }
         catch { }
-        LoadSlotCombos();
-        LoadDivisionList();
+        finally
+        {
+            _isLoadingData = false;
+        }
     }
 
     private void MarkDirty()
