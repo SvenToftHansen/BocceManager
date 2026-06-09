@@ -203,7 +203,7 @@ public class PlayerPanel : UserControl
             Cursor = Cursors.Hand
         };
         _btnNew.FlatAppearance.BorderSize = 0;
-        _btnNew.Click += (_, _) => StartCreateMode();
+        _btnNew.Click += (_, _) => AddNewPlayer();
 
         _lstPlayers = new ListBox
         {
@@ -648,7 +648,7 @@ public class PlayerPanel : UserControl
         _cmbPartner.SelectedIndex = selectedIndex;
     }
 
-    private void StartCreateMode()
+    private void AddNewPlayer()
     {
         _isLoadingData = true;
         try
@@ -684,57 +684,47 @@ public class PlayerPanel : UserControl
     {
         _mode = mode;
         _isCreatingNew = (mode == PlayerMode.Create);
-        bool editing = mode != PlayerMode.View;
         bool hasSelection = _selectedPlayerId.HasValue;
-        bool hasDefaultLeague = HasDefaultLeagueContext();
 
-        _txtFirstName.ReadOnly = !editing;
-        _txtLastName.ReadOnly = !editing;
-        _txtEmail.ReadOnly = !editing;
-        _txtPhone.ReadOnly = !editing;
-        _txtLotNumber.ReadOnly = !editing;
+        // Fields are always editable - no ReadOnly mode
+        _txtFirstName.ReadOnly = false;
+        _txtLastName.ReadOnly = false;
+        _txtEmail.ReadOnly = false;
+        _txtPhone.ReadOnly = false;
+        _txtLotNumber.ReadOnly = false;
 
-        _chkIsActive.Enabled = editing;
-        _cmbPartner.Enabled = editing;
+        _chkIsActive.Enabled = true;
+        _cmbPartner.Enabled = true;
 
-        // Show league selection panels only when creating or editing a player
-        if (mode == PlayerMode.Create || mode == PlayerMode.Edit)
-        {
-            BuildLeagueSelectionPanels();
-            _pnlLookingForTeamsCheckboxes.Visible = true;
-            _pnlSpareListCheckboxes.Visible = true;
+        // Show league selection panels always (not just in Create/Edit modes)
+        BuildLeagueSelectionPanels();
+        _pnlLookingForTeamsCheckboxes.Visible = true;
+        _pnlSpareListCheckboxes.Visible = true;
 
-            // If editing, populate checkboxes with current player's data
-            if (mode == PlayerMode.Edit && _selectedPlayerId.HasValue)
-                PopulateLeagueSelectionFromPlayer(_selectedPlayerId.Value);
-        }
-        else
-        {
-            _pnlLookingForTeamsCheckboxes.Visible = false;
-            _pnlSpareListCheckboxes.Visible = false;
-        }
+        // If editing, populate checkboxes with current player's data
+        if (mode == PlayerMode.Edit && _selectedPlayerId.HasValue)
+            PopulateLeagueSelectionFromPlayer(_selectedPlayerId.Value);
 
-        _btnNew.Visible = mode == PlayerMode.View;
-        _btnEdit.Visible = mode == PlayerMode.View && hasSelection;
-        _btnDelete.Visible = mode == PlayerMode.View && hasSelection;
+        _btnNew.Visible = true;
+        _btnEdit.Visible = false;
+        _btnDelete.Visible = hasSelection;
 
-        _btnSave.Visible = editing;
+        _btnSave.Visible = true;
         _btnSave.Enabled = _isCreatingNew;
         _btnSave.Text = mode == PlayerMode.Create ? "Create Player" : "Save Player";
 
-        _btnCancel.Visible = editing;
+        _btnCancel.Visible = _isCreatingNew;
 
-        _txtSearch.Enabled = !editing;
-        _lstPlayers.Enabled = !editing;
+        _txtSearch.Enabled = true;
+        _lstPlayers.Enabled = true;
 
-        if (editing)
+        if (mode != PlayerMode.Create)
             ClearDirty();
 
         _lblModeHint.Text = mode switch
         {
             PlayerMode.Create => BuildCreateModeHint(),
-            PlayerMode.Edit => "Edit the selected player and click Save Player.",
-            _ => "Select a player from the left list, or create a new one."
+            _ => "Select a player to edit, or create a new one."
         };
     }
 
