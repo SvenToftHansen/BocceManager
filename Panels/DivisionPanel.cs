@@ -9,9 +9,9 @@ namespace BocceManager.Panels;
 
 public class DivisionPanel : UserControl
 {
-    private enum DivisionMode { View, Edit, Create }
-    private DivisionMode _divisionMode = DivisionMode.View;
     private bool _isLoadingData = false;
+    private bool _isDirty = false;
+    private bool _isCreatingNew = false;
 
     // â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private int? _selectedLeagueId;
@@ -55,10 +55,10 @@ public class DivisionPanel : UserControl
     private Button       _btnDeleteAllPlayers = null!;
 
     // â”€â”€ Shared toolbar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    private Button _btnEdit   = null!;
+    private Button _btnAdd    = null!;
     private Button _btnSave   = null!;
-    private Button _btnDelete = null!;
     private Button _btnCancel = null!;
+    private Button _btnDelete = null!;
 
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -190,24 +190,9 @@ public class DivisionPanel : UserControl
         };
         _lstDivisions.SelectedIndexChanged += OnListDivisionSelected;
 
-        var btnNew = new Button
-        {
-            Dock = DockStyle.Bottom,
-            Text = "+ New Division",
-            Height = 32,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = AppTheme.ButtonSuccess,
-            ForeColor = Color.White,
-            Font = AppTheme.FontButton,
-            Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 0 }
-        };
-        btnNew.Click += (_, _) => StartNewDivision();
-
         panel.Controls.Add(_lstDivisions);
         panel.Controls.Add(_txtSearch);
         panel.Controls.Add(lblTitle);
-        panel.Controls.Add(btnNew);
     }
 
     private void BuildRightPanel(SplitterPanel panel)
@@ -258,11 +243,13 @@ public class DivisionPanel : UserControl
         Add(Lbl("Day Slot", lx, y));
         _cmbDay = new ComboBox { Location = new Point(ix, y), Width = 200, DropDownStyle = ComboBoxStyle.DropDownList, Font = AppTheme.FontDefault };
         _cmbDay.SelectedIndexChanged += OnSlotChanged;
+        _cmbDay.SelectedIndexChanged += (_, _) => MarkDirty();
         Add(_cmbDay); y += 44;
 
         Add(Lbl("Time Slot", lx, y));
         _cmbTime = new ComboBox { Location = new Point(ix, y), Width = 180, DropDownStyle = ComboBoxStyle.DropDownList, Font = AppTheme.FontDefault };
         _cmbTime.SelectedIndexChanged += OnSlotChanged;
+        _cmbTime.SelectedIndexChanged += (_, _) => MarkDirty();
         Add(_cmbTime); y += 44;
 
         Add(Sep(lx, y, iw + ix - lx)); y += 10;
@@ -281,6 +268,7 @@ public class DivisionPanel : UserControl
 
         Add(Lbl("Active", lx, y));
         _chkActive = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary, Checked = true };
+        _chkActive.CheckedChanged += (_, _) => MarkDirty();
         Add(_chkActive); y += 38;
 
         Add(Lbl("Created", lx, y));
@@ -309,6 +297,7 @@ public class DivisionPanel : UserControl
 
         Add(Lbl("Teams in Division", lx, y));
         _numTeamsInDiv = Num(ix, y, 0, 99);
+        _numTeamsInDiv.ValueChanged += (_, _) => MarkDirty();
         Add(_numTeamsInDiv, Hint("Max/target teams for this division. 0 = inherit from season or league. Even preferred; odd = one bye per round.", ix + 100, y + 4)); y += 44;
 
         Add(Sep(lx, y, iw + ix - lx)); y += 10;
@@ -316,10 +305,12 @@ public class DivisionPanel : UserControl
 
         Add(Lbl("Players / Team Min", lx, y));
         _numPlayersMin = Num(ix, y, 0, 99);
+        _numPlayersMin.ValueChanged += (_, _) => MarkDirty();
         Add(_numPlayersMin, Hint("0 = use season default", ix + 100, y + 4)); y += 38;
 
         Add(Lbl("Players / Team Max", lx, y));
         _numPlayersMax = Num(ix, y, 0, 99);
+        _numPlayersMax.ValueChanged += (_, _) => MarkDirty();
         Add(_numPlayersMax, Hint("0 = use season default", ix + 100, y + 4)); y += 38;
 
         scroll.Controls.AddRange([.. cc]);
@@ -500,44 +491,43 @@ public class DivisionPanel : UserControl
             BackColor = AppTheme.Surface, Padding = new Padding(12, 10, 12, 10)
         };
 
-        _btnEdit = new Button
+        _btnAdd = new Button
         {
-            Text = "Edit Division", Location = new Point(12, 10), Size = new Size(130, 32),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
-            Visible = false
+            Text = "+ Add Division", Location = new Point(12, 10), Size = new Size(140, 32),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }
         };
-        _btnEdit.Click += (_, _) => EnterEditMode();
-
-        _btnDelete = new Button
-        {
-            Text = "Delete Division", Location = new Point(150, 10), Size = new Size(140, 32),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 0 }, Enabled = false, Visible = false
-        };
-        _btnDelete.Click += (_, _) => DeleteDivision();
+        _btnAdd.Click += (_, _) => AddDivision();
 
         _btnSave = new Button
         {
-            Text = "Save Division", Location = new Point(12, 10), Size = new Size(130, 32),
+            Text = "Save Changes", Location = new Point(160, 10), Size = new Size(140, 32),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
-            Visible = false
+            Enabled = false
         };
         _btnSave.Click += (_, _) => SaveDivision();
 
         _btnCancel = new Button
         {
-            Text = "Cancel", Location = new Point(150, 10), Size = new Size(140, 32),
+            Text = "Cancel", Location = new Point(308, 10), Size = new Size(140, 32),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand,
             FlatAppearance = { BorderSize = 1, BorderColor = AppTheme.Separator },
             Visible = false
         };
-        _btnCancel.Click += (_, _) => ExitEditMode();
+        _btnCancel.Click += (_, _) => CancelAddDivision();
 
-        toolbar.Controls.AddRange([_btnEdit, _btnDelete, _btnSave, _btnCancel]);
+        _btnDelete = new Button
+        {
+            Text = "Delete Division", Location = new Point(308, 10), Size = new Size(140, 32),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand,
+            FlatAppearance = { BorderSize = 0 }, Enabled = false
+        };
+        _btnDelete.Click += (_, _) => DeleteDivision();
+
+        toolbar.Controls.AddRange([_btnAdd, _btnSave, _btnCancel, _btnDelete]);
         return toolbar;
     }
 
@@ -554,6 +544,19 @@ public class DivisionPanel : UserControl
         catch { }
         LoadSlotCombos();
         LoadDivisionList();
+    }
+
+    private void MarkDirty()
+    {
+        if (_isLoadingData) return;
+        _isDirty = true;
+        _btnSave.Enabled = true;
+    }
+
+    private void ClearDirty()
+    {
+        _isDirty = false;
+        _btnSave.Enabled = false;
     }
 
     private void LoadDivisionList()
@@ -713,14 +716,17 @@ public class DivisionPanel : UserControl
         _currentTeamId = null;
         LoadTeams(divisionId);
         ClearPlayersPanel();
-        _divisionMode = DivisionMode.View;
-        SetEditModeUI();  // Start in read-only mode
+        _isCreatingNew = false;
+        _btnCancel.Visible = false;
+        _btnDelete.Visible = true;
+        ClearDirty();
     }
 
     private void ClearEditor()
     {
         _selectedDivisionId = null;
         _currentTeamId      = null;
+        _isCreatingNew = false;
         _lblName.Text = "";
         _cmbDay.SelectedIndex  = 0;
         _cmbTime.SelectedIndex = 0;
@@ -732,12 +738,14 @@ public class DivisionPanel : UserControl
         _numPlayersMin.Value = 0;
         _numPlayersMax.Value = 0;
         _btnDelete.Enabled  = false;
+        _btnCancel.Visible  = false;
         _btnAddTeam.Enabled = false;
         _btnDeleteTeam.Enabled   = false;
         _btnAddPlayer.Enabled    = false;
         _btnRemovePlayer.Enabled = false;
         _teamsGrid.Rows.Clear();
         ClearPlayersPanel();
+        ClearDirty();
     }
 
     private void OnSlotChanged(object? sender, EventArgs e)
@@ -769,104 +777,34 @@ public class DivisionPanel : UserControl
 
     // â”€â”€ New Division â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    private void StartNewDivision()
+    private void AddDivision()
     {
         if (!_selectedSeasonId.HasValue)
         {
             MessageBox.Show("Select a season first.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
+        _isCreatingNew = true;
         _isLoadingData = true;
         _lstDivisions.SelectedIndex = -1;
         _isLoadingData = false;
         ClearEditor();
-        _divisionMode = DivisionMode.Create;
-        SetEditModeUI();
+        _btnCancel.Visible = true;
+        _btnDelete.Visible = false;
         _cmbDay.Focus();
+    }
+
+    private void CancelAddDivision()
+    {
+        _isCreatingNew = false;
+        _btnCancel.Visible = false;
+        _btnDelete.Visible = _selectedDivisionId.HasValue;
+        ClearEditor();
+        LoadDivisionList();
     }
 
     // â”€â”€ Edit Mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    private void EnterEditMode()
-    {
-        if (_selectedDivisionId == null) return;
-        _divisionMode = DivisionMode.Edit;
-        SetEditModeUI();
-    }
-
-    private void ExitEditMode()
-    {
-        _divisionMode = DivisionMode.View;
-        SetEditModeUI();
-        // Reload to discard changes
-        if (_selectedDivisionId.HasValue)
-            LoadDivision(_selectedDivisionId.Value);
-    }
-
-    private void SetControlBackgroundRecursive(Control parent, Color bgColor)
-    {
-        foreach (Control ctrl in parent.Controls)
-        {
-            // Set background for panels and groupboxes
-            if (ctrl is Panel or GroupBox)
-            {
-                ctrl.BackColor = bgColor;
-                SetControlBackgroundRecursive(ctrl, bgColor);
-            }
-            else if (ctrl.HasChildren)
-            {
-                SetControlBackgroundRecursive(ctrl, bgColor);
-            }
-        }
-    }
-
-    private void SetEditModeUI()
-    {
-        bool isEditMode = _divisionMode == DivisionMode.Edit;
-        bool isCreateMode = _divisionMode == DivisionMode.Create;
-
-        // Change tab container and pages background color based on mode
-        Color bgColor = isCreateMode ? AppTheme.CreateModeBackground
-                      : isEditMode ? AppTheme.EditModeBackground
-                      : AppTheme.ContentBackground;
-
-        _tabs.BackColor = bgColor;
-        foreach (TabPage page in _tabs.TabPages)
-        {
-            page.BackColor = bgColor;
-            SetControlBackgroundRecursive(page, bgColor);
-        }
-
-        // Division name is always computed from day + time and shown as a label
-
-        // Other controls editable in edit/create mode
-        _cmbDay.Enabled = isEditMode || isCreateMode;
-        _cmbTime.Enabled = isEditMode || isCreateMode;
-        _chkActive.Enabled = isEditMode || isCreateMode;
-        _numTeamsInDiv.Enabled = isEditMode || isCreateMode;
-        _numPlayersMin.Enabled = isEditMode || isCreateMode;
-        _numPlayersMax.Enabled = isEditMode || isCreateMode;
-
-        // Button visibility: Edit/Delete in view mode, Save/Cancel in edit/create mode
-        _btnEdit.Visible   = !isEditMode && !isCreateMode && _selectedDivisionId.HasValue;
-        _btnDelete.Visible = !isEditMode && !isCreateMode && _selectedDivisionId.HasValue;
-        _btnDelete.Enabled = !isEditMode && !isCreateMode && _selectedDivisionId.HasValue;
-        _btnSave.Visible   = isEditMode || isCreateMode;
-        _btnCancel.Visible = isEditMode || isCreateMode;
-
-        // Teams/Players editing only in edit/create mode
-        _btnAddTeam.Enabled = (isEditMode || isCreateMode) && _selectedDivisionId.HasValue;
-        _btnBuildTeams.Enabled = (isEditMode || isCreateMode) && _selectedDivisionId.HasValue;
-        _btnDeleteTeam.Enabled = (isEditMode || isCreateMode) && _currentTeamId.HasValue;
-        _btnDeleteAllTeams.Enabled = (isEditMode || isCreateMode) && (_selectedDivisionId.HasValue || _selectedLeagueId.HasValue);
-        _btnAddPlayer.Enabled = (isEditMode || isCreateMode) && _currentTeamId.HasValue;
-        _btnRemovePlayer.Enabled = (isEditMode || isCreateMode) && _playersGrid.SelectedRows.Count > 0;
-        _btnDeleteAllPlayers.Enabled = (isEditMode || isCreateMode) && _currentTeamId.HasValue;
-
-        // Teams grid Active column and captain dropdown read-only in view mode
-        _teamsGrid.Columns["TmActive"].ReadOnly = !isEditMode && !isCreateMode;
-        _cmbCaptain.Enabled = (isEditMode || isCreateMode) && _currentTeamId.HasValue;
-    }
 
     // â”€â”€ Save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -950,6 +888,10 @@ public class DivisionPanel : UserControl
         _btnDelete.Enabled  = true;
         _btnAddTeam.Enabled = true;
         MessageBox.Show("Division saved.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        _isCreatingNew = false;
+        _btnCancel.Visible = false;
+        _btnDelete.Visible = true;
+        ClearDirty();
         LoadDivisionList();
         SelectInList(savedId);
         LoadTeams(savedId);
@@ -1076,7 +1018,6 @@ public class DivisionPanel : UserControl
         {
             _currentTeamId = null;
             ClearPlayersPanel();
-            SetEditModeUI();
             return;
         }
         var row = _teamsGrid.SelectedRows[0];
@@ -1086,7 +1027,6 @@ public class DivisionPanel : UserControl
         string displayName = row.Cells["TmDisplay"].Value?.ToString() ?? "";
         _lblTeamTitle.Text = $"Players - Team {displayName}";
         LoadPlayersForTeam(_currentTeamId.Value);
-        SetEditModeUI();
     }
 
     private void OnTeamCellClick(object? sender, DataGridViewCellEventArgs e)
