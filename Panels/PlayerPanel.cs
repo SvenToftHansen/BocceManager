@@ -347,8 +347,8 @@ public class PlayerPanel : UserControl
         y += 40;
 
         // Column headers for League Status section
-        const int col1X = 230;
-        const int col2X = 500;
+        const int col1X = 24;
+        const int col2X = 330;
 
         var lblLftHeader = new Label
         {
@@ -399,7 +399,7 @@ public class PlayerPanel : UserControl
         _lstLookingForTeams = new CheckedListBox
         {
             Location = new Point(col1X, y),
-            Size = new Size(420, 80),
+            Size = new Size(280, 100),
             BackColor = AppTheme.ContentBackground,
             ForeColor = AppTheme.TextPrimary,
             Font = AppTheme.FontSmall,
@@ -409,13 +409,11 @@ public class PlayerPanel : UserControl
         _lstLookingForTeams.ItemCheck += (_, _) => MarkDirty();
         scroll.Controls.Add(_lstLookingForTeams);
 
-        y += 95;
-
         // Spare List listbox with checkboxes
         _lstSpareList = new CheckedListBox
         {
-            Location = new Point(col1X, y),
-            Size = new Size(420, 80),
+            Location = new Point(col2X, y),
+            Size = new Size(280, 100),
             BackColor = AppTheme.ContentBackground,
             ForeColor = AppTheme.TextPrimary,
             Font = AppTheme.FontSmall,
@@ -425,7 +423,7 @@ public class PlayerPanel : UserControl
         _lstSpareList.ItemCheck += (_, _) => MarkDirty();
         scroll.Controls.Add(_lstSpareList);
 
-        y += 95;
+        y += 110;
 
         _lblLeagueContext = new Label
         {
