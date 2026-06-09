@@ -768,13 +768,14 @@ public class SeasonPanel : UserControl
 
     private void LoadSeason(int seasonId)
     {
-        _selectedSeasonId = seasonId;
-        _isCopied = false; _copySourceId = null;
-        _isNewSeasonDraft = false;
-        _seasonNameCustomized = false;
-
+        _isLoadingData = true;
         try
         {
+            _selectedSeasonId = seasonId;
+            _isCopied = false; _copySourceId = null;
+            _isNewSeasonDraft = false;
+            _seasonNameCustomized = false;
+
             using var db = new BocceDbContext();
             var s = db.Seasons.Find(seasonId);
             if (s == null) return;
@@ -814,6 +815,10 @@ public class SeasonPanel : UserControl
             _chkPlayoffTiebreaker.Checked = s.PlayoffTiebreakerEnd;
         }
         catch { }
+        finally
+        {
+            _isLoadingData = false;
+        }
 
         LoadDivisions(seasonId);
         LoadSeasonSlots(seasonId);

@@ -531,10 +531,11 @@ public class LeaguePanel : UserControl
 
     private void LoadLeague(int leagueId)
     {
-        _selectedLeagueId = leagueId;
-
+        _isLoadingData = true;
         try
         {
+            _selectedLeagueId = leagueId;
+
             using var db = new BocceDbContext();
             var league = db.Leagues.Find(leagueId);
             if (league == null) return;
@@ -548,6 +549,10 @@ public class LeaguePanel : UserControl
             _numMaxTeams.Value   = league.MaxTeamsInDivision;
         }
         catch { }
+        finally
+        {
+            _isLoadingData = false;
+        }
 
         LoadSeasons(leagueId);
         UpdateDeleteButtonState();

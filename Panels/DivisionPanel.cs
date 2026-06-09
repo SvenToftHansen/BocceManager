@@ -696,10 +696,11 @@ public class DivisionPanel : UserControl
 
     private void LoadDivision(int divisionId)
     {
-        _selectedDivisionId = divisionId;
-
+        _isLoadingData = true;
         try
         {
+            _selectedDivisionId = divisionId;
+
             using var db = new BocceDbContext();
             var d = db.Divisions
                 .Include(x => x.DaySlot)
@@ -746,6 +747,10 @@ public class DivisionPanel : UserControl
             _numPlayersMax.Value = playersMax;
         }
         catch { }
+        finally
+        {
+            _isLoadingData = false;
+        }
 
         _currentTeamId = null;
         LoadTeams(divisionId);
