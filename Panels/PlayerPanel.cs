@@ -671,12 +671,16 @@ public class PlayerPanel : UserControl
         _chkIsActive.Enabled = editing;
         _cmbPartner.Enabled = editing;
 
-        // Show league selection panels only when creating a new player
-        if (mode == PlayerMode.Create)
+        // Show league selection panels only when creating or editing a player
+        if (mode == PlayerMode.Create || mode == PlayerMode.Edit)
         {
             BuildLeagueSelectionPanels();
             _pnlLookingForTeamsCheckboxes.Visible = true;
             _pnlSpareListCheckboxes.Visible = true;
+
+            // If editing, populate checkboxes with current player's data
+            if (mode == PlayerMode.Edit && _selectedPlayerId.HasValue)
+                PopulateLeagueSelectionFromPlayer(_selectedPlayerId.Value);
         }
         else
         {
@@ -877,6 +881,42 @@ public class PlayerPanel : UserControl
                 _pnlSpareListCheckboxes.Controls.Add(chk);
                 _spareListCheckboxes[league.Id] = chk;
                 yPos += 22;
+            }
+        }
+        catch { }
+    }
+
+    private void PopulateLeagueSelectionFromPlayer(int playerId)
+    {
+        try
+        {
+            using var db = new BocceDbContext();
+
+            // Get player's current LookingForTeam entries
+            var playerLft = db.LookingForTeams
+                .Where(l => l.PlayerId == playerId)
+                .Select(l => new { l.LeagueId, l.SeasonId })
+                .ToList();
+
+            // Get player's current SpareList entries
+            var playerSpare = db.SpareLists
+                .Where(s => s.PlayerId == playerId)
+                .Select(s => s.LeagueId)
+                .ToList();
+
+            // Check the Looking for Team boxes
+            foreach (var lft in playerLft)
+            {
+                string key = $"{lft.LeagueId}_{lft.SeasonId}";
+                if (_lookingForTeamCheckboxes.TryGetValue(key, out var chk))
+                    chk.Checked = true;
+            }
+
+            // Check the Spare List boxes
+            foreach (var leagueId in playerSpare)
+            {
+                if (_spareListCheckboxes.TryGetValue(leagueId, out var chk))
+                    chk.Checked = true;
             }
         }
         catch { }
