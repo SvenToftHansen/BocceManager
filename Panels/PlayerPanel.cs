@@ -69,15 +69,12 @@ public class PlayerPanel : UserControl
     private ComboBox _cmbPartner = null!;
     private Label _lblCreatedAt = null!;
     private Label _lblModeHint = null!;
-    private Label _lblLeagueStatus = null!;
     private Label _lblLeagueContext = null!;
 
-    private Label _lblLookingForTeams = null!;
-    private Label _lblSpareListLeagues = null!;
-    private Panel _pnlLookingForTeamsCheckboxes = null!;
-    private Panel _pnlSpareListCheckboxes = null!;
-    private Dictionary<string, CheckBox> _lookingForTeamCheckboxes = new();
-    private Dictionary<int, CheckBox> _spareListCheckboxes = new();
+    private CheckedListBox _lstLookingForTeams = null!;
+    private CheckedListBox _lstSpareList = null!;
+    private List<(int LeagueId, int SeasonId)> _lookingForTeamItems = [];
+    private List<int> _spareListItems = [];
 
     private Button _btnNew = null!;
     private Button _btnEdit = null!;
@@ -398,55 +395,35 @@ public class PlayerPanel : UserControl
 
         y += 18;
 
-        // Values
-        _lblLookingForTeams = new Label
-        {
-            Text = "(none)",
-            Font = AppTheme.FontSmall,
-            ForeColor = AppTheme.TextMuted,
-            AutoSize = false,
-            Size = new Size(250, 40),
-            Location = new Point(col1X, y)
-        };
-        scroll.Controls.Add(_lblLookingForTeams);
-
-        _lblSpareListLeagues = new Label
-        {
-            Text = "(none)",
-            Font = AppTheme.FontSmall,
-            ForeColor = AppTheme.TextMuted,
-            AutoSize = false,
-            Size = new Size(250, 40),
-            Location = new Point(col2X, y)
-        };
-        scroll.Controls.Add(_lblSpareListLeagues);
-
-        y += 50;
-
-        // Looking for Teams checkboxes (for create mode)
-        _pnlLookingForTeamsCheckboxes = new Panel
+        // Looking for Teams listbox with checkboxes
+        _lstLookingForTeams = new CheckedListBox
         {
             Location = new Point(col1X, y),
             Size = new Size(250, 100),
             BackColor = AppTheme.ContentBackground,
-            AutoScroll = true,
+            ForeColor = AppTheme.TextPrimary,
+            Font = AppTheme.FontSmall,
+            CheckOnClick = true,
             Visible = false
         };
-        scroll.Controls.Add(_pnlLookingForTeamsCheckboxes);
+        _lstLookingForTeams.ItemCheck += (_, _) => MarkDirty();
+        scroll.Controls.Add(_lstLookingForTeams);
 
-        // Spare List checkboxes (for create mode)
-        _pnlSpareListCheckboxes = new Panel
+        // Spare List listbox with checkboxes
+        _lstSpareList = new CheckedListBox
         {
             Location = new Point(col2X, y),
             Size = new Size(250, 100),
             BackColor = AppTheme.ContentBackground,
-            AutoScroll = true,
+            ForeColor = AppTheme.TextPrimary,
+            Font = AppTheme.FontSmall,
+            CheckOnClick = true,
             Visible = false
         };
-        scroll.Controls.Add(_pnlSpareListCheckboxes);
+        _lstSpareList.ItemCheck += (_, _) => MarkDirty();
+        scroll.Controls.Add(_lstSpareList);
 
         y += 110;
-        _lblLeagueStatus = null;
 
         _lblLeagueContext = new Label
         {
@@ -657,7 +634,7 @@ public class PlayerPanel : UserControl
             ClearEditor();
             PopulatePartnerLookup(null, null);
             RefreshLeagueContextAndStatus(null);
-            BuildLeagueSelectionPanels();
+            BuildLeagueSelectionListboxes();
         }
         finally
         {
@@ -674,8 +651,6 @@ public class PlayerPanel : UserControl
         _txtPhone.Text = "";
         _txtLotNumber.Text = "";
         _chkIsActive.Checked = true;
-        _lblLookingForTeams.Text = "(none)";
-        _lblSpareListLeagues.Text = "(none)";
         _lblCreatedAt.Text = "(new)";
         ClearLeagueSelections();
     }
@@ -696,13 +671,13 @@ public class PlayerPanel : UserControl
         _chkIsActive.Enabled = true;
         _cmbPartner.Enabled = true;
 
-        // Show league selection panels always (not just in Create/Edit modes)
-        BuildLeagueSelectionPanels();
-        _pnlLookingForTeamsCheckboxes.Visible = true;
-        _pnlSpareListCheckboxes.Visible = true;
+        // Build and populate league selection listboxes
+        BuildLeagueSelectionListboxes();
+        _lstLookingForTeams.Visible = true;
+        _lstSpareList.Visible = true;
 
-        // If editing, populate checkboxes with current player's data
-        if (mode == PlayerMode.Edit && _selectedPlayerId.HasValue)
+        // Populate with current player's data if viewing/editing existing player
+        if (_selectedPlayerId.HasValue)
             PopulateLeagueSelectionFromPlayer(_selectedPlayerId.Value);
 
         _btnNew.Visible = true;
@@ -764,45 +739,6 @@ public class PlayerPanel : UserControl
 
     private void RefreshLeagueContextAndStatus(int? playerId)
     {
-        using var db = new BocceDbContext();
-
-        if (!playerId.HasValue)
-        {
-            _lblLookingForTeams.Text = "(none)";
-            _lblSpareListLeagues.Text = "(none)";
-            _lblLeagueContext.Text = "";
-            return;
-        }
-
-        // Load Looking for Teams (League-Season pairs)
-        var lookingForTeams = db.LookingForTeams
-            .Where(l => l.PlayerId == playerId.Value)
-            .Include(l => l.League)
-            .Include(l => l.Season)
-            .OrderBy(l => l.League.Name)
-            .ThenBy(l => l.Season != null ? l.Season.Name : "")
-            .ToList();
-
-        if (lookingForTeams.Count == 0)
-            _lblLookingForTeams.Text = "(none)";
-        else
-            _lblLookingForTeams.Text = string.Join("\n",
-                lookingForTeams.Select(x => x.Season != null
-                    ? $"{x.League.Name} - {x.Season.Name}"
-                    : x.League.Name));
-
-        // Load Spare Lists (Leagues)
-        var spareLists = db.SpareLists
-            .Where(s => s.PlayerId == playerId.Value && s.IsActive)
-            .Include(s => s.League)
-            .OrderBy(s => s.League.Name)
-            .ToList();
-
-        if (spareLists.Count == 0)
-            _lblSpareListLeagues.Text = "(none)";
-        else
-            _lblSpareListLeagues.Text = string.Join("\n", spareLists.Select(s => s.League.Name));
-
         _lblLeagueContext.Text = "";
     }
 
@@ -820,18 +756,10 @@ public class PlayerPanel : UserControl
     private List<(int LeagueId, int SeasonId)> GetCheckedLookingForTeamEntries()
     {
         var result = new List<(int, int)>();
-        foreach (var kvp in _lookingForTeamCheckboxes)
+        for (int i = 0; i < _lstLookingForTeams.CheckedItems.Count; i++)
         {
-            if (kvp.Value.Checked)
-            {
-                var parts = kvp.Key.Split('_');
-                if (parts.Length == 2 &&
-                    int.TryParse(parts[0], out int leagueId) &&
-                    int.TryParse(parts[1], out int seasonId))
-                {
-                    result.Add((leagueId, seasonId));
-                }
-            }
+            if (_lstLookingForTeams.GetItemChecked(i) && i < _lookingForTeamItems.Count)
+                result.Add(_lookingForTeamItems[i]);
         }
         return result;
     }
@@ -839,23 +767,23 @@ public class PlayerPanel : UserControl
     private List<int> GetCheckedSpareLeagues()
     {
         var result = new List<int>();
-        foreach (var kvp in _spareListCheckboxes)
+        for (int i = 0; i < _lstSpareList.Items.Count; i++)
         {
-            if (kvp.Value.Checked)
-                result.Add(kvp.Key);
+            if (_lstSpareList.GetItemChecked(i) && i < _spareListItems.Count)
+                result.Add(_spareListItems[i]);
         }
         return result;
     }
 
     private void ClearLeagueSelections()
     {
-        _lookingForTeamCheckboxes.Clear();
-        _spareListCheckboxes.Clear();
-        _pnlLookingForTeamsCheckboxes.Controls.Clear();
-        _pnlSpareListCheckboxes.Controls.Clear();
+        _lookingForTeamItems.Clear();
+        _spareListItems.Clear();
+        _lstLookingForTeams.Items.Clear();
+        _lstSpareList.Items.Clear();
     }
 
-    private void BuildLeagueSelectionPanels()
+    private void BuildLeagueSelectionListboxes()
     {
         ClearLeagueSelections();
 
@@ -863,9 +791,8 @@ public class PlayerPanel : UserControl
         {
             using var db = new BocceDbContext();
 
-            // Build Looking for Team checkboxes (League/Season pairs - current and next season)
+            // Build Looking for Team listbox (League/Season pairs - current and next season)
             var leagues = db.Leagues.OrderBy(l => l.Name).ToList();
-            int yPos = 4;
 
             foreach (var league in leagues)
             {
@@ -877,37 +804,19 @@ public class PlayerPanel : UserControl
 
                 foreach (var season in seasons)
                 {
-                    var chk = new CheckBox
-                    {
-                        Text = $"{league.Name} - {season.Name}" + (season.IsCurrent ? " ★" : ""),
-                        Location = new Point(4, yPos),
-                        AutoSize = true,
-                        Font = AppTheme.FontSmall,
-                        ForeColor = AppTheme.TextPrimary
-                    };
-                    chk.CheckedChanged += (_, _) => MarkDirty();
-                    _pnlLookingForTeamsCheckboxes.Controls.Add(chk);
-                    _lookingForTeamCheckboxes[$"{league.Id}_{season.Id}"] = chk;
-                    yPos += 22;
+                    var displayText = $"{league.Name} - {season.Name}" + (season.IsCurrent ? " ★" : "");
+                    _lstLookingForTeams.Items.Add((league.Id, season.Id), false);
+                    int index = _lstLookingForTeams.Items.Count - 1;
+                    _lstLookingForTeams.Items[index] = displayText;
+                    _lookingForTeamItems.Add((league.Id, season.Id));
                 }
             }
 
-            // Build Spare List checkboxes (Leagues)
-            yPos = 4;
+            // Build Spare List listbox (Leagues)
             foreach (var league in leagues)
             {
-                var chk = new CheckBox
-                {
-                    Text = league.Name,
-                    Location = new Point(4, yPos),
-                    AutoSize = true,
-                    Font = AppTheme.FontSmall,
-                    ForeColor = AppTheme.TextPrimary
-                };
-                chk.CheckedChanged += (_, _) => MarkDirty();
-                _pnlSpareListCheckboxes.Controls.Add(chk);
-                _spareListCheckboxes[league.Id] = chk;
-                yPos += 22;
+                _lstSpareList.Items.Add(league.Name, false);
+                _spareListItems.Add(league.Id);
             }
         }
         catch { }
@@ -915,7 +824,7 @@ public class PlayerPanel : UserControl
 
     private void PopulateLeagueSelectionFromPlayer(int playerId)
     {
-        if (_lookingForTeamCheckboxes.Count == 0 && _spareListCheckboxes.Count == 0)
+        if (_lookingForTeamItems.Count == 0 && _spareListItems.Count == 0)
             return;
 
         try
@@ -934,19 +843,19 @@ public class PlayerPanel : UserControl
                 .Select(s => s.LeagueId)
                 .ToList();
 
-            // Check the Looking for Team boxes
-            foreach (var lft in playerLft)
+            // Check Looking for Team items
+            for (int i = 0; i < _lookingForTeamItems.Count; i++)
             {
-                string key = $"{lft.LeagueId}_{lft.SeasonId}";
-                if (_lookingForTeamCheckboxes.TryGetValue(key, out var chk))
-                    chk.Checked = true;
+                var (leagueId, seasonId) = _lookingForTeamItems[i];
+                if (playerLft.Any(l => l.LeagueId == leagueId && l.SeasonId == seasonId))
+                    _lstLookingForTeams.SetItemChecked(i, true);
             }
 
-            // Check the Spare List boxes
-            foreach (var leagueId in playerSpare)
+            // Check Spare List items
+            for (int i = 0; i < _spareListItems.Count; i++)
             {
-                if (_spareListCheckboxes.TryGetValue(leagueId, out var chk))
-                    chk.Checked = true;
+                if (playerSpare.Contains(_spareListItems[i]))
+                    _lstSpareList.SetItemChecked(i, true);
             }
         }
         catch (Exception ex)
