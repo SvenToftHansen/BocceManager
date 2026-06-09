@@ -739,18 +739,22 @@ public class PlayerPanel : UserControl
             return;
         }
 
-        // Load Looking for Teams (Leagues)
+        // Load Looking for Teams (League-Season pairs)
         var lookingForTeams = db.LookingForTeams
             .Where(l => l.PlayerId == playerId.Value)
             .Include(l => l.League)
+            .Include(l => l.Season)
             .OrderBy(l => l.League.Name)
+            .ThenBy(l => l.Season != null ? l.Season.Name : "")
             .ToList();
 
         if (lookingForTeams.Count == 0)
             _lblLookingForTeams.Text = "(none)";
         else
             _lblLookingForTeams.Text = string.Join("\n",
-                lookingForTeams.Select(x => x.League.Name));
+                lookingForTeams.Select(x => x.Season != null
+                    ? $"{x.League.Name} - {x.Season.Name}"
+                    : x.League.Name));
 
         // Load Spare Lists (Leagues)
         var spareLists = db.SpareLists
@@ -778,19 +782,19 @@ public class PlayerPanel : UserControl
         }
     }
 
-    private List<int> GetCheckedLookingForLeagues()
+    private List<(int LeagueId, int SeasonId)> GetCheckedLookingForTeamEntries()
     {
-        var result = new List<int>();
-        var seenLeagues = new HashSet<int>();
+        var result = new List<(int, int)>();
         foreach (var kvp in _lookingForTeamCheckboxes)
         {
             if (kvp.Value.Checked)
             {
                 var parts = kvp.Key.Split('_');
-                if (parts.Length == 2 && int.TryParse(parts[0], out int leagueId))
+                if (parts.Length == 2 &&
+                    int.TryParse(parts[0], out int leagueId) &&
+                    int.TryParse(parts[1], out int seasonId))
                 {
-                    if (seenLeagues.Add(leagueId))
-                        result.Add(leagueId);
+                    result.Add((leagueId, seasonId));
                 }
             }
         }
@@ -961,7 +965,7 @@ public class PlayerPanel : UserControl
                 db.SaveChanges();
 
                 UpdatePartnerLink(db, player, selectedPartnerId);
-                ApplyLeagueListStatus(db, player, GetCheckedLookingForLeagues(), GetCheckedSpareLeagues());
+                ApplyLeagueListStatus(db, player, GetCheckedLookingForTeamEntries(), GetCheckedSpareLeagues());
 
                 db.SaveChanges();
                 _selectedPlayerId = player.Id;
@@ -983,7 +987,7 @@ public class PlayerPanel : UserControl
                 player.IsActive = _chkIsActive.Checked;
 
                 UpdatePartnerLink(db, player, selectedPartnerId);
-                ApplyLeagueListStatus(db, player, GetCheckedLookingForLeagues(), GetCheckedSpareLeagues());
+                ApplyLeagueListStatus(db, player, GetCheckedLookingForTeamEntries(), GetCheckedSpareLeagues());
                 db.SaveChanges();
             }
             else
@@ -1001,20 +1005,21 @@ public class PlayerPanel : UserControl
         }
     }
 
-    private void ApplyLeagueListStatus(BocceDbContext db, Player player, List<int> lookingForLeagueIds, List<int> spareLeagueIds)
+    private void ApplyLeagueListStatus(BocceDbContext db, Player player, List<(int LeagueId, int SeasonId)> lookingForTeamEntries, List<int> spareLeagueIds)
     {
         // Remove all existing looking for teams for this player
         var existingLft = db.LookingForTeams.Where(l => l.PlayerId == player.Id).ToList();
         foreach (var lft in existingLft)
             db.LookingForTeams.Remove(lft);
 
-        // Add new looking for team entries
-        foreach (var leagueId in lookingForLeagueIds)
+        // Add new looking for team entries with season binding
+        foreach (var (leagueId, seasonId) in lookingForTeamEntries)
         {
             db.LookingForTeams.Add(new LookingForTeam
             {
                 LeagueId = leagueId,
                 PlayerId = player.Id,
+                SeasonId = seasonId,
                 TeamId = null
             });
         }
