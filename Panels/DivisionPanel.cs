@@ -27,6 +27,7 @@ public class DivisionPanel : UserControl
     private List<(int Id, string Display)> _allDivisions = [];
 
     private TabControl _tabs = null!;
+    private bool _teamsOnlyMode = false;
 
     // â”€â”€ Editor tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private Label         _lblName       = null!;
@@ -63,8 +64,9 @@ public class DivisionPanel : UserControl
 
     // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    public DivisionPanel()
+    public DivisionPanel(bool teamsOnly = false)
     {
+        _teamsOnlyMode = teamsOnly;
         BackColor = AppTheme.ContentBackground;
         Dock = DockStyle.Fill;
         BuildUI();
@@ -219,8 +221,11 @@ public class DivisionPanel : UserControl
     private TabControl BuildTabs()
     {
         _tabs = new TabControl { Dock = DockStyle.Fill, Font = AppTheme.FontDefault, Padding = new Point(16, 6) };
-        _tabs.TabPages.Add(BuildEditorTab());
-        _tabs.TabPages.Add(BuildParametersTab());
+        if (!_teamsOnlyMode)
+        {
+            _tabs.TabPages.Add(BuildEditorTab());
+            _tabs.TabPages.Add(BuildParametersTab());
+        }
         _tabs.TabPages.Add(BuildTeamsTab());
         return _tabs;
     }

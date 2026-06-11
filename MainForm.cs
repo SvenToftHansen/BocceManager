@@ -11,7 +11,7 @@ public partial class MainForm : Form
     {
         Dashboard,
         Leagues, Seasons, Divisions,
-        Players,
+        Players, Teams,
         ScoreEntry, Schedule,
         Standings, Playoffs,
         SpareLists, Announcements, Fees, EmailLists, Documents, Parameters, Utilities, Theme
@@ -294,6 +294,7 @@ public partial class MainForm : Form
             add("Seasons",   NavSection.Seasons);
             add("Divisions", NavSection.Divisions);
             add("Players",   NavSection.Players);
+            add("Teams",     NavSection.Teams);
         });
 
         AddGroup("OPERATIONS", add => {
@@ -389,6 +390,7 @@ public partial class MainForm : Form
         NavSection.Seasons    => new SeasonPanel(),
         NavSection.Divisions  => new DivisionPanel(),
         NavSection.Players    => new PlayerPanel(),
+        NavSection.Teams      => new DivisionPanel(teamsOnly: true),
         NavSection.Documents  => new DocumentsPanel(),
         NavSection.Parameters => new ParametersPanel(),
         NavSection.Utilities  => new UtilitiesPanel(),
@@ -424,6 +426,7 @@ public partial class MainForm : Form
         NavSection.Seasons       => "Seasons",
         NavSection.Divisions     => "Divisions",
         NavSection.Players       => "Players",
+        NavSection.Teams         => "Teams",
         NavSection.ScoreEntry    => "Score Entry",
         NavSection.Schedule      => "Schedule",
         NavSection.Standings     => "Standings",
@@ -493,6 +496,7 @@ public partial class MainForm : Form
             {
                 sectionsToEnable.Add(NavSection.Divisions);
                 sectionsToEnable.Add(NavSection.Players);
+                sectionsToEnable.Add(NavSection.Teams);
                 sectionsToEnable.Add(NavSection.ScoreEntry);
                 sectionsToEnable.Add(NavSection.Schedule);
                 sectionsToEnable.Add(NavSection.Standings);
