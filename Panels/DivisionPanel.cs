@@ -19,6 +19,7 @@ public class DivisionPanel : UserControl
     private int? _selectedDivisionId;
     private int? _previousDivisionId;
     private int? _currentTeamId;
+    private bool _seasonIsLocked = false;
 
     // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // ── Left panel ────────────────────────────────────────────────────────────
@@ -595,7 +596,7 @@ public class DivisionPanel : UserControl
         }
         else
         {
-            _btnAdd.Visible = !_teamsOnlyMode;
+            _btnAdd.Visible = !_teamsOnlyMode && !_seasonIsLocked;
             _btnCancel.Visible = false;
             _btnDelete.Visible = !_teamsOnlyMode;
         }
@@ -604,6 +605,7 @@ public class DivisionPanel : UserControl
     private void LoadDivisionList()
     {
         _allDivisions.Clear();
+        _seasonIsLocked = false;
         if (_selectedLeagueId.HasValue && _selectedSeasonId.HasValue)
         {
             try
@@ -612,6 +614,7 @@ public class DivisionPanel : UserControl
                 var season = db.Seasons.Find(_selectedSeasonId.Value);
                 if (season != null && season.LeagueId == _selectedLeagueId.Value)
                 {
+                    _seasonIsLocked = season.IsLocked;
                     _allDivisions = db.Divisions
                         .Where(d => d.SeasonId == _selectedSeasonId.Value)
                         .OrderBy(d => d.SortName).ThenBy(d => d.Name)
@@ -799,6 +802,7 @@ public class DivisionPanel : UserControl
         _isCreatingNew = false;
         _btnCancel.Visible = false;
         _btnDelete.Visible = true;
+        _btnDelete.Enabled = !_seasonIsLocked;
         ClearDirty();
     }
 
@@ -859,6 +863,11 @@ public class DivisionPanel : UserControl
 
     private void AddDivision()
     {
+        if (_seasonIsLocked)
+        {
+            MessageBox.Show("Season is locked. Divisions cannot be modified.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
         if (!_selectedSeasonId.HasValue)
         {
             MessageBox.Show("Select a season first.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -890,6 +899,11 @@ public class DivisionPanel : UserControl
 
     private void SaveDivision()
     {
+        if (_seasonIsLocked)
+        {
+            MessageBox.Show("Season is locked. Divisions cannot be modified.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
         if (!_selectedSeasonId.HasValue)
         {
             MessageBox.Show("Select a season first.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -1008,6 +1022,11 @@ public class DivisionPanel : UserControl
 
     private void DeleteDivision()
     {
+        if (_seasonIsLocked)
+        {
+            MessageBox.Show("Season is locked. Divisions cannot be deleted.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
         if (!_selectedDivisionId.HasValue) return;
         int divId = _selectedDivisionId.Value;
         string divName = _lblName.Text.Trim();
@@ -1125,12 +1144,12 @@ public class DivisionPanel : UserControl
         bool hasTeams = _teamsGrid.Rows.Count > 0;
         bool teamSelected = _teamsGrid.SelectedRows.Count > 0;
 
-        _btnAddTeam.Enabled = _selectedDivisionId.HasValue;
-        _btnBuildTeams.Enabled = _selectedDivisionId.HasValue;
-        _btnDeleteTeam.Enabled = teamSelected;
-        _btnDeleteAllTeams.Enabled = hasTeams;
-        _btnAddPlayer.Enabled = teamSelected;
-        _btnDeleteAllPlayers.Enabled = teamSelected;
+        _btnAddTeam.Enabled = _selectedDivisionId.HasValue && !_seasonIsLocked;
+        _btnBuildTeams.Enabled = _selectedDivisionId.HasValue && !_seasonIsLocked;
+        _btnDeleteTeam.Enabled = teamSelected && !_seasonIsLocked;
+        _btnDeleteAllTeams.Enabled = hasTeams && !_seasonIsLocked;
+        _btnAddPlayer.Enabled = teamSelected && !_seasonIsLocked;
+        _btnDeleteAllPlayers.Enabled = teamSelected && !_seasonIsLocked;
     }
 
     private void OnTeamSelected(object? sender, EventArgs e)
@@ -1244,6 +1263,11 @@ public class DivisionPanel : UserControl
 
     private void AddTeam()
     {
+        if (_seasonIsLocked)
+        {
+            MessageBox.Show("Season is locked. Teams cannot be added.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
         if (!_selectedDivisionId.HasValue) return;
         int divId = _selectedDivisionId.Value;
 
@@ -1466,6 +1490,11 @@ public class DivisionPanel : UserControl
 
     private void DeleteTeam()
     {
+        if (_seasonIsLocked)
+        {
+            MessageBox.Show("Season is locked. Teams cannot be deleted.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
         if (_currentTeamId == null || !_selectedDivisionId.HasValue) return;
         int teamId = _currentTeamId.Value;
         int divId  = _selectedDivisionId.Value;
@@ -1845,6 +1874,11 @@ public class DivisionPanel : UserControl
 
     private void AddPlayerToTeam()
     {
+        if (_seasonIsLocked)
+        {
+            MessageBox.Show("Season is locked. Players cannot be assigned to teams.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
         if (_currentTeamId == null || !_selectedDivisionId.HasValue) return;
         int teamId = _currentTeamId.Value;
         int divisionId = _selectedDivisionId.Value;
@@ -2002,6 +2036,11 @@ public class DivisionPanel : UserControl
 
     private void RemovePlayerFromTeam()
     {
+        if (_seasonIsLocked)
+        {
+            MessageBox.Show("Season is locked. Player assignments cannot be changed.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
         if (_currentTeamId == null || _playersGrid.SelectedRows.Count == 0) return;
         int teamId   = _currentTeamId.Value;
         int playerId = Convert.ToInt32(_playersGrid.SelectedRows[0].Cells["PlId"].Value);

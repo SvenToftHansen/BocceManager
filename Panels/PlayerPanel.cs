@@ -58,6 +58,7 @@ public class PlayerPanel : UserControl
     private bool _isCreatingNew = false;
     private bool _isLoadingData = false;
     private bool _isSavingAndReloading = false;
+    private bool _seasonIsLocked = false;
 
     private TextBox _txtSearch = null!;
     private ListBox _lstPlayers = null!;
@@ -1010,6 +1011,14 @@ public class PlayerPanel : UserControl
 
     private void ApplyLeagueListStatus(BocceDbContext db, Player player, List<(int LeagueId, int SeasonId)> lookingForTeamEntries, List<int> spareLeagueIds)
     {
+        // Check if any selected seasons are locked
+        var lockedSeasons = db.Seasons.Where(s => lookingForTeamEntries.Any(l => l.SeasonId == s.Id && l.LeagueId == s.LeagueId && s.IsLocked)).ToList();
+        if (lockedSeasons.Count > 0)
+        {
+            var lockedSeasonNames = string.Join(", ", lockedSeasons.Select(s => s.Name));
+            throw new InvalidOperationException($"Cannot assign to team in locked season(s): {lockedSeasonNames}");
+        }
+
         // Build a map of existing LFT entries to preserve TeamIds
         var existingLft = db.LookingForTeams.Where(l => l.PlayerId == player.Id).ToList();
         var preserveTeamIds = existingLft.ToDictionary(l => (l.LeagueId, l.SeasonId), l => l.TeamId);
