@@ -74,6 +74,9 @@ public class SeasonPanel : UserControl
     private CheckedListBox _timesList = null!;
     private Button         _btnBuild  = null!;
 
+    // ── Courts tab ────────────────────────────────────────────────────────────
+    private CheckedListBox _courtsList = null!;
+
     // All seasons for search filtering
     private List<(int Id, string Display)> _allSeasons = [];
 
@@ -242,6 +245,7 @@ public class SeasonPanel : UserControl
         tabs.TabPages.Add(BuildParametersTab());
         tabs.TabPages.Add(BuildDivisionsTab());
         tabs.TabPages.Add(BuildSlotsTab());
+        tabs.TabPages.Add(BuildCourtsTab());
         return tabs;
     }
 
@@ -623,6 +627,38 @@ public class SeasonPanel : UserControl
         return page;
     }
 
+    // ── Courts Tab ────────────────────────────────────────────────────────────
+
+    private TabPage BuildCourtsTab()
+    {
+        var page = new TabPage("  Courts  ");
+
+        var panel = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground, Padding = new Padding(16) };
+        _courtsList = new CheckedListBox
+        {
+            Dock = DockStyle.Fill,
+            CheckOnClick = true,
+            Font = AppTheme.FontDefault,
+            BackColor = AppTheme.Surface,
+            ForeColor = AppTheme.TextPrimary,
+            BorderStyle = BorderStyle.FixedSingle
+        };
+        _courtsList.ItemCheck += (_, _) => MarkDirty();
+        panel.Controls.Add(_courtsList);
+        panel.Controls.Add(new Label
+        {
+            Text = "Active Courts",
+            Dock = DockStyle.Top,
+            Height = 28,
+            Font = AppTheme.FontSectionHeading,
+            ForeColor = AppTheme.Accent
+        });
+
+        page.Controls.Add(panel);
+        LoadCourtsList();
+        return page;
+    }
+
     // ── Data Loading ──────────────────────────────────────────────────────────
 
     private void LoadContext()
@@ -828,6 +864,7 @@ public class SeasonPanel : UserControl
 
         LoadDivisions(seasonId);
         LoadSeasonSlots(seasonId);
+        LoadSeasonCourts(seasonId);
         UpdateDeleteButtonState();
         ClearDirty();
         _isCreatingNew = false;
@@ -867,6 +904,7 @@ public class SeasonPanel : UserControl
         _btnCancel.Visible = false;
         _divisionsGrid.Rows.Clear();
         LoadSeasonSlots(null);
+        LoadSeasonCourts(null);
         ClearDirty();
     }
 
@@ -928,6 +966,34 @@ public class SeasonPanel : UserControl
             if (_daysList.Items[i] is SlotItem di) _daysList.SetItemChecked(i, configuredDays.Contains(di.Id));
         for (int i = 0; i < _timesList.Items.Count; i++)
             if (_timesList.Items[i] is SlotItem ti) _timesList.SetItemChecked(i, configuredTimes.Contains(ti.Id));
+    }
+
+    private void LoadCourtsList()
+    {
+        _courtsList.Items.Clear();
+        try
+        {
+            using var db = new BocceDbContext();
+            foreach (var c in db.Courts.Where(c => c.IsActive).OrderBy(c => c.CourtNumber).ToList())
+                _courtsList.Items.Add(new SlotItem(c.Id, $"{c.CourtNumber} ({c.CourtLetter})"));
+        }
+        catch { }
+    }
+
+    private void LoadSeasonCourts(int? seasonId)
+    {
+        var configuredCourts = new HashSet<int>();
+        if (seasonId.HasValue)
+        {
+            try
+            {
+                using var db = new BocceDbContext();
+                configuredCourts = db.SeasonCourts.Where(s => s.SeasonId == seasonId.Value).Select(s => s.CourtId).ToHashSet();
+            }
+            catch { }
+        }
+        for (int i = 0; i < _courtsList.Items.Count; i++)
+            if (_courtsList.Items[i] is SlotItem ci) _courtsList.SetItemChecked(i, configuredCourts.Contains(ci.Id));
     }
 
     // ── Add Season ────────────────────────────────────────────────────────────
@@ -1201,12 +1267,16 @@ public class SeasonPanel : UserControl
 
             var selDayIds  = _daysList.CheckedItems.Cast<SlotItem>().Select(s => s.Id).ToHashSet();
             var selTimeIds = _timesList.CheckedItems.Cast<SlotItem>().Select(s => s.Id).ToHashSet();
+            var selCourtIds = _courtsList.CheckedItems.Cast<SlotItem>().Select(s => s.Id).ToHashSet();
             db.SeasonDaySlots.RemoveRange(db.SeasonDaySlots.Where(s => s.SeasonId == savedId));
             db.SeasonTimeSlots.RemoveRange(db.SeasonTimeSlots.Where(s => s.SeasonId == savedId));
+            db.SeasonCourts.RemoveRange(db.SeasonCourts.Where(s => s.SeasonId == savedId));
             foreach (var id in selDayIds)
                 db.SeasonDaySlots.Add(new SeasonDaySlot { SeasonId = savedId, DaySlotId = id });
             foreach (var id in selTimeIds)
                 db.SeasonTimeSlots.Add(new SeasonTimeSlot { SeasonId = savedId, TimeSlotId = id });
+            foreach (var id in selCourtIds)
+                db.SeasonCourts.Add(new SeasonCourt { SeasonId = savedId, CourtId = id });
             db.SaveChanges();
 
             if (season.IsCurrent)
@@ -1266,6 +1336,7 @@ public class SeasonPanel : UserControl
         SelectInList(savedId);
         LoadDivisions(savedId);
         LoadSeasonSlots(savedId);
+        LoadSeasonCourts(savedId);
         UpdateDeleteButtonState();
     }
 
@@ -1554,6 +1625,7 @@ public class SeasonPanel : UserControl
         MessageBox.Show(msg, "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
         LoadDivisions(seasonId);
         LoadSeasonSlots(seasonId);
+        LoadSeasonCourts(seasonId);
     }
 
     private void OnDeleteDivision(object? sender, EventArgs e)
