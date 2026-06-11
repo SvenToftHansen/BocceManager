@@ -14,7 +14,7 @@ public partial class MainForm : Form
         Players, Teams,
         ScoreEntry, Schedule,
         Standings, Playoffs,
-        SpareLists, Announcements, Fees, EmailLists, Documents, Parameters, Utilities, Theme
+        SpareLists, Announcements, Fees, EmailLists, Documents, Parameters, Courts, Utilities, Theme
     }
 
     private NavSection _currentSection = NavSection.Dashboard;
@@ -314,6 +314,7 @@ public partial class MainForm : Form
             add("Email Lists",    NavSection.EmailLists);
             add("Documents",      NavSection.Documents);
             add("Parameters",     NavSection.Parameters);
+            add("Courts",         NavSection.Courts);
         });
 
         AddGroup("UTILITIES", add => {
@@ -393,6 +394,7 @@ public partial class MainForm : Form
         NavSection.Teams      => new DivisionPanel(teamsOnly: true),
         NavSection.Documents  => new DocumentsPanel(),
         NavSection.Parameters => new ParametersPanel(),
+        NavSection.Courts     => new CourtPanel(),
         NavSection.Utilities  => new UtilitiesPanel(),
         NavSection.Theme      => new ThemePanel(),
         _ => new PlaceholderPanel(SectionTitle(section))
@@ -437,6 +439,7 @@ public partial class MainForm : Form
         NavSection.EmailLists    => "Email Lists",
         NavSection.Documents     => "Documents",
         NavSection.Parameters    => "Parameters",
+        NavSection.Courts        => "Courts",
         NavSection.Theme         => "Theme",
         _ => section.ToString()
     };
@@ -489,7 +492,16 @@ public partial class MainForm : Form
             // If no default season selected: disable Divisions and dependent sections
             // Otherwise: all enabled
 
-            var sectionsToEnable = new HashSet<NavSection> { NavSection.Dashboard, NavSection.Leagues };
+            var sectionsToEnable = new HashSet<NavSection>
+            {
+                NavSection.Dashboard,
+                NavSection.Leagues,
+                NavSection.Parameters,
+                NavSection.Documents,
+                NavSection.Courts,
+                NavSection.Utilities,
+                NavSection.Theme
+            };
             if (hasLeagues)
                 sectionsToEnable.Add(NavSection.Seasons);
             if (hasLeagues && hasSeasons && hasDefaultSeason)
@@ -505,10 +517,6 @@ public partial class MainForm : Form
                 sectionsToEnable.Add(NavSection.Announcements);
                 sectionsToEnable.Add(NavSection.Fees);
                 sectionsToEnable.Add(NavSection.EmailLists);
-                sectionsToEnable.Add(NavSection.Documents);
-                sectionsToEnable.Add(NavSection.Parameters);
-                sectionsToEnable.Add(NavSection.Utilities);
-                sectionsToEnable.Add(NavSection.Theme);
             }
 
             foreach (var section in _navItems.Keys)

@@ -1000,27 +1000,36 @@ public class PlayerPanel : UserControl
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"SavePlayer exception: {ex.Message}\n{ex.StackTrace}");
-            MessageBox.Show($"Unable to save player.\n\n{ex.Message}", "Players", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            string fullError = ex.Message;
+            if (ex.InnerException != null)
+                fullError += $"\n\nInner: {ex.InnerException.Message}";
+            System.Diagnostics.Debug.WriteLine($"SavePlayer exception: {fullError}\n{ex.StackTrace}");
+            MessageBox.Show($"Unable to save player.\n\n{fullError}", "Players", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
     private void ApplyLeagueListStatus(BocceDbContext db, Player player, List<(int LeagueId, int SeasonId)> lookingForTeamEntries, List<int> spareLeagueIds)
     {
-        // Remove all existing looking for teams for this player
+        // Build a map of existing LFT entries to preserve TeamIds
         var existingLft = db.LookingForTeams.Where(l => l.PlayerId == player.Id).ToList();
+        var preserveTeamIds = existingLft.ToDictionary(l => (l.LeagueId, l.SeasonId), l => l.TeamId);
+
+        // Remove all existing looking for teams for this player
         foreach (var lft in existingLft)
             db.LookingForTeams.Remove(lft);
 
-        // Add new looking for team entries with season binding
+        db.SaveChanges(); // Commit deletions before adding new entries
+
+        // Add new looking for team entries with season binding, preserving TeamIds
         foreach (var (leagueId, seasonId) in lookingForTeamEntries)
         {
+            int? preservedTeamId = preserveTeamIds.TryGetValue((leagueId, seasonId), out var teamId) ? teamId : null;
             db.LookingForTeams.Add(new LookingForTeam
             {
                 LeagueId = leagueId,
                 PlayerId = player.Id,
                 SeasonId = seasonId,
-                TeamId = null
+                TeamId = preservedTeamId
             });
         }
 

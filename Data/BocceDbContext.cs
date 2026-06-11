@@ -115,7 +115,7 @@ public class BocceDbContext : DbContext
         model.Entity<SeasonDaySlot>().HasIndex(e => new { e.SeasonId, e.DaySlotId }).IsUnique();
         model.Entity<SeasonTimeSlot>().HasIndex(e => new { e.SeasonId, e.TimeSlotId }).IsUnique();
         model.Entity<SpareList>().HasIndex(e => new { e.LeagueId, e.PlayerId }).IsUnique();
-        model.Entity<LookingForTeam>().HasIndex(e => new { e.LeagueId, e.PlayerId }).IsUnique();
+        model.Entity<LookingForTeam>().HasIndex(e => new { e.LeagueId, e.PlayerId, e.SeasonId }).IsUnique();
         model.Entity<SeasonFee>().HasIndex(e => new { e.PlayerId, e.SeasonId }).IsUnique();
         model.Entity<Team>().HasIndex(e => new { e.DivisionId, e.TeamLetter }).IsUnique();
         model.Entity<TeamPlayer>().HasIndex(e => new { e.TeamId, e.PlayerId }).IsUnique();

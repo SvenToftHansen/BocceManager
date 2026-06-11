@@ -3,9 +3,10 @@ namespace BocceManager.Data.Entities;
 public class Court
 {
     public int Id { get; set; }
-    public string CourtName { get; set; } = "";
-    public string? Description { get; set; }
+    public int CourtNumber { get; set; }
+    public string CourtLetter { get; set; } = "";
     public bool IsActive { get; set; } = true;
+    public string? Notes { get; set; }
 }
 
 public class TimeSlot

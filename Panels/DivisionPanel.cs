@@ -365,7 +365,7 @@ public class DivisionPanel : UserControl
         _teamsGrid.CellValueChanged   += OnTeamActiveChanged;
 
         // â”€â”€ Players sub-panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        var playerPanel = new Panel { Dock = DockStyle.Bottom, Height = 220, BackColor = AppTheme.ContentBackground };
+        var playerPanel = new Panel { Dock = DockStyle.Bottom, Height = 330, BackColor = AppTheme.ContentBackground };
 
         _playersGrid = new DataGridView
         {
@@ -433,8 +433,8 @@ public class DivisionPanel : UserControl
 
         var splitter = new Panel { Dock = DockStyle.Bottom, Height = 5, BackColor = AppTheme.Separator };
 
-        // Teams tab toolbar
-        var teamToolbar = new Panel { Dock = DockStyle.Bottom, Height = 48, BackColor = AppTheme.Surface, Padding = new Padding(12, 8, 12, 8) };
+        // Teams tab toolbar — two rows: buttons on row 1, hint on row 2
+        var teamToolbar = new Panel { Dock = DockStyle.Bottom, Height = 76, BackColor = AppTheme.Surface, Padding = new Padding(12, 8, 12, 8) };
         _btnAddTeam = new Button
         {
             Text = "+ Add Team", Location = new Point(12, 8), Size = new Size(120, 30),
@@ -470,10 +470,8 @@ public class DivisionPanel : UserControl
         var teamHint = new Label
         {
             Text = "Teams: A, B, C... auto-lettered. Delete re-sequences remaining.",
-            AutoSize = false,
-            Width = 350,
-            Height = 30,
-            Location = new Point(600, 12),
+            AutoSize = true,
+            Location = new Point(12, 44),
             Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted
         };
         teamToolbar.Controls.AddRange([_btnAddTeam, _btnBuildTeams, _btnDeleteTeam, _btnDeleteAllTeams, teamHint]);
@@ -554,7 +552,8 @@ public class DivisionPanel : UserControl
             _selectedLeagueId = AppParameterService.GetDefaultLeagueId(db);
             _selectedSeasonId = AppParameterService.GetDefaultSeasonId(db);
 
-            LoadSlotCombos();
+            if (!_teamsOnlyMode)
+                LoadSlotCombos();
             LoadDivisionList();
 
             // Force select first division in teams-only mode if divisions exist
@@ -590,15 +589,15 @@ public class DivisionPanel : UserControl
     {
         if (_isDirty || _isCreatingNew)
         {
-            _btnAdd.Visible = false;
+            _btnAdd.Visible = !_teamsOnlyMode && false;
             _btnCancel.Visible = true;
-            _btnDelete.Visible = false;
+            _btnDelete.Visible = !_teamsOnlyMode && false;
         }
         else
         {
-            _btnAdd.Visible = true;
+            _btnAdd.Visible = !_teamsOnlyMode;
             _btnCancel.Visible = false;
-            _btnDelete.Visible = true;
+            _btnDelete.Visible = !_teamsOnlyMode;
         }
     }
 
@@ -1131,6 +1130,7 @@ public class DivisionPanel : UserControl
         _btnDeleteTeam.Enabled = teamSelected;
         _btnDeleteAllTeams.Enabled = hasTeams;
         _btnAddPlayer.Enabled = teamSelected;
+        _btnDeleteAllPlayers.Enabled = teamSelected;
     }
 
     private void OnTeamSelected(object? sender, EventArgs e)
@@ -1821,6 +1821,7 @@ public class DivisionPanel : UserControl
         _cmbCaptain.Items.Clear();
         foreach (var item in playerItems) _cmbCaptain.Items.Add(item);
         _cmbCaptain.SelectedIndex = 0;
+        _cmbCaptain.Enabled = true;
         if (captainId.HasValue)
             for (int i = 0; i < _cmbCaptain.Items.Count; i++)
                 if (_cmbCaptain.Items[i] is IntItem ci && ci.Id == captainId.Value)
