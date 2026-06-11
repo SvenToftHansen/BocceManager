@@ -469,13 +469,12 @@ public class DivisionPanel : UserControl
 
         var teamHint = new Label
         {
-            Text = "Teams are lettered A, B, C... automatically. Deleting re-sequences the remaining teams.",
+            Text = "Teams: A, B, C... auto-lettered. Delete re-sequences remaining.",
             AutoSize = false,
-            Width = 400,
-            Height = 32,
-            Location = new Point(750, 10),
-            Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted,
-            Anchor = AnchorStyles.Top | AnchorStyles.Right
+            Width = 350,
+            Height = 30,
+            Location = new Point(600, 12),
+            Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted
         };
         teamToolbar.Controls.AddRange([_btnAddTeam, _btnBuildTeams, _btnDeleteTeam, _btnDeleteAllTeams, teamHint]);
 
@@ -557,6 +556,12 @@ public class DivisionPanel : UserControl
 
             LoadSlotCombos();
             LoadDivisionList();
+
+            // Force select first division in teams-only mode if divisions exist
+            if (_teamsOnlyMode && _lstDivisions.Items.Count > 0 && _lstDivisions.SelectedIndex < 0)
+            {
+                _lstDivisions.SelectedIndex = 0;
+            }
         }
         catch { }
         finally
@@ -628,7 +633,8 @@ public class DivisionPanel : UserControl
 
     private void FilterDivisionList()
     {
-        var query = _txtSearch.Text == "Search..." ? "" : _txtSearch.Text;
+        // Safely get search text, handling cases where _txtSearch might not be initialized
+        var query = (_txtSearch?.Text == "Search..." || string.IsNullOrEmpty(_txtSearch?.Text)) ? "" : _txtSearch.Text;
         var prev  = _lstDivisions.SelectedItem is ListItem sel ? sel.Id : (int?)null;
 
         _isLoadingData = true;
@@ -637,7 +643,7 @@ public class DivisionPanel : UserControl
             _lstDivisions.BeginUpdate();
             _lstDivisions.Items.Clear();
             foreach (var (id, display) in _allDivisions)
-                if (SearchQueryService.MatchesAnyTerm(display, query))
+                if (string.IsNullOrEmpty(query) || SearchQueryService.MatchesAnyTerm(display, query))
                     _lstDivisions.Items.Add(new ListItem(id, display));
             _lstDivisions.EndUpdate();
         }
