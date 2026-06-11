@@ -501,7 +501,8 @@ public class DivisionPanel : UserControl
         {
             Text = "+ Add Division", Location = new Point(12, 10), Size = new Size(140, 32),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
+            Visible = !_teamsOnlyMode
         };
         _btnAdd.Click += (_, _) => AddDivision();
 
@@ -510,7 +511,8 @@ public class DivisionPanel : UserControl
             Text = "Save Changes", Location = new Point(160, 10), Size = new Size(140, 32),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
-            Enabled = false
+            Enabled = false,
+            Visible = !_teamsOnlyMode
         };
         _btnSave.Click += (_, _) => SaveDivision();
 
@@ -529,7 +531,8 @@ public class DivisionPanel : UserControl
             Text = "Delete Division", Location = new Point(308, 10), Size = new Size(140, 32),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 0 }, Enabled = false
+            FlatAppearance = { BorderSize = 0 }, Enabled = false,
+            Visible = !_teamsOnlyMode
         };
         _btnDelete.Click += (_, _) => DeleteDivision();
 
