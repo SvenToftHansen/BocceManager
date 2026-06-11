@@ -1235,7 +1235,7 @@ public class DivisionPanel : UserControl
             var div = db.Divisions.Find(divId);
             if (div == null) return;
 
-            int currentCount = db.Teams.Count(t => t.DivisionId == divId && !t.IsByeTeam);
+            int currentCount = db.Teams.Count(t => t.DivisionId == divId);
             int maxTeams     = ResolveMaxTeams();
             if (maxTeams > 0 && currentCount >= maxTeams)
             {
@@ -1248,18 +1248,22 @@ public class DivisionPanel : UserControl
                 return;
             }
 
-            var existing = db.Teams.Where(t => t.DivisionId == divId && !t.IsByeTeam)
+            var existing = db.Teams.Where(t => t.DivisionId == divId)
                 .OrderBy(t => t.TeamLetter).ToList();
             char nextLetter = existing.Count > 0
                 ? (char)(existing.Max(t => string.IsNullOrEmpty(t.TeamLetter) ? 'A' - 1 : t.TeamLetter[0]) + 1)
                 : 'A';
 
+            var systemName = $"{nextLetter}-{div.ShortName}";
+            var sortOrder = $"{div.SortName}-{nextLetter}";
+
             db.Teams.Add(new Team
             {
                 DivisionId  = divId,
                 TeamLetter  = nextLetter.ToString(),
-                SystemName  = $"{nextLetter}-{div.ShortName}",
-                DisplayName = null,
+                SystemName  = systemName,
+                DisplayName = systemName,
+                SortOrder   = sortOrder,
                 IsActive    = true
             });
             db.SaveChanges();
@@ -1343,7 +1347,7 @@ public class DivisionPanel : UserControl
 
                 var teams = db.Teams
                     .Include(t => t.TeamPlayers)
-                    .Where(t => t.DivisionId == div.Id && !t.IsByeTeam)
+                    .Where(t => t.DivisionId == div.Id)
                     .OrderBy(t => t.TeamLetter)
                     .ToList();
 
@@ -1358,12 +1362,15 @@ public class DivisionPanel : UserControl
                     int toCreate = maxTeams - currentCount;
                     for (int i = 0; i < toCreate; i++)
                     {
+                        var systemName = $"{nextLetter}-{div.ShortName}";
+                        var sortOrder = $"{div.SortName}-{nextLetter}";
                         db.Teams.Add(new Team
                         {
                             DivisionId = div.Id,
                             TeamLetter = nextLetter.ToString(),
-                            SystemName = $"{nextLetter}-{div.ShortName}",
-                            DisplayName = null,
+                            SystemName = systemName,
+                            DisplayName = systemName,
+                            SortOrder = sortOrder,
                             IsActive = true
                         });
                         nextLetter++;
@@ -1571,9 +1578,9 @@ public class DivisionPanel : UserControl
             }
 
             var divisionIds = targetDivisions.Select(d => d.Id).ToList();
-            teamCount = db.Teams.Count(t => divisionIds.Contains(t.DivisionId) && !t.IsByeTeam);
+            teamCount = db.Teams.Count(t => divisionIds.Contains(t.DivisionId));
             playerCount = db.TeamPlayers.Count(tp => divisionIds.Contains(tp.Team.DivisionId));
-            captainCount = db.Teams.Count(t => divisionIds.Contains(t.DivisionId) && t.CaptainPlayerId.HasValue && !t.IsByeTeam);
+            captainCount = db.Teams.Count(t => divisionIds.Contains(t.DivisionId) && t.CaptainPlayerId.HasValue);
         }
         catch (Exception ex)
         {
@@ -1619,7 +1626,7 @@ public class DivisionPanel : UserControl
             var divisionIds = targetDivisions.Select(d => d.Id).ToList();
             var teams = db.Teams
                 .Include(t => t.TeamPlayers)
-                .Where(t => divisionIds.Contains(t.DivisionId) && !t.IsByeTeam)
+                .Where(t => divisionIds.Contains(t.DivisionId))
                 .ToList();
 
             foreach (var team in teams)
@@ -1731,9 +1738,11 @@ public class DivisionPanel : UserControl
 
     private void ResequenceTeams(int divisionId, BocceDbContext db)
     {
-        string divShortName = db.Divisions.Find(divisionId)?.ShortName ?? "";
+        var division = db.Divisions.Find(divisionId);
+        if (division == null) return;
+
         var teams = db.Teams
-            .Where(t => t.DivisionId == divisionId && !t.IsByeTeam)
+            .Where(t => t.DivisionId == divisionId)
             .OrderBy(t => t.TeamLetter)
             .ToList();
 
@@ -1741,12 +1750,17 @@ public class DivisionPanel : UserControl
         foreach (var team in teams)
         {
             team.TeamLetter = letter.ToString();
-            team.SystemName = $"{letter}-{divShortName}";
+            team.SystemName = $"{letter}-{division.ShortName}";
+            team.SortOrder = $"{division.SortName}-{letter}";
             if (team.CaptainPlayerId.HasValue)
             {
                 var captain = db.Players.Find(team.CaptainPlayerId.Value);
                 if (captain != null)
                     team.DisplayName = $"{letter}-{captain.LastName}";
+            }
+            else
+            {
+                team.DisplayName = team.SystemName;
             }
             letter++;
         }

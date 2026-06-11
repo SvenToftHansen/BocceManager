@@ -549,7 +549,7 @@ public class TeamPanel : UserControl
             {
                 using var db = new BocceDbContext();
                 _allTeams = db.Teams
-                    .Where(t => t.DivisionId == _selectedDivisionId.Value && !t.IsByeTeam)
+                    .Where(t => t.DivisionId == _selectedDivisionId.Value)
                     .OrderBy(t => t.TeamLetter)
                     .Select(t => new
                     {
@@ -1060,7 +1060,7 @@ public class TeamPanel : UserControl
             else
             {
                 team.CaptainPlayerId = null;
-                team.DisplayName = null;
+                team.DisplayName = team.SystemName;
             }
 
             db.SaveChanges();
@@ -1231,7 +1231,7 @@ public class TeamPanel : UserControl
                 var division = db.Divisions.Find(divId);
                 if (division == null) throw new Exception("Division not found.");
 
-                var existingTeams = db.Teams.Where(t => t.DivisionId == divId && !t.IsByeTeam)
+                var existingTeams = db.Teams.Where(t => t.DivisionId == divId)
                     .OrderBy(t => t.TeamLetter).ToList();
                 char nextLetter = existingTeams.Count > 0
                     ? (char)(existingTeams.Max(t => t.TeamLetter[0]) + 1)
@@ -1244,11 +1244,15 @@ public class TeamPanel : UserControl
                     return;
                 }
 
+                var systemName = $"{nextLetter}-{division.ShortName}";
+                var sortOrder = $"{division.SortName}-{nextLetter}";
                 team = new Team
                 {
                     DivisionId = divId,
                     TeamLetter = nextLetter.ToString(),
-                    SystemName = $"{nextLetter}-{division.ShortName}",
+                    SystemName = systemName,
+                    DisplayName = systemName,
+                    SortOrder = sortOrder,
                     IsActive = true
                 };
                 db.Teams.Add(team);
@@ -1360,7 +1364,7 @@ public class TeamPanel : UserControl
         if (division == null) return;
 
         var teams = db.Teams
-            .Where(t => t.DivisionId == divisionId && !t.IsByeTeam)
+            .Where(t => t.DivisionId == divisionId)
             .OrderBy(t => t.TeamLetter)
             .ToList();
 
@@ -1369,11 +1373,16 @@ public class TeamPanel : UserControl
         {
             team.TeamLetter = letter.ToString();
             team.SystemName = $"{letter}-{division.ShortName}";
+            team.SortOrder = $"{division.SortName}-{letter}";
             if (team.CaptainPlayerId.HasValue)
             {
                 var captain = db.Players.Find(team.CaptainPlayerId.Value);
                 if (captain != null)
                     team.DisplayName = $"{letter}-{captain.LastName}";
+            }
+            else
+            {
+                team.DisplayName = team.SystemName;
             }
             letter++;
         }

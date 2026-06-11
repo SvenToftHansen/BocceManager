@@ -6,14 +6,14 @@ public class Team
     public int DivisionId { get; set; }
     // Unique within division: A, B, C, ...
     public string TeamLetter { get; set; } = "";
+    // e.g. "1-09:00-A" (Division.SortOrder + "-" + TeamLetter)
+    public string SortOrder { get; set; } = "";
     // e.g. "A-MON-0900"
     public string SystemName { get; set; } = "";
     // Defaults to system_name; auto-updated to [Letter][CaptainLastName] when captain assigned
     public string? DisplayName { get; set; }
     public int? CaptainPlayerId { get; set; }
     public bool IsActive { get; set; } = true;
-    // TRUE only when division has odd active teams despite even teams_in_division
-    public bool IsByeTeam { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Division Division { get; set; } = null!;
