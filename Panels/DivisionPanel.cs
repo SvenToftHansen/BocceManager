@@ -470,8 +470,12 @@ public class DivisionPanel : UserControl
         var teamHint = new Label
         {
             Text = "Teams are lettered A, B, C... automatically. Deleting re-sequences the remaining teams.",
-            Location = new Point(562, 16), AutoSize = true,
-            Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted
+            AutoSize = false,
+            Width = 400,
+            Height = 32,
+            Location = new Point(750, 10),
+            Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted,
+            Anchor = AnchorStyles.Top | AnchorStyles.Right
         };
         teamToolbar.Controls.AddRange([_btnAddTeam, _btnBuildTeams, _btnDeleteTeam, _btnDeleteAllTeams, teamHint]);
 
