@@ -34,6 +34,7 @@ public class SeasonPanel : UserControl
     private ThemedNumericUpDown _numGamesPerSeason = null!;
     private DateTimePicker _dtpPlayoffStart   = null!;
     private CheckBox       _chkIsCurrent      = null!;
+    private CheckBox       _chkIsLocked       = null!;
     private ComboBox       _cmbStatus         = null!;
     private Label          _lblCreatedAt      = null!;
 
@@ -290,6 +291,11 @@ public class SeasonPanel : UserControl
         _chkIsCurrent = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary };
         _chkIsCurrent.CheckedChanged += (_, _) => MarkDirty();
         Add(_chkIsCurrent, Hint("Only one season per league can be current (★)", ix + 26, y + 4)); y += 38;
+
+        Add(Lbl("Is Locked", lx, y));
+        _chkIsLocked = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary };
+        _chkIsLocked.CheckedChanged += (_, _) => MarkDirty();
+        Add(_chkIsLocked, Hint("When locked: teams cannot be added/edited, divisions are read-only, score entry blocked", ix + 26, y + 4)); y += 38;
 
         Add(Lbl("Status", lx, y));
         _cmbStatus = new ComboBox { Location = new Point(ix, y), Width = 200, DropDownStyle = ComboBoxStyle.DropDownList, Font = AppTheme.FontDefault };
@@ -833,6 +839,7 @@ public class SeasonPanel : UserControl
 
             bool onlyOne = db.Seasons.Count(x => x.LeagueId == s.LeagueId) == 1;
             _chkIsCurrent.Checked    = s.IsCurrent || onlyOne;
+            _chkIsLocked.Checked     = s.IsLocked;
             SelStr(_cmbStatus, s.Status ?? "Setup");
             _lblCreatedAt.Text       = s.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
 
@@ -884,7 +891,7 @@ public class SeasonPanel : UserControl
         _dtpStartDate.Value = DateTime.Today;
         _numWeeks.Value = 0; _numGamesPerSeason.Value = 0;
         _dtpPlayoffStart.Checked = false;
-        _chkIsCurrent.Checked = false; _cmbStatus.SelectedIndex = 0; _lblCreatedAt.Text = "";
+        _chkIsCurrent.Checked = false; _chkIsLocked.Checked = false; _cmbStatus.SelectedIndex = 0; _lblCreatedAt.Text = "";
 
         _numMaxTeamsDiv.Value = 0;
         if (_cmbGameInterval.Items.Count > 0) _cmbGameInterval.SelectedIndex = 0;
@@ -1349,6 +1356,7 @@ public class SeasonPanel : UserControl
         s.PlayoffStartDate     = _dtpPlayoffStart.Checked ? DateOnly.FromDateTime(_dtpPlayoffStart.Value) : null;
         s.MaxTeamsInDivision   = (int)_numMaxTeamsDiv.Value;
         s.IsCurrent        = _chkIsCurrent.Checked;
+        s.IsLocked         = _chkIsLocked.Checked;
         s.Status           = StrVal(_cmbStatus) ?? "Setup";
         s.GameInterval     = StrVal(_cmbGameInterval)  ?? "weekly";
         s.TimeslotDriven   = _chkTimeslotDriven.Checked;

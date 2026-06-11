@@ -41,6 +41,7 @@ public class Season
     public int  MaxTeamsInDivision    { get; set; } = 0;
     // Setup | League Play | Playoff Play | Completed
     public string Status { get; set; } = "Setup";
+    public bool IsLocked { get; set; } = false;
     public DateOnly? PlayoffStartDate { get; set; }
     public DateOnly? PlayoffEndDate { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
