@@ -386,7 +386,7 @@ public class LeaguePanel : UserControl
         _seasonsGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "Divisions",  HeaderText = "Divisions",     FillWeight = 10, MinimumWidth = 70  });
         _seasonsGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "Teams",      HeaderText = "Teams",         FillWeight = 8,  MinimumWidth = 60  });
         _seasonsGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Current",    HeaderText = "Current",       FillWeight = 8,  MinimumWidth = 60  });
-        _seasonsGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Active",     HeaderText = "Active",        FillWeight = 8,  MinimumWidth = 60  });
+        _seasonsGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "Status",     HeaderText = "Status",        FillWeight = 10, MinimumWidth = 70  });
 
         _seasonsGrid.CellDoubleClick += OnSeasonDoubleClick;
 
