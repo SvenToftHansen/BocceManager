@@ -284,6 +284,13 @@ public partial class MainForm : Form
                 groupItems.Add(item);
             });
 
+            // Format items with tree structure
+            for (int i = 0; i < groupItems.Count; i++)
+            {
+                string prefix = i == groupItems.Count - 1 ? "  \u2514\u2500 " : "  \u251C\u2500 ";
+                groupItems[i].Text = prefix + groupItems[i].Text.Trim();
+            }
+
             _navGroups.Add((header, groupItems));
         }
 
