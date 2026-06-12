@@ -61,6 +61,11 @@ public class BocceDbContext : DbContext
     public DbSet<MatchTeamResult> MatchTeamResults => Set<MatchTeamResult>();
     public DbSet<Game> Games => Set<Game>();
 
+    // Schedule Templates
+    public DbSet<ScheduleTemplate>      ScheduleTemplates      => Set<ScheduleTemplate>();
+    public DbSet<ScheduleTemplateWeek>  ScheduleTemplateWeeks  => Set<ScheduleTemplateWeek>();
+    public DbSet<ScheduleTemplateMatch> ScheduleTemplateMatches => Set<ScheduleTemplateMatch>();
+
     // Standings
     public DbSet<TeamStanding> TeamStandings => Set<TeamStanding>();
 
@@ -120,6 +125,7 @@ public class BocceDbContext : DbContext
         model.Entity<Team>().HasIndex(e => new { e.DivisionId, e.TeamLetter }).IsUnique();
         model.Entity<TeamPlayer>().HasIndex(e => new { e.TeamId, e.PlayerId }).IsUnique();
         model.Entity<TeamStanding>().HasIndex(e => new { e.TeamId, e.DivisionId }).IsUnique();
+        model.Entity<ScheduleTemplate>().HasIndex(e => new { e.SeasonId, e.TeamCount }).IsUnique();
         model.Entity<EmailListMember>().HasIndex(e => new { e.EmailListId, e.PlayerId }).IsUnique();
         model.Entity<LeagueOfficial>().HasIndex(e => new { e.LeagueId, e.PlayerId }).IsUnique();
 

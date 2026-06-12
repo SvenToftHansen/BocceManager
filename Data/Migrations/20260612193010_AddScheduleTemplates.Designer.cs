@@ -3,6 +3,7 @@ using System;
 using BocceManager.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BocceManager.Data.Migrations
 {
     [DbContext(typeof(BocceDbContext))]
-    partial class BocceDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260612193010_AddScheduleTemplates")]
+    partial class AddScheduleTemplates
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1049,86 +1052,6 @@ namespace BocceManager.Data.Migrations
                     b.ToTable("ScheduleWeeks");
                 });
 
-            modelBuilder.Entity("BocceManager.Data.Entities.ScheduleTemplate", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("GeneratedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("SeasonId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("TeamCount")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("WeekCount")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex(new[] { "SeasonId", "TeamCount" }, "IX_ScheduleTemplates_SeasonId_TeamCount")
-                        .IsUnique();
-
-                    b.ToTable("ScheduleTemplates");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.ScheduleTemplateMatch", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("CourtId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Slot1")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Slot2")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("TemplateWeekId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CourtId");
-
-                    b.HasIndex("TemplateWeekId");
-
-                    b.ToTable("ScheduleTemplateMatches");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.ScheduleTemplateWeek", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("TemplateId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("WeekNumber")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TemplateId");
-
-                    b.ToTable("ScheduleTemplateWeeks");
-                });
-
             modelBuilder.Entity("BocceManager.Data.Entities.Season", b =>
                 {
                     b.Property<int>("Id")
@@ -1903,47 +1826,6 @@ namespace BocceManager.Data.Migrations
                     b.Navigation("Match");
                 });
 
-            modelBuilder.Entity("BocceManager.Data.Entities.ScheduleTemplate", b =>
-                {
-                    b.HasOne("BocceManager.Data.Entities.Season", "Season")
-                        .WithMany()
-                        .HasForeignKey("SeasonId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Season");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.ScheduleTemplateMatch", b =>
-                {
-                    b.HasOne("BocceManager.Data.Entities.Court", "Court")
-                        .WithMany()
-                        .HasForeignKey("CourtId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("BocceManager.Data.Entities.ScheduleTemplateWeek", "TemplateWeek")
-                        .WithMany("Matches")
-                        .HasForeignKey("TemplateWeekId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Court");
-
-                    b.Navigation("TemplateWeek");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.ScheduleTemplateWeek", b =>
-                {
-                    b.HasOne("BocceManager.Data.Entities.ScheduleTemplate", "Template")
-                        .WithMany("Weeks")
-                        .HasForeignKey("TemplateId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Template");
-                });
-
             modelBuilder.Entity("BocceManager.Data.Entities.InitiationFee", b =>
                 {
                     b.HasOne("BocceManager.Data.Entities.Player", "Player")
@@ -2492,16 +2374,6 @@ namespace BocceManager.Data.Migrations
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.ScheduleWeek", b =>
-                {
-                    b.Navigation("Matches");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.ScheduleTemplate", b =>
-                {
-                    b.Navigation("Weeks");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.ScheduleTemplateWeek", b =>
                 {
                     b.Navigation("Matches");
                 });

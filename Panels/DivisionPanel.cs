@@ -942,6 +942,17 @@ public class DivisionPanel : UserControl
             return;
         }
 
+        // Teams in division must be 0 (inherit) or one of 4, 6, 8
+        int teamsInDivValue = (int)_numTeamsInDiv.Value;
+        if (teamsInDivValue != 0 && teamsInDivValue != 4 && teamsInDivValue != 6 && teamsInDivValue != 8)
+        {
+            MessageBox.Show(
+                "Teams in Division must be 4, 6, or 8 (or 0 to inherit from season/league).\n\n" +
+                $"You entered {teamsInDivValue}.",
+                "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
         // Check for duplicate division names in the same season
         try
         {
