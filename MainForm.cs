@@ -265,8 +265,8 @@ public partial class MainForm : Form
             {
                 var item = new Label
                 {
-                    Text = "    • " + text,
-                    Width = 220, Height = 40,
+                    Text = "        ● " + text,
+                    Width = 220, Height = 32,
                     ForeColor = AppTheme.NavText,
                     BackColor = AppTheme.NavBackground,
                     TextAlign = ContentAlignment.MiddleLeft,
