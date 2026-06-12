@@ -11,7 +11,6 @@ public class SchedulePanel : UserControl
     // ── State ──────────────────────────────────────────────────────────────────
     private int? _selectedSeasonId;
     private int? _selectedTemplateId;
-    private bool _isEditingCourt = false;
 
     // ── Left panel ─────────────────────────────────────────────────────────────
     private ListBox _lstTemplates = null!;
@@ -19,18 +18,17 @@ public class SchedulePanel : UserControl
     // ── Toolbar ────────────────────────────────────────────────────────────────
     private Button _btnGenerate = null!;
     private Button _btnDelete   = null!;
-    private Label  _lblStatus   = null!;
 
     // ── Right panel ────────────────────────────────────────────────────────────
     private Label         _lblTemplateTitle = null!;
+    private Label         _lblStatus        = null!;
     private DataGridView  _grid             = null!;
-    private DataGridViewTextBoxColumn  _colWeek   = null!;
-    private DataGridViewTextBoxColumn  _colSlot1  = null!;
-    private DataGridViewTextBoxColumn  _colVs     = null!;
-    private DataGridViewTextBoxColumn  _colSlot2  = null!;
-    private DataGridViewComboBoxColumn _colCourt  = null!;
+    private DataGridViewTextBoxColumn  _colWeek  = null!;
+    private DataGridViewTextBoxColumn  _colSlot1 = null!;
+    private DataGridViewTextBoxColumn  _colVs    = null!;
+    private DataGridViewTextBoxColumn  _colSlot2 = null!;
+    private DataGridViewComboBoxColumn _colCourt = null!;
 
-    // court lookup for the combo column
     private List<(int Id, string Display)> _seasonCourts = [];
 
     public SchedulePanel()
@@ -55,7 +53,7 @@ public class SchedulePanel : UserControl
 
     private void BuildUI()
     {
-        // Outer table: left list (220px) + right detail (fill)
+        // Outer: 2 columns — left list (220px) | right detail (fill)
         var outer = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -69,22 +67,33 @@ public class SchedulePanel : UserControl
         outer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         Controls.Add(outer);
 
-        // ── Left panel ──────────────────────────────────────────────────────────
-        var left = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
-        outer.Controls.Add(left, 0, 0);
+        // ── Left panel: 3 rows (header | list | toolbar) ──────────────────────
+        var leftLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 3,
+            BackColor = AppTheme.Surface,
+            Padding = Padding.Empty,
+            Margin  = Padding.Empty,
+            CellBorderStyle = TableLayoutPanelCellBorderStyle.None
+        };
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));   // header
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));   // list
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));   // toolbar
+        outer.Controls.Add(leftLayout, 0, 0);
 
         var lblHeader = new Label
         {
             Text = "Templates",
-            Dock = DockStyle.Top,
-            Height = 36,
+            Dock = DockStyle.Fill,
             ForeColor = AppTheme.TextPrimary,
             BackColor = AppTheme.Surface,
             TextAlign = ContentAlignment.MiddleLeft,
             Padding = new Padding(8, 0, 0, 0),
             Font = new Font("Segoe UI", 11f, FontStyle.Bold)
         };
-        left.Controls.Add(lblHeader);
+        leftLayout.Controls.Add(lblHeader, 0, 0);
 
         _lstTemplates = new ListBox
         {
@@ -93,16 +102,14 @@ public class SchedulePanel : UserControl
             ForeColor = AppTheme.TextPrimary,
             Font = new Font("Segoe UI", 10f),
             BorderStyle = BorderStyle.None,
-            ItemHeight = 28
+            IntegralHeight = false
         };
         _lstTemplates.SelectedIndexChanged += OnTemplateSelected;
-        left.Controls.Add(_lstTemplates);
+        leftLayout.Controls.Add(_lstTemplates, 0, 1);
 
-        // toolbar at bottom of left panel
         var leftToolbar = new Panel
         {
-            Dock = DockStyle.Bottom,
-            Height = 48,
+            Dock = DockStyle.Fill,
             BackColor = AppTheme.Separator,
             Padding = new Padding(8)
         };
@@ -116,46 +123,48 @@ public class SchedulePanel : UserControl
         _btnDelete.Enabled = false;
         _btnDelete.Location = new Point(_btnGenerate.Right + 8, 8);
         leftToolbar.Controls.Add(_btnDelete);
+        leftLayout.Controls.Add(leftToolbar, 0, 2);
 
-        left.Controls.Add(leftToolbar);
-
-        // ── Right panel ─────────────────────────────────────────────────────────
-        var right = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground };
-        outer.Controls.Add(right, 1, 0);
-
-        // Status bar at top
-        var topBar = new Panel
-        {
-            Dock = DockStyle.Top,
-            Height = 40,
-            BackColor = AppTheme.Surface,
-            Padding = new Padding(10, 0, 10, 0)
-        };
-        _lblStatus = new Label
+        // ── Right panel: 3 rows (title | status | grid) ───────────────────────
+        var rightLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ForeColor = AppTheme.TextSecondary,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font("Segoe UI", 9.5f),
-            Text = "Select a template on the left, or click Generate."
+            ColumnCount = 1,
+            RowCount = 3,
+            BackColor = AppTheme.ContentBackground,
+            Padding = Padding.Empty,
+            Margin  = Padding.Empty,
+            CellBorderStyle = TableLayoutPanelCellBorderStyle.None
         };
-        topBar.Controls.Add(_lblStatus);
-        right.Controls.Add(topBar);
+        rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));  // title
+        rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));  // status
+        rightLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // grid
+        outer.Controls.Add(rightLayout, 1, 0);
 
         _lblTemplateTitle = new Label
         {
-            Dock = DockStyle.Top,
-            Height = 32,
+            Dock = DockStyle.Fill,
             ForeColor = AppTheme.TextPrimary,
-            BackColor = AppTheme.ContentBackground,
+            BackColor = AppTheme.Surface,
             TextAlign = ContentAlignment.MiddleLeft,
             Padding = new Padding(10, 0, 0, 0),
             Font = new Font("Segoe UI", 11f, FontStyle.Bold),
             Text = ""
         };
-        right.Controls.Add(_lblTemplateTitle);
+        rightLayout.Controls.Add(_lblTemplateTitle, 0, 0);
 
-        // Grid
+        _lblStatus = new Label
+        {
+            Dock = DockStyle.Fill,
+            ForeColor = AppTheme.TextSecondary,
+            BackColor = AppTheme.ContentBackground,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(10, 0, 0, 0),
+            Font = new Font("Segoe UI", 9.5f),
+            Text = "Select a template on the left, or click Generate."
+        };
+        rightLayout.Controls.Add(_lblStatus, 0, 1);
+
         _grid = new DataGridView
         {
             Dock = DockStyle.Fill,
@@ -174,7 +183,7 @@ public class SchedulePanel : UserControl
                 BackColor = AppTheme.Surface,
                 ForeColor = AppTheme.TextPrimary,
                 SelectionBackColor = AppTheme.NavSelected,
-                SelectionForeColor = AppTheme.TextPrimary
+                SelectionForeColor = AppTheme.NavText
             },
             ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
             {
@@ -185,24 +194,25 @@ public class SchedulePanel : UserControl
             EnableHeadersVisualStyles = false,
             ColumnHeadersHeight = 30
         };
+        _grid.DataError += (_, e) => e.Cancel = true;
 
-        _colWeek  = new DataGridViewTextBoxColumn { Name = "Week",  HeaderText = "Week",  ReadOnly = true, FillWeight = 10 };
-        _colSlot1 = new DataGridViewTextBoxColumn { Name = "Slot1", HeaderText = "Team 1 Slot", ReadOnly = true, FillWeight = 20 };
-        _colVs    = new DataGridViewTextBoxColumn { Name = "Vs",    HeaderText = "vs",    ReadOnly = true, FillWeight = 8 };
-        _colSlot2 = new DataGridViewTextBoxColumn { Name = "Slot2", HeaderText = "Team 2 Slot", ReadOnly = true, FillWeight = 20 };
+        _colWeek  = new DataGridViewTextBoxColumn { Name = "Week",  HeaderText = "Week",       ReadOnly = true, FillWeight = 8  };
+        _colSlot1 = new DataGridViewTextBoxColumn { Name = "Slot1", HeaderText = "Team 1 Slot", ReadOnly = true, FillWeight = 18 };
+        _colVs    = new DataGridViewTextBoxColumn { Name = "Vs",    HeaderText = "",            ReadOnly = true, FillWeight = 6  };
+        _colSlot2 = new DataGridViewTextBoxColumn { Name = "Slot2", HeaderText = "Team 2 Slot", ReadOnly = true, FillWeight = 18 };
         _colCourt = new DataGridViewComboBoxColumn
         {
             Name = "Court",
             HeaderText = "Court",
-            FillWeight = 25,
+            FillWeight = 30,
             FlatStyle = FlatStyle.Flat,
             DisplayStyleForCurrentCellOnly = true
         };
 
         _grid.Columns.AddRange(_colWeek, _colSlot1, _colVs, _colSlot2, _colCourt);
-        _grid.CellValueChanged    += OnCourtCellChanged;
+        _grid.CellValueChanged += OnCourtCellChanged;
         _grid.CurrentCellDirtyStateChanged += OnCellDirty;
-        right.Controls.Add(_grid);
+        rightLayout.Controls.Add(_grid, 0, 2);
     }
 
     // ── Data loading ───────────────────────────────────────────────────────────
@@ -221,11 +231,12 @@ public class SchedulePanel : UserControl
                     .Where(sc => sc.SeasonId == _selectedSeasonId.Value)
                     .Include(sc => sc.Court)
                     .OrderBy(sc => sc.Court.CourtNumber)
-                    .Select(sc => new { sc.CourtId, Display = sc.Court.CourtLetter != ""
-                        ? $"Court {sc.Court.CourtNumber} ({sc.Court.CourtLetter})"
-                        : $"Court {sc.Court.CourtNumber}" })
                     .AsEnumerable()
-                    .Select(x => (x.CourtId, x.Display))
+                    .Select(sc => (
+                        sc.CourtId,
+                        Display: sc.Court.CourtLetter != ""
+                            ? $"Court {sc.Court.CourtNumber} ({sc.Court.CourtLetter})"
+                            : $"Court {sc.Court.CourtNumber}"))
                     .ToList();
             }
         }
@@ -260,6 +271,7 @@ public class SchedulePanel : UserControl
         }
 
         _lstTemplates.SelectedIndexChanged += OnTemplateSelected;
+        _lstTemplates.Refresh();
 
         if (_lstTemplates.Items.Count == 0)
         {
@@ -286,16 +298,35 @@ public class SchedulePanel : UserControl
             using var db = new BocceDbContext();
             var rows = ScheduleTemplateService.GetTemplateRows(db, templateId);
 
+            // Ensure court combo has items for all courts that appear in this template
+            var templateCourtIds = rows.Select(r => r.CourtId).Distinct().ToHashSet();
+            foreach (int cid in templateCourtIds)
+            {
+                if (_seasonCourts.All(c => c.Id != cid))
+                {
+                    // Court from template is no longer in season courts — add placeholder
+                    string placeholder = $"Court #{cid}";
+                    if (!_colCourt.Items.Contains(placeholder))
+                        _colCourt.Items.Add(placeholder);
+                }
+            }
+
             foreach (var r in rows)
             {
-                int courtDisplayIdx = _seasonCourts.FindIndex(c => c.Id == r.CourtId);
-                string courtDisplay = courtDisplayIdx >= 0 ? _seasonCourts[courtDisplayIdx].Display : $"Court #{r.CourtId}";
+                var courtEntry = _seasonCourts.FirstOrDefault(c => c.Id == r.CourtId);
+                string courtDisplay = courtEntry != default
+                    ? courtEntry.Display
+                    : $"Court #{r.CourtId}";
 
                 int rowIdx = _grid.Rows.Add(r.WeekNumber, r.Slot1, "vs", r.Slot2, courtDisplay);
                 _grid.Rows[rowIdx].Tag = r;
             }
 
-            _lblStatus.Text = $"{rows.Count} matches across {rows.Select(r => r.WeekNumber).Distinct().Count()} weeks. Court column is editable.";
+            if (_grid.Rows.Count > 0)
+                _grid.FirstDisplayedScrollingRowIndex = 0;
+
+            int weekCount = rows.Select(r => r.WeekNumber).Distinct().Count();
+            _lblStatus.Text = $"{rows.Count} matches across {weekCount} weeks. Edit the Court column to reassign courts.";
         }
         catch (Exception ex)
         {
@@ -333,7 +364,9 @@ public class SchedulePanel : UserControl
 
         if (_seasonCourts.Count == 0)
         {
-            MessageBox.Show("This season has no courts configured.\n\nGo to Administration → Courts to add courts, then use Season settings to assign them to this season.",
+            MessageBox.Show(
+                "This season has no courts configured.\n\n" +
+                "Go to Administration → Courts to add courts, then assign them to this season in Season settings.",
                 "Generate Templates", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
@@ -342,66 +375,58 @@ public class SchedulePanel : UserControl
         {
             using var db = new BocceDbContext();
 
-            // Find distinct team counts across all divisions in this season
-            var teamCounts = db.Divisions
+            var divCounts = db.Divisions
                 .Where(d => d.SeasonId == _selectedSeasonId.Value && d.TeamsInDivision > 0)
                 .Select(d => d.TeamsInDivision)
                 .Distinct()
-                .OrderBy(n => n)
                 .ToList();
 
-            // Also check season default
             var season = db.Seasons.Find(_selectedSeasonId.Value);
-            if (season?.MaxTeamsInDivision > 0 && !teamCounts.Contains(season.MaxTeamsInDivision))
-                teamCounts.Add(season.MaxTeamsInDivision);
+            if (season?.MaxTeamsInDivision > 0 && !divCounts.Contains(season.MaxTeamsInDivision))
+                divCounts.Add(season.MaxTeamsInDivision);
 
-            var invalidCounts = teamCounts.Where(n => !ScheduleTemplateService.ValidTeamCounts.Contains(n)).ToList();
-            if (invalidCounts.Any())
+            var invalid = divCounts.Where(n => !ScheduleTemplateService.ValidTeamCounts.Contains(n)).ToList();
+            if (invalid.Any())
             {
                 MessageBox.Show(
-                    $"Some divisions have invalid team counts: {string.Join(", ", invalidCounts)}.\n\n" +
-                    "Only 4, 6, and 8 are supported. Fix the divisions first.",
+                    $"Some divisions have invalid team counts: {string.Join(", ", invalid)}.\n\nOnly 4, 6, and 8 are supported.",
                     "Generate Templates", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            if (teamCounts.Count == 0)
+            if (divCounts.Count == 0)
             {
-                MessageBox.Show("No divisions with a teams-in-division value found for this season.\n\n" +
-                    "Set the Teams in Division on each division (or the season default) before generating templates.",
+                MessageBox.Show(
+                    "No divisions with a teams-in-division value found for this season.\n\n" +
+                    "Set Teams in Division on each division (or the season default) before generating.",
                     "Generate Templates", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            // Check season has week count
             int weekCount = (season?.WeeksInSeason > 0 ? season.WeeksInSeason : season?.GamesPerSeason) ?? 0;
             if (weekCount <= 0)
             {
-                MessageBox.Show("Season must have Weeks in Season or Games Per Season set before generating templates.",
+                MessageBox.Show("Season must have Weeks in Season or Games Per Season set before generating.",
                     "Generate Templates", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            // Confirm replacement if templates already exist
-            var existingCounts = db.ScheduleTemplates
+            var existing = db.ScheduleTemplates
                 .Where(t => t.SeasonId == _selectedSeasonId.Value)
-                .Select(t => t.TeamCount)
-                .ToList();
-            var toReplace = teamCounts.Intersect(existingCounts).ToList();
-
+                .Select(t => t.TeamCount).ToList();
+            var toReplace = divCounts.Intersect(existing).ToList();
             if (toReplace.Any())
             {
-                string msg = $"Templates for the following team counts already exist and will be replaced:\n\n" +
-                             $"{string.Join(", ", toReplace.Select(n => $"{n}-team"))}\n\n" +
-                             $"Continue?";
+                string msg = "Templates already exist for:\n\n" +
+                             string.Join("\n", toReplace.Select(n => $"  • {n}-team")) +
+                             "\n\nThey will be replaced. Continue?";
                 if (MessageBox.Show(msg, "Generate Templates", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                     return;
             }
 
             var generated = new List<string>();
             var errors    = new List<string>();
-
-            foreach (int tc in teamCounts)
+            foreach (int tc in divCounts.OrderBy(n => n))
             {
                 try
                 {
@@ -414,15 +439,9 @@ public class SchedulePanel : UserControl
                 }
             }
 
-            string summary = generated.Any()
-                ? $"Generated:\n  • {string.Join("\n  • ", generated)}"
-                : "";
-            string errSummary = errors.Any()
-                ? $"\n\nErrors:\n  • {string.Join("\n  • ", errors)}"
-                : "";
-
-            MessageBox.Show(summary + errSummary,
-                "Generate Templates", MessageBoxButtons.OK,
+            string body = (generated.Any() ? "Generated:\n" + string.Join("\n", generated.Select(s => $"  • {s}")) : "")
+                        + (errors.Any() ? "\n\nErrors:\n" + string.Join("\n", errors.Select(s => $"  • {s}")) : "");
+            MessageBox.Show(body.Trim(), "Generate Templates", MessageBoxButtons.OK,
                 errors.Any() ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
         }
         catch (Exception ex)
@@ -436,8 +455,6 @@ public class SchedulePanel : UserControl
 
     private void OnDelete(object? sender, EventArgs e)
     {
-        if (!_selectedTemplateId.HasValue) return;
-
         if (_lstTemplates.SelectedItem is not TemplateItem item) return;
 
         if (MessageBox.Show(
@@ -481,9 +498,7 @@ public class SchedulePanel : UserControl
         {
             using var db = new BocceDbContext();
             ScheduleTemplateService.UpdateMatchCourt(db, row.MatchId, courtEntry.Id);
-            _lblStatus.Text = $"Court updated for Week {row.WeekNumber}, {row.Slot1} vs {row.Slot2}.";
-
-            // Update the row tag with the new court id
+            _lblStatus.Text = $"Court updated — Week {row.WeekNumber}, {row.Slot1} vs {row.Slot2}.";
             _grid.Rows[e.RowIndex].Tag = row with { CourtId = courtEntry.Id };
         }
         catch (Exception ex)
@@ -509,9 +524,9 @@ public class SchedulePanel : UserControl
 
     private sealed class TemplateItem(int id, int teamCount, int weekCount, DateTime generatedAt)
     {
-        public int Id          { get; } = id;
-        public int TeamCount   { get; } = teamCount;
-        public int WeekCount   { get; } = weekCount;
+        public int Id           { get; } = id;
+        public int TeamCount    { get; } = teamCount;
+        public int WeekCount    { get; } = weekCount;
         public DateTime GeneratedAt { get; } = generatedAt;
         public override string ToString() => $"{TeamCount}-Team  ({WeekCount} wks)";
     }
