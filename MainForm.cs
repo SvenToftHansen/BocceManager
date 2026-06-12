@@ -22,6 +22,7 @@ public partial class MainForm : Form
     private readonly List<(Label Header, List<Label> Items)> _navGroups = [];
     private int _openGroupIndex = -1;
     private UserControl? _currentPanel;
+    private Panel? _navDrawingPanel;
 
     private List<(int Id, string Name)> _topBarLeagues = [];
     private List<(int Id, string Name)> _topBarSeasons = [];
@@ -217,6 +218,15 @@ public partial class MainForm : Form
         };
         pnlNav.Controls.Add(flow);
 
+        // Create drawing panel for tree lines (will be added at the end)
+        _navDrawingPanel = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+            Padding = new Padding(0)
+        };
+
         void AddStandaloneItem(string text, NavSection section)
         {
             var item = new Label
@@ -284,13 +294,6 @@ public partial class MainForm : Form
                 groupItems.Add(item);
             });
 
-            // Format items with tree structure
-            for (int i = 0; i < groupItems.Count; i++)
-            {
-                string prefix = i == groupItems.Count - 1 ? "  \u2514\u2500 " : "  \u251C\u2500 ";
-                groupItems[i].Text = prefix + groupItems[i].Text.Trim();
-            }
-
             _navGroups.Add((header, groupItems));
         }
 
@@ -328,6 +331,13 @@ public partial class MainForm : Form
             add("Backup",         NavSection.Utilities);
             add("Theme",          NavSection.Theme);
         });
+
+        // Add drawing panel on top of flow panel
+        if (_navDrawingPanel != null)
+        {
+            _navDrawingPanel.Paint += (s, e) => DrawNavigationTree(e, flow);
+            pnlNav.Controls.Add(_navDrawingPanel);
+        }
     }
 
     private void ToggleGroup(int index)
@@ -351,7 +361,62 @@ public partial class MainForm : Form
             _openGroupIndex = index;
         }
 
-        pnlNav.Refresh();
+        if (_navDrawingPanel != null)
+            _navDrawingPanel.Invalidate();
+    }
+
+    private void DrawNavigationTree(PaintEventArgs e, FlowLayoutPanel flow)
+    {
+        using var pen = new Pen(Color.Yellow, 2f);
+
+        int groupIndex = 0;
+        foreach (var (header, items) in _navGroups)
+        {
+            // Only draw if group is open
+            if (groupIndex != _openGroupIndex)
+            {
+                groupIndex++;
+                continue;
+            }
+
+            // Find header position in the drawing panel's coordinate system
+            var headerPosInFlow = header.Location;
+            var headerY = headerPosInFlow.Y + header.Height / 2; // Middle of header
+
+            // Get first and last visible items
+            var visibleItems = items.Where(i => i.Visible).ToList();
+            if (visibleItems.Count == 0)
+            {
+                groupIndex++;
+                continue;
+            }
+
+            var firstItem = visibleItems[0];
+            var lastItem = visibleItems[visibleItems.Count - 1];
+
+            var firstItemPosInFlow = firstItem.Location;
+            var lastItemPosInFlow = lastItem.Location;
+
+            int firstItemY = firstItemPosInFlow.Y + firstItem.Height / 2;
+            int lastItemY = lastItemPosInFlow.Y + lastItem.Height / 2;
+
+            // Vertical line position (20px from left, align with arrow)
+            int verticalLineX = 20;
+            int connectorLength = 15; // Length of horizontal connectors
+
+            // Draw vertical line from first item to last item
+            e.Graphics.DrawLine(pen, verticalLineX, firstItemY, verticalLineX, lastItemY);
+
+            // Draw horizontal connectors to each visible item
+            foreach (var item in visibleItems)
+            {
+                var itemPosInFlow = item.Location;
+                int itemY = itemPosInFlow.Y + item.Height / 2;
+                e.Graphics.DrawLine(pen, verticalLineX, itemY, verticalLineX + connectorLength, itemY);
+            }
+
+            groupIndex++;
+        }
     }
 
     private void ExpandGroupContaining(NavSection section)
