@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner">
+  <Description>Lists all teams and rosters for the current season, organized by division and time slot.</Description>
+  <Author>Bocce Manager</Author>
+  <PageHeight>11in</PageHeight>
+  <PageWidth>8.5in</PageWidth>
+  <Width>7.5in</Width>
+  <TopMargin>0.5in</TopMargin>
+  <LeftMargin>0.5in</LeftMargin>
+  <RightMargin>0.5in</RightMargin>
+  <BottomMargin>0.5in</BottomMargin>
+  <rd:ReportID>b1fc5e73-1f70-4f0d-8329-71b46a5e8de5</rd:ReportID>
+  <ReportParameters>
+    <ReportParameter Name="SeasonId">
+      <DataType>Integer</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>1</Value>
+        </Values>
+      </DefaultValue>
+    </ReportParameter>
+  </ReportParameters>
+  <DataSources>
+    <DataSource Name="BocceDb">
+      <ConnectionProperties>
+        <DataProvider>SQL</DataProvider>
+        <ConnectString />
+      </ConnectionProperties>
+      <rd:SecurityType>Integrated</rd:SecurityType>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="Teams">
+      <Query>
+        <DataSourceName>BocceDb</DataSourceName>
+        <CommandText>SELECT t.Id, t.TeamLetter, d.Name as DivisionName FROM Teams t INNER JOIN Divisions d ON t.DivisionId = d.Id WHERE d.SeasonId = @SeasonId</CommandText>
+        <QueryParameters>
+          <QueryParameter Name="@SeasonId">
+            <Value>=Parameters!SeasonId.Value</Value>
+          </QueryParameter>
+        </QueryParameters>
+      </Query>
+      <Fields>
+        <Field Name="Id">
+          <DataField>Id</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="TeamLetter">
+          <DataField>TeamLetter</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="DivisionName">
+          <DataField>DivisionName</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+  </DataSets>
+  <Body>
+    <ReportItems>
+      <Textbox Name="ReportTitle">
+        <CanGrow>true</CanGrow>
+        <CanShrink>false</CanShrink>
+        <Height>0.5in</Height>
+        <Width>7.5in</Width>
+        <Value>Team Listing Report</Value>
+        <Style>
+          <FontSize>16pt</FontSize>
+          <FontWeight>Bold</FontWeight>
+        </Style>
+      </Textbox>
+      <Tablix Name="Tablix1">
+        <TablixBody>
+          <TablixRows>
+            <TablixRow>
+              <Height>0.25in</Height>
+              <TablixCells>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Team">
+                      <CanGrow>true</CanGrow>
+                      <CanShrink>false</CanShrink>
+                      <ParagraphStyle>
+                        <TextAligns>Left</TextAligns>
+                      </ParagraphStyle>
+                      <Value>=Fields!TeamLetter.Value</Value>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Division">
+                      <CanGrow>true</CanGrow>
+                      <CanShrink>false</CanShrink>
+                      <ParagraphStyle>
+                        <TextAligns>Left</TextAligns>
+                      </ParagraphStyle>
+                      <Value>=Fields!DivisionName.Value</Value>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+              </TablixCells>
+            </TablixRow>
+          </TablixRows>
+        </TablixBody>
+        <TablixColumnHierarchy>
+          <TablixMembers>
+            <TablixMember>
+              <Width>1in</Width>
+            </TablixMember>
+            <TablixMember>
+              <Width>2in</Width>
+            </TablixMember>
+          </TablixMembers>
+        </TablixColumnHierarchy>
+        <TablixRowHierarchy>
+          <TablixMembers>
+            <TablixMember>
+              <Group Name="Details" />
+              <TablixHeader>
+                <Size>0.25in</Size>
+                <CellContents>
+                  <Textbox Name="TeamHeader">
+                    <CanGrow>true</CanGrow>
+                    <Value>Team</Value>
+                    <Style>
+                      <FontWeight>Bold</FontWeight>
+                      <BackgroundColor>LightGrey</BackgroundColor>
+                    </Style>
+                  </Textbox>
+                </CellContents>
+              </TablixHeader>
+              <TablixHeader>
+                <Size>0.25in</Size>
+                <CellContents>
+                  <Textbox Name="DivisionHeader">
+                    <CanGrow>true</CanGrow>
+                    <Value>Division</Value>
+                    <Style>
+                      <FontWeight>Bold</FontWeight>
+                      <BackgroundColor>LightGrey</BackgroundColor>
+                    </Style>
+                  </Textbox>
+                </CellContents>
+              </TablixHeader>
+            </TablixMember>
+          </TablixMembers>
+        </TablixRowHierarchy>
+        <DataSetName>Teams</DataSetName>
+        <Height>0.75in</Height>
+        <Width>3in</Width>
+        <Top>0.6in</Top>
+        <Left>0in</Left>
+      </Tablix>
+    </ReportItems>
+  </Body>
+</Report>

@@ -310,6 +310,32 @@ public static class DatabaseInitializer
             );
         }
 
+        // Initialize reports if empty
+        if (!db.Reports.Any())
+        {
+            var reports = new[]
+            {
+                new Report
+                {
+                    Name = "Team Listing",
+                    ReportPath = "Reports/TeamListing.rdlc",
+                    Description = "Lists all teams and rosters for the current season, organized by division and time slot.",
+                    DisplayOrder = 1,
+                    IsActive = true
+                },
+                new Report
+                {
+                    Name = "Schedules - Generic",
+                    ReportPath = "Reports/SchedulesGeneric.rdlc",
+                    Description = "Prints all schedule templates for the current season, showing weekly court assignments.",
+                    DisplayOrder = 2,
+                    IsActive = true
+                }
+            };
+
+            db.Reports.AddRange(reports);
+        }
+
         db.SaveChanges();
     }
 }

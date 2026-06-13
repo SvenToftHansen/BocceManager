@@ -93,6 +93,10 @@ public class BocceDbContext : DbContext
     // Ideas
     public DbSet<NewIdea> NewIdeas => Set<NewIdea>();
 
+    // Reports
+    public DbSet<Report> Reports => Set<Report>();
+    public DbSet<ReportParameter> ReportParameters => Set<ReportParameter>();
+
     protected override void OnConfiguring(DbContextOptionsBuilder options)
     {
         if (!string.IsNullOrEmpty(DbPath))
@@ -138,6 +142,11 @@ public class BocceDbContext : DbContext
 
         // GlAccount unique code
         model.Entity<GlAccount>().HasIndex(e => e.Code).IsUnique();
+
+        // Report: unique key on Name
+        model.Entity<Report>().HasIndex(e => e.Name).IsUnique();
+        // ReportParameter: unique on ReportId + ParameterName
+        model.Entity<ReportParameter>().HasIndex(e => new { e.ReportId, e.ParameterName }).IsUnique();
 
         // JournalEntry: two FKs to GlAccount
         model.Entity<JournalEntry>()

@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner">
+  <Description>Prints all schedule templates for the current season, showing weekly court assignments.</Description>
+  <Author>Bocce Manager</Author>
+  <PageHeight>11in</PageHeight>
+  <PageWidth>8.5in</PageWidth>
+  <Width>7.5in</Width>
+  <TopMargin>0.5in</TopMargin>
+  <LeftMargin>0.5in</LeftMargin>
+  <RightMargin>0.5in</RightMargin>
+  <BottomMargin>0.5in</BottomMargin>
+  <rd:ReportID>a2fc5e73-2f71-5f1e-9330-82c57b6e9de6</rd:ReportID>
+  <ReportParameters>
+    <ReportParameter Name="SeasonId">
+      <DataType>Integer</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>1</Value>
+        </Values>
+      </DefaultValue>
+    </ReportParameter>
+  </ReportParameters>
+  <DataSources>
+    <DataSource Name="BocceDb">
+      <ConnectionProperties>
+        <DataProvider>SQL</DataProvider>
+        <ConnectString />
+      </ConnectionProperties>
+      <rd:SecurityType>Integrated</rd:SecurityType>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="Schedules">
+      <Query>
+        <DataSourceName>BocceDb</DataSourceName>
+        <CommandText>SELECT st.Id, st.TeamCount, COUNT(stw.Id) as WeekCount FROM ScheduleTemplates st LEFT JOIN ScheduleTemplateWeeks stw ON st.Id = stw.ScheduleTemplateId WHERE st.SeasonId = @SeasonId GROUP BY st.Id, st.TeamCount</CommandText>
+        <QueryParameters>
+          <QueryParameter Name="@SeasonId">
+            <Value>=Parameters!SeasonId.Value</Value>
+          </QueryParameter>
+        </QueryParameters>
+      </Query>
+      <Fields>
+        <Field Name="Id">
+          <DataField>Id</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="TeamCount">
+          <DataField>TeamCount</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="WeekCount">
+          <DataField>WeekCount</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+  </DataSets>
+  <Body>
+    <ReportItems>
+      <Textbox Name="ReportTitle">
+        <CanGrow>true</CanGrow>
+        <CanShrink>false</CanShrink>
+        <Height>0.5in</Height>
+        <Width>7.5in</Width>
+        <Value>Schedules - Generic Report</Value>
+        <Style>
+          <FontSize>16pt</FontSize>
+          <FontWeight>Bold</FontWeight>
+        </Style>
+      </Textbox>
+      <Tablix Name="Tablix1">
+        <TablixBody>
+          <TablixRows>
+            <TablixRow>
+              <Height>0.25in</Height>
+              <TablixCells>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Teams">
+                      <CanGrow>true</CanGrow>
+                      <CanShrink>false</CanShrink>
+                      <ParagraphStyle>
+                        <TextAligns>Left</TextAligns>
+                      </ParagraphStyle>
+                      <Value>=Fields!TeamCount.Value &amp; " Teams"</Value>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Weeks">
+                      <CanGrow>true</CanGrow>
+                      <CanShrink>false</CanShrink>
+                      <ParagraphStyle>
+                        <TextAligns>Left</TextAligns>
+                      </ParagraphStyle>
+                      <Value>=Fields!WeekCount.Value &amp; " Weeks"</Value>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+              </TablixCells>
+            </TablixRow>
+          </TablixRows>
+        </TablixBody>
+        <TablixColumnHierarchy>
+          <TablixMembers>
+            <TablixMember>
+              <Width>1.5in</Width>
+            </TablixMember>
+            <TablixMember>
+              <Width>1.5in</Width>
+            </TablixMember>
+          </TablixMembers>
+        </TablixColumnHierarchy>
+        <TablixRowHierarchy>
+          <TablixMembers>
+            <TablixMember>
+              <Group Name="Details" />
+              <TablixHeader>
+                <Size>0.25in</Size>
+                <CellContents>
+                  <Textbox Name="TeamsHeader">
+                    <CanGrow>true</CanGrow>
+                    <Value>Teams</Value>
+                    <Style>
+                      <FontWeight>Bold</FontWeight>
+                      <BackgroundColor>LightGrey</BackgroundColor>
+                    </Style>
+                  </Textbox>
+                </CellContents>
+              </TablixHeader>
+              <TablixHeader>
+                <Size>0.25in</Size>
+                <CellContents>
+                  <Textbox Name="WeeksHeader">
+                    <CanGrow>true</CanGrow>
+                    <Value>Weeks</Value>
+                    <Style>
+                      <FontWeight>Bold</FontWeight>
+                      <BackgroundColor>LightGrey</BackgroundColor>
+                    </Style>
+                  </Textbox>
+                </CellContents>
+              </TablixHeader>
+            </TablixMember>
+          </TablixMembers>
+        </TablixRowHierarchy>
+        <DataSetName>Schedules</DataSetName>
+        <Height>0.75in</Height>
+        <Width>3in</Width>
+        <Top>0.6in</Top>
+        <Left>0in</Left>
+      </Tablix>
+    </ReportItems>
+  </Body>
+</Report>
