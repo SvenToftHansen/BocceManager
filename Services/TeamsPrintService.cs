@@ -16,9 +16,9 @@ public static class TeamsPrintService
 
     // ── Layout constants ──────────────────────────────────────────────────────
 
-    private const float ColTeamW    = 90f;
-    private const float ColPlayersW = 470f;  // All players with captain marked
-    private const float ColPhoneW   = 100f;
+    private const float ColTeamW    = 80f;
+    private const float ColPlayersW = 360f;  // All players with captain marked
+    private const float ColPhoneW   = 110f;
     private const float TableW      = ColTeamW + ColPlayersW + ColPhoneW;
 
     private const string PrintFont = "Consolas";
@@ -142,13 +142,14 @@ public static class TeamsPrintService
 
                         string phone = captainTp?.Player.Phone ?? "";
                         string formattedPlayers = FormatPlayersWithGrouping(playersForTeam, captainTp);
-                        string teamIdentifier = $"{team.Team.TeamLetter} - {team.Team.EffectiveDisplayName}";
+                        string captainLastName = captainTp?.Player.LastName ?? "";
+                        string teamIdentifier = $"{team.Team.TeamLetter} - {captainLastName}";
 
                         teamRows.Add(new TeamRow(teamIdentifier, formattedPlayers, phone));
                     }
                 }
 
-                string dayLabel = $"{dayGroup.Key}, {timeSlotGroup.Key.Timeslot12h}";
+                string dayLabel = dayGroup.Key;
                 daySections.Add(new DaySection(dayLabel, teamRows));
             }
 
@@ -219,7 +220,7 @@ public static class TeamsPrintService
         doc.QueryPageSettings += (_, qe) =>
         {
             qe.PageSettings.Landscape = false;
-            qe.PageSettings.Margins   = new Margins(25, 25, 25, 25);
+            qe.PageSettings.Margins   = new Margins(10, 10, 10, 10);
         };
         doc.BeginPrint += (_, _) => { secIdx = 0; dayIdx = 0; rowIdx = 0; pageNum = 0; };
 
@@ -238,17 +239,23 @@ public static class TeamsPrintService
             using var colHdrFont   = new Font(PrintFont,  9f, FontStyle.Bold);
             using var dataFont     = new Font(PrintFont,  9f);
             using var footerFont   = new Font(PrintFont,  8f);
+            using var darkGreenBrush = new SolidBrush(Color.FromArgb(0, 100, 0));
+            using var lightGreenBrush = new SolidBrush(Color.FromArgb(144, 238, 144));
+            using var whiteBrush   = new SolidBrush(Color.White);
             using var hdrFill      = new SolidBrush(Color.FromArgb(210, 210, 210));
             using var altFill      = new SolidBrush(Color.FromArgb(246, 246, 246));
             using var sepPen       = new Pen(Color.FromArgb(190, 190, 190));
             using var leftAlign    = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Near };
+            using var centerAlign  = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
 
             float lx = b.Left + (b.Width - TableW) / 2f;
 
             // ── Draw helpers ──────────────────────────────────────────────────
             void DrawTimeSlotLabel(string text)
             {
-                g.DrawString(text, timeSlotFont, Brushes.Black, lx, y + 2);
+                g.FillRectangle(darkGreenBrush, b.Left, y, b.Width, TimeSlotH);
+                var timeSlotRect = new RectangleF(b.Left, y, b.Width, TimeSlotH);
+                g.DrawString(text, timeSlotFont, whiteBrush, timeSlotRect, centerAlign);
             }
             void DrawColHeader()
             {
@@ -267,7 +274,9 @@ public static class TeamsPrintService
             }
             void DrawDayLabel(string text)
             {
-                g.DrawString(text, dayHdrFont, Brushes.Black, lx + 4, y + 2);
+                g.FillRectangle(lightGreenBrush, b.Left, y, b.Width, DayHdrH);
+                var dayRect = new RectangleF(b.Left, y, b.Width, DayHdrH);
+                g.DrawString(text, dayHdrFont, Brushes.Black, dayRect, centerAlign);
             }
             // Greedily pack names onto lines, breaking at name boundaries only.
             // Returns the wrapped text (lines joined with \n) and the required row height.
@@ -316,9 +325,9 @@ public static class TeamsPrintService
             // Document header — every page
             if (sections.Count > 0)
             {
-                var sz = g.MeasureString(sections[0].DocHeader, docHdrFont);
-                g.DrawString(sections[0].DocHeader, docHdrFont, Brushes.Black,
-                    b.Left + (b.Width - sz.Width) / 2f, y + 4);
+                g.FillRectangle(darkGreenBrush, b.Left, y, b.Width, DocHdrH);
+                var hdrRect = new RectangleF(b.Left, y, b.Width, DocHdrH);
+                g.DrawString(sections[0].DocHeader, docHdrFont, whiteBrush, hdrRect, centerAlign);
                 y += DocHdrH;
             }
 
