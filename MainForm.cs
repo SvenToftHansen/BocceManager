@@ -13,7 +13,7 @@ public partial class MainForm : Form
         Leagues, Seasons, Divisions,
         Players, Teams,
         ScoreEntry, Schedule,
-        Standings, Playoffs, Reports,
+        Standings, Playoffs, ReportTeamListing, ReportScheduleGeneric,
         SpareLists, Announcements, Fees, EmailLists, Documents, Parameters, Courts, Utilities, Theme
     }
 
@@ -303,9 +303,10 @@ public partial class MainForm : Form
         });
 
         AddGroup("REPORTS", add => {
-            add("Standings", NavSection.Standings);
-            add("Playoffs",  NavSection.Playoffs);
-            add("Reports",   NavSection.Reports);
+            add("Standings",     NavSection.Standings);
+            add("Playoffs",      NavSection.Playoffs);
+            add("Team Listing",  NavSection.ReportTeamListing);
+            add("Schedules",     NavSection.ReportScheduleGeneric);
         });
 
         AddGroup("ADMINISTRATION", add => {
@@ -395,7 +396,8 @@ public partial class MainForm : Form
         NavSection.Parameters => new ParametersPanel(),
         NavSection.Courts     => new CourtPanel(),
         NavSection.Schedule              => new SchedulePanel(),
-        NavSection.Reports => new ReportViewerPanel(),
+        NavSection.ReportTeamListing     => new ReportTeamListingPanel(),
+        NavSection.ReportScheduleGeneric => new ReportSchedulePanel(),
         NavSection.Utilities  => new UtilitiesPanel(),
         NavSection.Theme      => new ThemePanel(),
         _ => new PlaceholderPanel(SectionTitle(section))
@@ -433,7 +435,8 @@ public partial class MainForm : Form
         NavSection.ScoreEntry    => "Score Entry",
         NavSection.Schedule              => "Schedule",
         NavSection.Standings             => "Standings",
-        NavSection.Reports => "Reports",
+        NavSection.ReportTeamListing     => "Team Listing",
+        NavSection.ReportScheduleGeneric => "Schedules",
         NavSection.Playoffs      => "Playoffs",
         NavSection.SpareLists    => "Spare Lists",
         NavSection.Announcements => "Announcements",
@@ -515,7 +518,8 @@ public partial class MainForm : Form
                 sectionsToEnable.Add(NavSection.Schedule);
                 sectionsToEnable.Add(NavSection.Standings);
                 sectionsToEnable.Add(NavSection.Playoffs);
-                sectionsToEnable.Add(NavSection.Reports);
+                sectionsToEnable.Add(NavSection.ReportTeamListing);
+                sectionsToEnable.Add(NavSection.ReportScheduleGeneric);
                 sectionsToEnable.Add(NavSection.SpareLists);
                 sectionsToEnable.Add(NavSection.Announcements);
                 sectionsToEnable.Add(NavSection.Fees);
