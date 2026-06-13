@@ -2,18 +2,17 @@ using BocceManager.Data;
 using BocceManager.Services;
 using BocceManager.UI.Theme;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Reporting.WinForms;
 
 namespace BocceManager.Panels;
 
 public class ReportViewerPanel : UserControl
 {
     private ListBox _reportList = null!;
-    private ReportViewer _reportViewer = null!;
     private Button _btnPrint = null!;
     private Button _btnPdf = null!;
     private Button _btnWeb = null!;
     private Label _lblStatus = null!;
+    private Label _lblPreview = null!;
 
     public ReportViewerPanel()
     {
@@ -78,15 +77,19 @@ public class ReportViewerPanel : UserControl
         _reportList.SelectedIndexChanged += OnReportSelected;
         leftPanel.Controls.Add(_reportList);
 
-        // Center: ReportViewer
+        // Center: Preview Area
         var centerPanel = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground };
 
-        _reportViewer = new ReportViewer
+        _lblPreview = new Label
         {
             Dock = DockStyle.Fill,
-            ProcessingMode = ProcessingMode.Local
+            Text = "Select a report from the list to preview",
+            TextAlign = ContentAlignment.MiddleCenter,
+            Font = AppTheme.FontDefault,
+            ForeColor = AppTheme.TextSecondary,
+            AutoSize = false
         };
-        centerPanel.Controls.Add(_reportViewer);
+        centerPanel.Controls.Add(_lblPreview);
 
         // Bottom bar with controls
         var bottomBar = new Panel
@@ -210,22 +213,7 @@ public class ReportViewerPanel : UserControl
                 return;
             }
 
-            var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-            var resourceName = $"BocceManager.{report.ReportPath.Replace('/', '.')}";
-
-            using var stream = assembly.GetManifestResourceStream(resourceName);
-            if (stream == null)
-            {
-                MessageBox.Show($"Report file not found: {resourceName}", report.Name, MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            _reportViewer.LocalReport.LoadReportDefinition(stream);
-
-            var reportParams = new ReportParameter("SeasonId", seasonId.Value.ToString());
-            _reportViewer.LocalReport.SetParameters(reportParams);
-
-            _reportViewer.RefreshReport();
+            _lblPreview.Text = $"✓ {report.Name} ready\n\nClick 'Print' to preview and print\nClick 'PDF' to export to file";
         }
         catch (Exception ex)
         {
@@ -240,11 +228,38 @@ public class ReportViewerPanel : UserControl
 
         try
         {
-            _reportViewer.PrintDialog();
+            using var db = new BocceDbContext();
+            var seasonId = AppParameterService.GetDefaultSeasonId(db);
+            if (!seasonId.HasValue) return;
+
+            if (report.Name.Contains("Team"))
+            {
+                var sections = TeamsPrintService.BuildSections(seasonId.Value);
+                if (sections.Count == 0)
+                {
+                    MessageBox.Show("No data available for this report.", report.Name, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                var doc = TeamsPrintService.BuildDocument(sections);
+                doc.DocumentName = report.Name;
+                TeamsPrintService.ShowPrintPreview(this, doc);
+            }
+            else if (report.Name.Contains("Schedule"))
+            {
+                var sections = SchedulePrintService.BuildSections(seasonId.Value);
+                if (sections.Count == 0)
+                {
+                    MessageBox.Show("No data available for this report.", report.Name, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                var doc = SchedulePrintService.BuildDocument(sections);
+                doc.DocumentName = report.Name;
+                SchedulePrintService.ShowPrintPreview(this, doc);
+            }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error printing report:\n\n{ex.Message}", "Print", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show($"Error:\n\n{ex.Message}", "Print", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
@@ -256,8 +271,10 @@ public class ReportViewerPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
-            var savePath = ReportService.GetDefaultReportPdfLocation(db);
+            var seasonId = AppParameterService.GetDefaultSeasonId(db);
+            if (!seasonId.HasValue) return;
 
+            var savePath = ReportService.GetDefaultReportPdfLocation(db);
             var dialog = new SaveFileDialog
             {
                 InitialDirectory = savePath,
@@ -267,14 +284,13 @@ public class ReportViewerPanel : UserControl
 
             if (dialog.ShowDialog(this) == DialogResult.OK)
             {
-                byte[] pdfBytes = _reportViewer.LocalReport.Render("PDF");
-                File.WriteAllBytes(dialog.FileName, pdfBytes);
-                MessageBox.Show($"PDF saved to:\n{dialog.FileName}", "PDF Export", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("PDF export feature coming soon.", "PDF Export", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                // TODO: Implement PDF export using print services
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error exporting to PDF:\n\n{ex.Message}", "PDF Export", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show($"Error:\n\n{ex.Message}", "PDF Export", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
