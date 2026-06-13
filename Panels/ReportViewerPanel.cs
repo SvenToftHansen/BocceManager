@@ -121,9 +121,9 @@ public class ReportViewerPanel : UserControl
         bottomBar.Controls.Add(buttonPanel);
         bottomBar.Controls.Add(_lblStatus);
 
+        Controls.Add(bottomBar);
         Controls.Add(leftPanel);
         Controls.Add(centerPanel);
-        Controls.Add(bottomBar);
     }
 
     private Button CreateButton(string text, EventHandler onClick)
