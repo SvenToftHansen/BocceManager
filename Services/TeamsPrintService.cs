@@ -142,8 +142,8 @@ public static class TeamsPrintService
 
                         string phone = captainTp?.Player.Phone ?? "";
                         string formattedPlayers = FormatPlayersWithGrouping(playersForTeam, captainTp);
-                        string captainLastName = captainTp?.Player.LastName ?? "";
-                        string teamIdentifier = $"{team.Team.TeamLetter} - {captainLastName}";
+                        string teamName = team.Team.DisplayName ?? $"{team.Team.TeamLetter} - {captainTp?.Player.LastName ?? ""}".TrimEnd('-', ' ');
+                        string teamIdentifier = $"{team.Team.TeamLetter} - {teamName}";
 
                         teamRows.Add(new TeamRow(teamIdentifier, formattedPlayers, phone));
                     }
@@ -182,7 +182,7 @@ public static class TeamsPrintService
         foreach (var group in playersByLastName)
         {
             var groupPlayers = group.OrderBy(tp => tp.Player.FirstName).ToList();
-            var isCaptainInGroup = groupPlayers.Any(tp => tp == captain);
+            var captainInGroup = groupPlayers.FirstOrDefault(tp => tp == captain);
 
             if (groupPlayers.Count == 1)
             {
@@ -192,15 +192,29 @@ public static class TeamsPrintService
             }
             else if (groupPlayers.Count == 2)
             {
-                var firstNames = groupPlayers.Select(tp => tp.Player.FirstName).ToList();
-                string prefix = isCaptainInGroup ? "*" : "";
-                groups.Add($"{prefix}{string.Join(" & ", firstNames)} {groupPlayers[0].Player.LastName}".Trim());
+                var nonCaptain = groupPlayers.FirstOrDefault(tp => tp != captain);
+                if (captainInGroup != null)
+                {
+                    groups.Add($"{nonCaptain?.Player.FirstName} & *{captainInGroup.Player.FirstName} {captainInGroup.Player.LastName}".Trim());
+                }
+                else
+                {
+                    var firstNames = groupPlayers.Select(tp => tp.Player.FirstName).ToList();
+                    groups.Add($"{string.Join(" & ", firstNames)} {groupPlayers[0].Player.LastName}".Trim());
+                }
             }
             else
             {
-                var firstNames = groupPlayers.Select(tp => tp.Player.FirstName).ToList();
-                string prefix = isCaptainInGroup ? "*" : "";
-                groups.Add($"{prefix}{string.Join(", ", firstNames.SkipLast(1))} & {firstNames.Last()} {groupPlayers[0].Player.LastName}".Trim());
+                var nonCaptains = groupPlayers.Where(tp => tp != captain).Select(tp => tp.Player.FirstName).ToList();
+                if (captainInGroup != null)
+                {
+                    groups.Add($"{string.Join(", ", nonCaptains)} & *{captainInGroup.Player.FirstName} {captainInGroup.Player.LastName}".Trim());
+                }
+                else
+                {
+                    var firstNames = groupPlayers.Select(tp => tp.Player.FirstName).ToList();
+                    groups.Add($"{string.Join(", ", firstNames.SkipLast(1))} & {firstNames.Last()} {groupPlayers[0].Player.LastName}".Trim());
+                }
             }
         }
 
