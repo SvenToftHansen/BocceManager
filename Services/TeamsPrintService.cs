@@ -12,15 +12,14 @@ public static class TeamsPrintService
 
     public record PrintSection(string DocHeader, string TimeSlotLabel, List<DaySection> DaySections);
     public record DaySection(string DayLabel, List<TeamRow> Teams);
-    public record TeamRow(string TeamLetter, string CaptainName, string AllOtherPlayers, string Phone);
+    public record TeamRow(string TeamIdentifier, string FormattedPlayers, string Phone);
 
     // ── Layout constants ──────────────────────────────────────────────────────
 
-    private const float ColTeamW    = 50f;
-    private const float ColCaptainW = 140f;
-    private const float ColPlayersW = 420f;  // All players 2-5
-    private const float ColPhoneW   = 110f;
-    private const float TableW      = ColTeamW + ColCaptainW + ColPlayersW + ColPhoneW;
+    private const float ColTeamW    = 90f;
+    private const float ColPlayersW = 470f;  // All players with captain marked
+    private const float ColPhoneW   = 100f;
+    private const float TableW      = ColTeamW + ColPlayersW + ColPhoneW;
 
     private const string PrintFont = "Consolas";
 
@@ -141,27 +140,11 @@ public static class TeamsPrintService
                             ? playersForTeam.FirstOrDefault(tp => tp.PlayerId == captainId)
                             : playersForTeam.FirstOrDefault(tp => tp.Role == "captain");
 
-                        string captain       = "";
-                        string phone         = "";
-                        var otherPlayersList = new List<string>();
+                        string phone = captainTp?.Player.Phone ?? "";
+                        string formattedPlayers = FormatPlayersWithGrouping(playersForTeam, captainTp);
+                        string teamIdentifier = $"{team.Team.TeamLetter} - {team.Team.EffectiveDisplayName}";
 
-                        foreach (var tp in playersForTeam)
-                        {
-                            var    player = tp.Player;
-                            string name   = $"{player.FirstName} {player.LastName}".Trim();
-                            if (tp == captainTp)
-                            {
-                                captain = name;
-                                phone   = player.Phone ?? "";
-                            }
-                            else
-                            {
-                                otherPlayersList.Add(name);
-                            }
-                        }
-
-                        string otherPlayers = string.Join(" | ", otherPlayersList);
-                        teamRows.Add(new TeamRow(team.Team.TeamLetter, captain, otherPlayers, phone));
+                        teamRows.Add(new TeamRow(teamIdentifier, formattedPlayers, phone));
                     }
                 }
 
@@ -183,6 +166,44 @@ public static class TeamsPrintService
         if (slot12h.Contains("9:00")) return "MORNINGS";
         if (slot12h.Contains("1:00") || slot12h.Contains("3:30")) return "AFTERNOONS";
         return "";
+    }
+
+    private static string FormatPlayersWithGrouping(List<TeamPlayer> players, TeamPlayer? captain)
+    {
+        if (players.Count == 0) return "";
+
+        var groups = new List<string>();
+        var playersByLastName = players
+            .GroupBy(tp => tp.Player.LastName)
+            .OrderBy(g => players.IndexOf(players.FirstOrDefault(tp => tp.Player.LastName == g.Key) ?? players[0]))
+            .ToList();
+
+        foreach (var group in playersByLastName)
+        {
+            var groupPlayers = group.OrderBy(tp => tp.Player.FirstName).ToList();
+            var isCaptainInGroup = groupPlayers.Any(tp => tp == captain);
+
+            if (groupPlayers.Count == 1)
+            {
+                var p = groupPlayers[0];
+                string prefix = p == captain ? "*" : "";
+                groups.Add($"{prefix}{p.Player.FirstName} {p.Player.LastName}".Trim());
+            }
+            else if (groupPlayers.Count == 2)
+            {
+                var firstNames = groupPlayers.Select(tp => tp.Player.FirstName).ToList();
+                string prefix = isCaptainInGroup ? "*" : "";
+                groups.Add($"{prefix}{string.Join(" & ", firstNames)} {groupPlayers[0].Player.LastName}".Trim());
+            }
+            else
+            {
+                var firstNames = groupPlayers.Select(tp => tp.Player.FirstName).ToList();
+                string prefix = isCaptainInGroup ? "*" : "";
+                groups.Add($"{prefix}{string.Join(", ", firstNames.SkipLast(1))} & {firstNames.Last()} {groupPlayers[0].Player.LastName}".Trim());
+            }
+        }
+
+        return string.Join(", ", groups);
     }
 
     // ── Build PrintDocument ───────────────────────────────────────────────────
@@ -233,10 +254,9 @@ public static class TeamsPrintService
             {
                 g.FillRectangle(hdrFill, lx, y, TableW, ColHdrH);
                 float cx = lx;
-                DrawColText("Team",          cx, ColTeamW);    cx += ColTeamW;
-                DrawColText("Captain",       cx, ColCaptainW); cx += ColCaptainW;
-                DrawColText("Other Players", cx, ColPlayersW); cx += ColPlayersW;
-                DrawColText("Contact #",     cx, ColPhoneW);
+                DrawColText("Team",     cx, ColTeamW);    cx += ColTeamW;
+                DrawColText("Players",  cx, ColPlayersW); cx += ColPlayersW;
+                DrawColText("Contact #", cx, ColPhoneW);
                 g.DrawRectangle(Pens.Gray, lx, y, TableW - 1, ColHdrH - 1);
 
                 void DrawColText(string text, float x, float w)
@@ -279,10 +299,9 @@ public static class TeamsPrintService
             {
                 if (alt) g.FillRectangle(altFill, lx, y, TableW, rowH);
                 float cx = lx;
-                DrawCell(r.TeamLetter,   cx, ColTeamW);    cx += ColTeamW;
-                DrawCell(r.CaptainName,  cx, ColCaptainW); cx += ColCaptainW;
-                DrawCell(wrappedPlayers, cx, ColPlayersW); cx += ColPlayersW;
-                DrawCell(r.Phone,        cx, ColPhoneW);
+                DrawCell(r.TeamIdentifier, cx, ColTeamW);  cx += ColTeamW;
+                DrawCell(wrappedPlayers,   cx, ColPlayersW); cx += ColPlayersW;
+                DrawCell(r.Phone,          cx, ColPhoneW);
                 g.DrawLine(sepPen, lx, y + rowH, lx + TableW, y + rowH);
 
                 void DrawCell(string text, float x, float w)
@@ -343,7 +362,7 @@ public static class TeamsPrintService
 
                     for (; rowIdx < day.Teams.Count; rowIdx++)
                     {
-                        var (wrappedPlayers, rowH) = WrapPlayers(day.Teams[rowIdx].AllOtherPlayers);
+                        var (wrappedPlayers, rowH) = WrapPlayers(day.Teams[rowIdx].FormattedPlayers);
                         if (y + rowH > yMax) { pe.HasMorePages = true; goto PageDone; }
                         DrawDataRow(day.Teams[rowIdx], rowIdx % 2 == 1, rowH, wrappedPlayers);
                         y += rowH;
