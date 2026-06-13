@@ -184,6 +184,15 @@ public static class ScheduleTemplateService
             .ToList();
     }
 
+    public static void UpdateMatchSlots(BocceDbContext db, int matchId, string slot1, string slot2)
+    {
+        var match = db.ScheduleTemplateMatches.Find(matchId)
+            ?? throw new InvalidOperationException("Match not found.");
+        match.Slot1 = slot1;
+        match.Slot2 = slot2;
+        db.SaveChanges();
+    }
+
     public static void UpdateMatchCourt(BocceDbContext db, int matchId, int courtId)
     {
         var match = db.ScheduleTemplateMatches.Find(matchId)
