@@ -363,8 +363,8 @@ public static class SchedulePrintService
             btnNext,
             btnClose
         ]);
-        form.Controls.Add(toolbar);
         form.Controls.Add(preview);
+        form.Controls.Add(toolbar);
 
         btnPrinter.Click += (_, _) => SendToPrinter(parent, doc);
         btnPdf.Click     += (_, _) => SendToPdf(parent, doc, doc.DocumentName);
