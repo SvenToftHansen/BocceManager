@@ -84,7 +84,7 @@ public class ReportViewerPanel : UserControl
         _reportViewer = new ReportViewer
         {
             Dock = DockStyle.Fill,
-            ProcessingMode = ProcessingMode.Remote
+            ProcessingMode = ProcessingMode.Local
         };
         centerPanel.Controls.Add(_reportViewer);
 
@@ -199,18 +199,38 @@ public class ReportViewerPanel : UserControl
 
     private void LoadReportData(Data.Entities.Report report)
     {
-        using var db = new BocceDbContext();
-        var seasonId = AppParameterService.GetDefaultSeasonId(db);
-
-        if (!seasonId.HasValue)
+        try
         {
-            MessageBox.Show("No default season selected.", report.Name, MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
+            using var db = new BocceDbContext();
+            var seasonId = AppParameterService.GetDefaultSeasonId(db);
 
-        // For now, we'll skip the actual report loading since RDLC files aren't created yet
-        // TODO: Implement when RDLC files are ready
-        MessageBox.Show("Report viewer is ready. RDLC files will be implemented next.", report.Name, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            if (!seasonId.HasValue)
+            {
+                MessageBox.Show("No default season selected.", report.Name, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+            var resourceName = $"BocceManager.{report.ReportPath.Replace('/', '.')}";
+
+            using var stream = assembly.GetManifestResourceStream(resourceName);
+            if (stream == null)
+            {
+                MessageBox.Show($"Report file not found: {resourceName}", report.Name, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            _reportViewer.LocalReport.LoadReportDefinition(stream);
+
+            var reportParams = new ReportParameter("SeasonId", seasonId.Value.ToString());
+            _reportViewer.LocalReport.SetParameters(reportParams);
+
+            _reportViewer.RefreshReport();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error loading report:\n\n{ex.Message}", report.Name, MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void OnClickPrint(object? sender, EventArgs e)
@@ -218,7 +238,14 @@ public class ReportViewerPanel : UserControl
         if (_reportList.SelectedItem is not Data.Entities.Report report)
             return;
 
-        MessageBox.Show($"Print functionality for {report.Name} coming soon.", "Print", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        try
+        {
+            _reportViewer.PrintDialog();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error printing report:\n\n{ex.Message}", "Print", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void OnClickPdf(object? sender, EventArgs e)
@@ -240,13 +267,14 @@ public class ReportViewerPanel : UserControl
 
             if (dialog.ShowDialog(this) == DialogResult.OK)
             {
-                MessageBox.Show($"PDF export to {dialog.FileName} coming soon.", "PDF Export", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                // TODO: Implement PDF export
+                byte[] pdfBytes = _reportViewer.LocalReport.Render("PDF");
+                File.WriteAllBytes(dialog.FileName, pdfBytes);
+                MessageBox.Show($"PDF saved to:\n{dialog.FileName}", "PDF Export", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error: {ex.Message}", "PDF Export", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show($"Error exporting to PDF:\n\n{ex.Message}", "PDF Export", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
