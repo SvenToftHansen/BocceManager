@@ -151,7 +151,10 @@ public static class TeamsPrintService
                             .ToList();
 
                         string players = string.Join(" | ", otherPlayers);
-                        string teamName = team.Team.DisplayName ?? $"{team.Team.TeamLetter}-{captainTp?.Player.LastName ?? ""}".TrimEnd('-', ' ');
+                        // Use DisplayName if available, otherwise fall back to SystemName
+                        string teamName = !string.IsNullOrEmpty(team.Team.DisplayName)
+                            ? team.Team.DisplayName
+                            : team.Team.SystemName;
 
                         teamRows.Add(new TeamRow(teamName, captain, players, phone));
                     }
