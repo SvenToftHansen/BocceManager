@@ -17,7 +17,7 @@ public static class TeamsPrintService
 
     // ── Layout constants ──────────────────────────────────────────────────────
 
-    private const float ColTeamW    = 70f;
+    private const float ColTeamW    = 100f;  // Wider for team names
     private const float ColCaptainW = 120f;
     private const float ColPhoneW   = 110f;
     private const float DayGapH     = 12f;   // 1/8 inch gap between days
