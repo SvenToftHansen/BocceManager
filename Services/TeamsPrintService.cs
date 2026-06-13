@@ -213,7 +213,7 @@ public static class TeamsPrintService
             var footerFont   = AppTheme.FontSmall;
             using var headerBrush  = new SolidBrush(AppTheme.NavHeader);
             using var lightBrush   = new SolidBrush(AppTheme.NavHover);
-            using var textBrush    = new SolidBrush(AppTheme.TextPrimary);
+            using var textBrush    = new SolidBrush(Color.Black);  // Always black for readability
             using var hdrFill      = new SolidBrush(AppTheme.GridHeaderBackground);
             using var altFill      = new SolidBrush(AppTheme.GridAlternateRow);
             using var sepPen       = new Pen(AppTheme.GridLines);
@@ -243,7 +243,7 @@ public static class TeamsPrintService
 
                 void DrawColText(string text, float x, float w)
                 {
-                    g.DrawString(text, colHdrFont, new SolidBrush(AppTheme.GridHeaderText), new RectangleF(x + 2, y + 2, w - 4, ColHdrH - 4), leftAlign);
+                    g.DrawString(text, colHdrFont, new SolidBrush(Color.Black), new RectangleF(x + 2, y + 2, w - 4, ColHdrH - 4), leftAlign);
                     g.DrawLine(sepPen, x + w, y, x + w, y + ColHdrH);
                 }
             }
