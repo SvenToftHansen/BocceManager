@@ -52,9 +52,9 @@ public class ReportViewerPanel : UserControl
             Text = "Reports",
             Font = new Font(AppTheme.FontDefault.FontFamily, 11f, FontStyle.Bold),
             ForeColor = AppTheme.TextPrimary,
-            Padding = new Padding(8, 4, 0, 2),
+            Padding = new Padding(8, 6, 0, 4),
             AutoSize = false,
-            Height = 24,
+            Height = 30,
             BackColor = AppTheme.ContentBackground
         };
         leftPanel.Controls.Add(leftHeader);
