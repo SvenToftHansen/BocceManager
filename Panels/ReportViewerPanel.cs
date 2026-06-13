@@ -37,19 +37,11 @@ public class ReportViewerPanel : UserControl
 
     private void BuildUI()
     {
-        var mainContainer = new SplitContainer
-        {
-            Dock = DockStyle.Fill,
-            Orientation = Orientation.Vertical,
-            BorderStyle = BorderStyle.None,
-            BackColor = AppTheme.ContentBackground
-        };
-
         // Left sidebar with report list
         var leftPanel = new Panel
         {
             Dock = DockStyle.Left,
-            Width = 220,
+            Width = 200,
             BackColor = AppTheme.ContentBackground
         };
 
@@ -95,9 +87,9 @@ public class ReportViewerPanel : UserControl
         var bottomBar = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 50,
+            Height = 56,
             BackColor = AppTheme.Surface,
-            Padding = new Padding(12)
+            Padding = new Padding(12, 8, 12, 8)
         };
 
         var buttonPanel = new FlowLayoutPanel
@@ -129,11 +121,8 @@ public class ReportViewerPanel : UserControl
         bottomBar.Controls.Add(buttonPanel);
         bottomBar.Controls.Add(_lblStatus);
 
-        // Wire up the split container
-        mainContainer.Panel1.Controls.Add(leftPanel);
-        mainContainer.Panel2.Controls.Add(centerPanel);
-
-        Controls.Add(mainContainer);
+        Controls.Add(leftPanel);
+        Controls.Add(centerPanel);
         Controls.Add(bottomBar);
     }
 
