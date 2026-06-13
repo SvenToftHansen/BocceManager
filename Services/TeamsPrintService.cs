@@ -16,9 +16,9 @@ public static class TeamsPrintService
 
     // ── Layout constants ──────────────────────────────────────────────────────
 
-    private const float ColTeamW    = 80f;
-    private const float ColPlayersW = 360f;  // All players with captain marked
-    private const float ColPhoneW   = 110f;
+    private const float ColTeamW    = 90f;
+    private const float ColPlayersW = 400f;  // All players with captain marked
+    private const float ColPhoneW   = 120f;
     private const float TableW      = ColTeamW + ColPlayersW + ColPhoneW;
 
     private const string PrintFont = "Consolas";
@@ -142,8 +142,8 @@ public static class TeamsPrintService
 
                         string phone = captainTp?.Player.Phone ?? "";
                         string formattedPlayers = FormatPlayersWithGrouping(playersForTeam, captainTp);
-                        string teamName = team.Team.DisplayName ?? $"{team.Team.TeamLetter} - {captainTp?.Player.LastName ?? ""}".TrimEnd('-', ' ');
-                        string teamIdentifier = $"{team.Team.TeamLetter} - {teamName}";
+                        string teamName = team.Team.DisplayName ?? $"{team.Team.TeamLetter}-{captainTp?.Player.LastName ?? ""}".TrimEnd('-', ' ');
+                        string teamIdentifier = teamName;
 
                         teamRows.Add(new TeamRow(teamIdentifier, formattedPlayers, phone));
                     }
@@ -262,7 +262,8 @@ public static class TeamsPrintService
             using var leftAlign    = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Near };
             using var centerAlign  = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
 
-            float lx = b.Left + (b.Width - TableW) / 2f;
+            float lx = b.Left;
+            float tableWidth = b.Width;
 
             // ── Draw helpers ──────────────────────────────────────────────────
             void DrawTimeSlotLabel(string text)
@@ -273,12 +274,12 @@ public static class TeamsPrintService
             }
             void DrawColHeader()
             {
-                g.FillRectangle(hdrFill, lx, y, TableW, ColHdrH);
+                g.FillRectangle(hdrFill, lx, y, tableWidth, ColHdrH);
                 float cx = lx;
                 DrawColText("Team",     cx, ColTeamW);    cx += ColTeamW;
                 DrawColText("Players",  cx, ColPlayersW); cx += ColPlayersW;
                 DrawColText("Contact #", cx, ColPhoneW);
-                g.DrawRectangle(Pens.Gray, lx, y, TableW - 1, ColHdrH - 1);
+                g.DrawRectangle(Pens.Gray, lx, y, tableWidth - 1, ColHdrH - 1);
 
                 void DrawColText(string text, float x, float w)
                 {
@@ -320,12 +321,12 @@ public static class TeamsPrintService
             }
             void DrawDataRow(TeamRow r, bool alt, float rowH, string wrappedPlayers)
             {
-                if (alt) g.FillRectangle(altFill, lx, y, TableW, rowH);
+                if (alt) g.FillRectangle(altFill, lx, y, tableWidth, rowH);
                 float cx = lx;
                 DrawCell(r.TeamIdentifier, cx, ColTeamW);  cx += ColTeamW;
                 DrawCell(wrappedPlayers,   cx, ColPlayersW); cx += ColPlayersW;
                 DrawCell(r.Phone,          cx, ColPhoneW);
-                g.DrawLine(sepPen, lx, y + rowH, lx + TableW, y + rowH);
+                g.DrawLine(sepPen, lx, y + rowH, lx + tableWidth, y + rowH);
 
                 void DrawCell(string text, float x, float w)
                 {
