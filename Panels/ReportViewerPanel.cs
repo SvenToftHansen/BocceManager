@@ -13,6 +13,7 @@ public class ReportViewerPanel : UserControl
     private Button _btnWeb = null!;
     private Label _lblStatus = null!;
     private Label _lblPreview = null!;
+    private List<Data.Entities.Report> _reports = new();
 
     public ReportViewerPanel()
     {
@@ -51,9 +52,9 @@ public class ReportViewerPanel : UserControl
             Text = "Reports",
             Font = new Font(AppTheme.FontDefault.FontFamily, 11f, FontStyle.Bold),
             ForeColor = AppTheme.TextPrimary,
-            Padding = new Padding(8, 8, 0, 4),
+            Padding = new Padding(8, 4, 0, 2),
             AutoSize = false,
-            Height = 32,
+            Height = 24,
             BackColor = AppTheme.ContentBackground
         };
         leftPanel.Controls.Add(leftHeader);
@@ -61,10 +62,11 @@ public class ReportViewerPanel : UserControl
         _reportList = new ListBox
         {
             Dock = DockStyle.Fill,
-            BackColor = AppTheme.Surface,
-            ForeColor = AppTheme.TextPrimary,
-            BorderStyle = BorderStyle.None,
-            Font = AppTheme.FontDefault
+            BackColor = Color.White,
+            ForeColor = Color.Black,
+            BorderStyle = BorderStyle.FixedSingle,
+            Font = AppTheme.FontDefault,
+            IntegralHeight = false
         };
         _reportList.SelectedIndexChanged += OnReportSelected;
         leftPanel.Controls.Add(_reportList);
@@ -146,22 +148,22 @@ public class ReportViewerPanel : UserControl
     private void LoadReports()
     {
         _reportList.Items.Clear();
+        _reports.Clear();
         try
         {
             using var db = new BocceDbContext();
-            var reports = ReportService.GetActiveReports(db).ToList();
+            _reports = ReportService.GetActiveReports(db).ToList();
 
-            _lblStatus.Text = $"Found {reports.Count} reports";
-
-            foreach (var report in reports)
+            foreach (var report in _reports)
             {
-                _reportList.Items.Add(report.Name);
+                var name = report.Name ?? "Unknown";
+                _reportList.Items.Add($"• {name}");
             }
+
+            _lblStatus.Text = $"Loaded {_reportList.Items.Count} reports";
 
             if (_reportList.Items.Count > 0)
                 _reportList.SelectedIndex = 0;
-            else
-                _lblStatus.Text = "No reports available";
         }
         catch (Exception ex)
         {
@@ -176,8 +178,10 @@ public class ReportViewerPanel : UserControl
 
     private void RefreshCurrentReport()
     {
-        if (_reportList.SelectedItem is not Data.Entities.Report report)
+        if (_reportList.SelectedIndex < 0 || _reportList.SelectedIndex >= _reports.Count)
             return;
+
+        var report = _reports[_reportList.SelectedIndex];
 
         try
         {
@@ -215,8 +219,10 @@ public class ReportViewerPanel : UserControl
 
     private void OnClickPrint(object? sender, EventArgs e)
     {
-        if (_reportList.SelectedItem is not Data.Entities.Report report)
+        if (_reportList.SelectedIndex < 0 || _reportList.SelectedIndex >= _reports.Count)
             return;
+
+        var report = _reports[_reportList.SelectedIndex];
 
         try
         {
@@ -257,8 +263,10 @@ public class ReportViewerPanel : UserControl
 
     private void OnClickPdf(object? sender, EventArgs e)
     {
-        if (_reportList.SelectedItem is not Data.Entities.Report report)
+        if (_reportList.SelectedIndex < 0 || _reportList.SelectedIndex >= _reports.Count)
             return;
+
+        var report = _reports[_reportList.SelectedIndex];
 
         try
         {
@@ -288,8 +296,10 @@ public class ReportViewerPanel : UserControl
 
     private void OnClickWeb(object? sender, EventArgs e)
     {
-        if (_reportList.SelectedItem is not Data.Entities.Report report)
+        if (_reportList.SelectedIndex < 0 || _reportList.SelectedIndex >= _reports.Count)
             return;
+
+        var report = _reports[_reportList.SelectedIndex];
 
         MessageBox.Show($"Web upload for {report.Name} coming soon.\n\nThis is a placeholder for future integration with your website.", "Web Upload", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
