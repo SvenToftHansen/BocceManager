@@ -205,7 +205,7 @@ public static class TeamsPrintService
             float y    = b.Top;
             float yMax = b.Bottom - FooterH;
 
-            var docHdrFont   = AppTheme.FontSectionHeading;  // Smaller than PageTitle
+            var docHdrFont   = AppTheme.FontNavHeader;  // Even smaller header font
             var timeSlotFont = AppTheme.FontNavHeader;
             var dayHdrFont   = AppTheme.FontNavHeader;
             var colHdrFont   = AppTheme.FontGridHeader;
@@ -282,7 +282,7 @@ public static class TeamsPrintService
             }
             void DrawDataRow(TeamRow r, bool alt, float rowH, string wrappedPlayers)
             {
-                if (alt) g.FillRectangle(altFill, lx, y, tableWidth, rowH);
+                // All white background, no alternating colors
                 float cx = lx;
                 DrawCell(r.TeamIdentifier, cx, ColTeamW);  cx += ColTeamW;
                 DrawCell(r.CaptainName,    cx, ColCaptainW); cx += ColCaptainW;
@@ -340,11 +340,13 @@ public static class TeamsPrintService
 
                     if (rowIdx == 0)
                     {
+                        // Add gap above day header
+                        if (dayIdx > 0)
+                            y += DayGapH;
                         // Orphan guard: require day header + at least 1 row
                         if (y + DayHdrH + DataRowH > yMax) { pe.HasMorePages = true; goto PageDone; }
                         DrawDayLabel(day.DayLabel, day.TimeSlot);
                         y += DayHdrH;
-                        y += DayGapH;  // Add white gap between days
                     }
 
                     for (; rowIdx < day.Teams.Count; rowIdx++)
