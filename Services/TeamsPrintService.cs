@@ -12,15 +12,17 @@ public static class TeamsPrintService
     // ── Data structures ───────────────────────────────────────────────────────
 
     public record PrintSection(string DocHeader, string TimeSlotLabel, List<DaySection> DaySections);
-    public record DaySection(string DayLabel, List<TeamRow> Teams);
-    public record TeamRow(string TeamIdentifier, string FormattedPlayers, string Phone);
+    public record DaySection(string DayLabel, string TimeSlot, List<TeamRow> Teams);
+    public record TeamRow(string TeamIdentifier, string CaptainName, string AllOtherPlayers, string Phone);
 
     // ── Layout constants ──────────────────────────────────────────────────────
 
-    private const float ColTeamW    = 90f;
-    private const float ColPlayersW = 400f;  // All players with captain marked
-    private const float ColPhoneW   = 120f;
-    private const float TableW      = ColTeamW + ColPlayersW + ColPhoneW;
+    private const float ColTeamW    = 70f;
+    private const float ColCaptainW = 120f;
+    private const float ColPlayersW = 310f;  // Other players
+    private const float ColPhoneW   = 110f;
+    private const float TableW      = ColTeamW + ColCaptainW + ColPlayersW + ColPhoneW;
+    private const float DayGapH     = 12f;   // 1/8 inch gap between days
 
 
     private const float DocHdrH     = 40f;
@@ -140,17 +142,26 @@ public static class TeamsPrintService
                             ? playersForTeam.FirstOrDefault(tp => tp.PlayerId == captainId)
                             : playersForTeam.FirstOrDefault(tp => tp.Role == "captain");
 
+                        string captain = captainTp != null ? $"{captainTp.Player.FirstName} {captainTp.Player.LastName}".Trim() : "";
                         string phone = captainTp?.Player.Phone ?? "";
-                        string formattedPlayers = FormatPlayersWithGrouping(playersForTeam, captainTp);
-                        string teamName = team.Team.DisplayName ?? $"{team.Team.TeamLetter}-{captainTp?.Player.LastName ?? ""}".TrimEnd('-', ' ');
-                        string teamIdentifier = teamName;
 
-                        teamRows.Add(new TeamRow(teamIdentifier, formattedPlayers, phone));
+                        var otherPlayers = playersForTeam
+                            .Where(tp => tp != captainTp)
+                            .OrderBy(tp => tp.Player.LastName)
+                            .ThenBy(tp => tp.Player.FirstName)
+                            .Select(tp => $"{tp.Player.FirstName} {tp.Player.LastName}".Trim())
+                            .ToList();
+
+                        string players = string.Join(" | ", otherPlayers);
+                        string teamName = team.Team.DisplayName ?? $"{team.Team.TeamLetter}-{captainTp?.Player.LastName ?? ""}".TrimEnd('-', ' ');
+
+                        teamRows.Add(new TeamRow(teamName, captain, players, phone));
                     }
                 }
 
                 string dayLabel = dayGroup.Key;
-                daySections.Add(new DaySection(dayLabel, teamRows));
+                string timeSlot = timeSlotGroup.Key.Timeslot12h;
+                daySections.Add(new DaySection(dayLabel, timeSlot, teamRows));
             }
 
             sections.Add(new PrintSection(docHeader, timeSlotLabel, daySections));
@@ -169,57 +180,6 @@ public static class TeamsPrintService
         return "";
     }
 
-    private static string FormatPlayersWithGrouping(List<TeamPlayer> players, TeamPlayer? captain)
-    {
-        if (players.Count == 0) return "";
-
-        var groups = new List<string>();
-        var playersByLastName = players
-            .GroupBy(tp => tp.Player.LastName)
-            .OrderBy(g => players.IndexOf(players.FirstOrDefault(tp => tp.Player.LastName == g.Key) ?? players[0]))
-            .ToList();
-
-        foreach (var group in playersByLastName)
-        {
-            var groupPlayers = group.OrderBy(tp => tp.Player.FirstName).ToList();
-            var captainInGroup = groupPlayers.FirstOrDefault(tp => tp == captain);
-
-            if (groupPlayers.Count == 1)
-            {
-                var p = groupPlayers[0];
-                string prefix = p == captain ? "*" : "";
-                groups.Add($"{prefix}{p.Player.FirstName} {p.Player.LastName}".Trim());
-            }
-            else if (groupPlayers.Count == 2)
-            {
-                var nonCaptain = groupPlayers.FirstOrDefault(tp => tp != captain);
-                if (captainInGroup != null)
-                {
-                    groups.Add($"{nonCaptain?.Player.FirstName} & *{captainInGroup.Player.FirstName} {captainInGroup.Player.LastName}".Trim());
-                }
-                else
-                {
-                    var firstNames = groupPlayers.Select(tp => tp.Player.FirstName).ToList();
-                    groups.Add($"{string.Join(" & ", firstNames)} {groupPlayers[0].Player.LastName}".Trim());
-                }
-            }
-            else
-            {
-                var nonCaptains = groupPlayers.Where(tp => tp != captain).Select(tp => tp.Player.FirstName).ToList();
-                if (captainInGroup != null)
-                {
-                    groups.Add($"{string.Join(", ", nonCaptains)} & *{captainInGroup.Player.FirstName} {captainInGroup.Player.LastName}".Trim());
-                }
-                else
-                {
-                    var firstNames = groupPlayers.Select(tp => tp.Player.FirstName).ToList();
-                    groups.Add($"{string.Join(", ", firstNames.SkipLast(1))} & {firstNames.Last()} {groupPlayers[0].Player.LastName}".Trim());
-                }
-            }
-        }
-
-        return string.Join(", ", groups);
-    }
 
     // ── Build PrintDocument ───────────────────────────────────────────────────
 
@@ -276,9 +236,10 @@ public static class TeamsPrintService
             {
                 g.FillRectangle(hdrFill, lx, y, tableWidth, ColHdrH);
                 float cx = lx;
-                DrawColText("Team",     cx, ColTeamW);    cx += ColTeamW;
-                DrawColText("Players",  cx, ColPlayersW); cx += ColPlayersW;
-                DrawColText("Contact #", cx, ColPhoneW);
+                DrawColText("Team",       cx, ColTeamW);    cx += ColTeamW;
+                DrawColText("Captain",    cx, ColCaptainW); cx += ColCaptainW;
+                DrawColText("Players",    cx, ColPlayersW); cx += ColPlayersW;
+                DrawColText("Contact #",  cx, ColPhoneW);
                 g.DrawRectangle(Pens.Gray, lx, y, tableWidth - 1, ColHdrH - 1);
 
                 void DrawColText(string text, float x, float w)
@@ -287,11 +248,12 @@ public static class TeamsPrintService
                     g.DrawLine(sepPen, x + w, y, x + w, y + ColHdrH);
                 }
             }
-            void DrawDayLabel(string text)
+            void DrawDayLabel(string dayText, string timeSlot)
             {
                 g.FillRectangle(lightBrush, b.Left, y, b.Width, DayHdrH);
                 var dayRect = new RectangleF(b.Left, y, b.Width, DayHdrH);
-                g.DrawString(text, dayHdrFont, textBrush, dayRect, centerAlign);
+                string fullLabel = $"{dayText} - {timeSlot}";
+                g.DrawString(fullLabel, AppTheme.FontDefaultBold, new SolidBrush(Color.White), dayRect, centerAlign);
             }
             // Greedily pack names onto lines, breaking at name boundaries only.
             // Returns the wrapped text (lines joined with \n) and the required row height.
@@ -324,6 +286,7 @@ public static class TeamsPrintService
                 if (alt) g.FillRectangle(altFill, lx, y, tableWidth, rowH);
                 float cx = lx;
                 DrawCell(r.TeamIdentifier, cx, ColTeamW);  cx += ColTeamW;
+                DrawCell(r.CaptainName,    cx, ColCaptainW); cx += ColCaptainW;
                 DrawCell(wrappedPlayers,   cx, ColPlayersW); cx += ColPlayersW;
                 DrawCell(r.Phone,          cx, ColPhoneW);
                 g.DrawLine(sepPen, lx, y + rowH, lx + tableWidth, y + rowH);
@@ -380,13 +343,14 @@ public static class TeamsPrintService
                     {
                         // Orphan guard: require day header + at least 1 row
                         if (y + DayHdrH + DataRowH > yMax) { pe.HasMorePages = true; goto PageDone; }
-                        DrawDayLabel(day.DayLabel);
+                        DrawDayLabel(day.DayLabel, day.TimeSlot);
                         y += DayHdrH;
+                        y += DayGapH;  // Add white gap between days
                     }
 
                     for (; rowIdx < day.Teams.Count; rowIdx++)
                     {
-                        var (wrappedPlayers, rowH) = WrapPlayers(day.Teams[rowIdx].FormattedPlayers);
+                        var (wrappedPlayers, rowH) = WrapPlayers(day.Teams[rowIdx].AllOtherPlayers);
                         if (y + rowH > yMax) { pe.HasMorePages = true; goto PageDone; }
                         DrawDataRow(day.Teams[rowIdx], rowIdx % 2 == 1, rowH, wrappedPlayers);
                         y += rowH;
