@@ -149,10 +149,13 @@ public class ReportViewerPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
-            var reports = ReportService.GetActiveReports(db);
+            var reports = ReportService.GetActiveReports(db).ToList();
+
+            _lblStatus.Text = $"Found {reports.Count} reports";
+
             foreach (var report in reports)
             {
-                _reportList.Items.Add(report);
+                _reportList.Items.Add(report.Name);
             }
 
             if (_reportList.Items.Count > 0)
@@ -162,7 +165,7 @@ public class ReportViewerPanel : UserControl
         }
         catch (Exception ex)
         {
-            _lblStatus.Text = $"Error loading reports: {ex.Message}";
+            _lblStatus.Text = $"Error: {ex.Message}";
         }
     }
 
