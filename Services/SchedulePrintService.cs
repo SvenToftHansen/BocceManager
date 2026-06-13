@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Drawing.Printing;
 using BocceManager.Data;
 using BocceManager.Data.Entities;
+using BocceManager.UI.Theme;
 using Microsoft.EntityFrameworkCore;
 
 namespace BocceManager.Services;
@@ -122,7 +123,7 @@ public static class SchedulePrintService
         doc.QueryPageSettings += (_, qe) =>
         {
             qe.PageSettings.Landscape = false;
-            qe.PageSettings.Margins   = new Margins(25, 25, 25, 25);
+            qe.PageSettings.Margins   = new Margins(10, 10, 10, 10);
         };
         doc.BeginPrint += (_, _) => { secIdx = 0; rowIdx = 0; pageNum = 0; };
 
@@ -136,23 +137,24 @@ public static class SchedulePrintService
             float yMax = b.Bottom - FooterH;
             float pageH = yMax - b.Top;
 
-            using var docHdrFont = new Font(PrintFont, 16f, FontStyle.Bold);
-            using var titleFont  = new Font(PrintFont, 12f, FontStyle.Bold);
-            using var hdrFont    = new Font(PrintFont, 10f, FontStyle.Bold);
-            using var dataFont   = new Font(PrintFont, 10f);
-            using var teamFont   = new Font(PrintFont, 10f, FontStyle.Bold);
-            using var vsFont     = new Font(PrintFont, 10f, FontStyle.Italic);
-            using var footerFont = new Font(PrintFont,  9f);
-            using var hdrFill    = new SolidBrush(Color.FromArgb(210, 210, 210));
-            using var altFill    = new SolidBrush(Color.FromArgb(246, 246, 246));
-            using var sepPen     = new Pen(Color.FromArgb(190, 190, 190));
+            var docHdrFont = AppTheme.FontNavHeader;
+            var titleFont  = AppTheme.FontSectionHeading;
+            var hdrFont    = AppTheme.FontGridHeader;
+            var dataFont   = AppTheme.FontDefault;
+            var teamFont   = AppTheme.FontDefaultBold;
+            var vsFont     = AppTheme.FontSmall;
+            var footerFont = AppTheme.FontSmall;
+            using var headerBrush = new SolidBrush(AppTheme.NavHeader);
+            using var hdrFill     = new SolidBrush(AppTheme.GridHeaderBackground);
+            using var sepPen      = new Pen(AppTheme.GridLines);
             using var centerSf   = new StringFormat
             {
                 Alignment     = StringAlignment.Center,
                 LineAlignment = StringAlignment.Center
             };
 
-            float lx = b.Left + (b.Width - tableW) / 2f;
+            float lx = b.Left;
+            float tableW_adjusted = b.Width;
 
             // ── Draw helpers ──────────────────────────────────────────────────
             void DrawTmplTitle(string text)
@@ -161,21 +163,21 @@ public static class SchedulePrintService
             }
             void DrawColHeader(string[] headers)
             {
-                g.FillRectangle(hdrFill, lx, y, tableW, ColHdrH);
-                g.DrawString("Week Of", hdrFont, Brushes.Black, lx + 3, y + 4);
+                g.FillRectangle(hdrFill, lx, y, tableW_adjusted, ColHdrH);
+                g.DrawString("Week Of", hdrFont, new SolidBrush(Color.White), lx + 3, y + 4);
                 for (int i = 0; i < PrintCourts; i++)
                 {
                     float cx = lx + PrintWeekW + i * PrintCourtW;
                     g.DrawLine(sepPen, cx, y, cx, y + ColHdrH);
-                    g.DrawString(headers[i], hdrFont, Brushes.Black,
+                    g.DrawString(headers[i], hdrFont, new SolidBrush(Color.White),
                         new RectangleF(cx, y, PrintCourtW, ColHdrH), centerSf);
                 }
-                g.DrawRectangle(Pens.Gray, lx, y, tableW - 1, ColHdrH - 1);
+                g.DrawRectangle(sepPen, lx, y, tableW_adjusted - 1, ColHdrH - 1);
             }
             void DrawDataRow(PDataRow r)
             {
-                if (r.Alt) g.FillRectangle(altFill, lx, y, tableW, DataRowH);
-                g.DrawString(r.Week, dataFont, Brushes.Black, lx + 3, y + 3);
+                // All white background, no alternating colors
+                g.DrawString(r.Week, dataFont, new SolidBrush(Color.Black), lx + 3, y + 3);
                 for (int i = 0; i < PrintCourts; i++)
                 {
                     float cx = lx + PrintWeekW + i * PrintCourtW;
@@ -190,21 +192,22 @@ public static class SchedulePrintService
                         float w2  = g.MeasureString(slot.S2, teamFont, PointF.Empty, sf).Width;
                         float tx  = cx + (PrintCourtW - (w1 + vsGap + wv + vsGap + w2)) / 2f;
                         float ry  = y + (DataRowH - teamFont.GetHeight(g)) / 2f;
-                        g.DrawString(slot.S1, teamFont, Brushes.Black, tx,                           ry, sf);
-                        g.DrawString("vs",    vsFont,   Brushes.Black, tx + w1 + vsGap,              ry, sf);
-                        g.DrawString(slot.S2, teamFont, Brushes.Black, tx + w1 + vsGap + wv + vsGap, ry, sf);
+                        g.DrawString(slot.S1, teamFont, new SolidBrush(Color.Black), tx,                           ry, sf);
+                        g.DrawString("vs",    vsFont,   new SolidBrush(Color.Black), tx + w1 + vsGap,              ry, sf);
+                        g.DrawString(slot.S2, teamFont, new SolidBrush(Color.Black), tx + w1 + vsGap + wv + vsGap, ry, sf);
                     }
                 }
-                g.DrawLine(sepPen, lx, y + DataRowH, lx + tableW, y + DataRowH);
+                g.DrawLine(sepPen, lx, y + DataRowH, lx + tableW_adjusted, y + DataRowH);
             }
             // ─────────────────────────────────────────────────────────────────
 
-            // Document header — page 1 only, centered above all sections
+            // Document header — page 1 only, with dark background and white text
             if (pageNum == 1 && sections.Count > 0)
             {
-                var sz = g.MeasureString(sections[0].DocHeader, docHdrFont);
-                g.DrawString(sections[0].DocHeader, docHdrFont, Brushes.Black,
-                    b.Left + (b.Width - sz.Width) / 2f, y + 4);
+                g.FillRectangle(headerBrush, b.Left, y, b.Width, DocHdrH);
+                var centerSf_hdr = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                var hdrRect = new RectangleF(b.Left, y, b.Width, DocHdrH);
+                g.DrawString(sections[0].DocHeader, docHdrFont, new SolidBrush(Color.White), hdrRect, centerSf_hdr);
                 y += DocHdrH;
             }
 
@@ -232,7 +235,7 @@ public static class SchedulePrintService
                     if (!firstOnPage)
                     {
                         if (y + SepH > yMax) { pe.HasMorePages = true; break; }
-                        g.DrawLine(Pens.LightGray, lx, y + SepH / 2f, lx + tableW, y + SepH / 2f);
+                        g.DrawLine(sepPen, lx, y + SepH / 2f, lx + tableW_adjusted, y + SepH / 2f);
                         y += SepH;
                     }
                 }
