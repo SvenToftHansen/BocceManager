@@ -13,6 +13,7 @@ public class ReportViewerPanel : UserControl
     private Button _btnWeb = null!;
     private Label _lblStatus = null!;
     private Label _lblPreview = null!;
+    private DataGridView _dataGrid = null!;
     private List<Data.Entities.Report> _reports = new();
 
     public ReportViewerPanel()
@@ -84,6 +85,29 @@ public class ReportViewerPanel : UserControl
             AutoSize = false
         };
         centerPanel.Controls.Add(_lblPreview);
+
+        _dataGrid = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            BackgroundColor = AppTheme.Surface,
+            BorderStyle = BorderStyle.None,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            AllowUserToOrderColumns = false,
+            AllowUserToResizeRows = false,
+            ReadOnly = true,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            MultiSelect = false,
+            RowHeadersVisible = true,
+            Visible = false
+        };
+        _dataGrid.DefaultCellStyle.BackColor = AppTheme.Surface;
+        _dataGrid.DefaultCellStyle.ForeColor = AppTheme.TextPrimary;
+        _dataGrid.DefaultCellStyle.Font = AppTheme.FontDefault;
+        _dataGrid.ColumnHeadersDefaultCellStyle.BackColor = AppTheme.ContentBackground;
+        _dataGrid.ColumnHeadersDefaultCellStyle.ForeColor = AppTheme.TextPrimary;
+        _dataGrid.ColumnHeadersDefaultCellStyle.Font = AppTheme.FontDefaultBold;
+        centerPanel.Controls.Add(_dataGrid);
 
         // Bottom bar with controls
         var bottomBar = new Panel
@@ -205,16 +229,73 @@ public class ReportViewerPanel : UserControl
 
             if (!seasonId.HasValue)
             {
-                MessageBox.Show("No default season selected.", report.Name, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                _lblPreview.Visible = true;
+                _dataGrid.Visible = false;
+                _lblPreview.Text = "No default season selected";
                 return;
             }
 
-            _lblPreview.Text = $"✓ {report.Name} ready\n\nClick 'Print' to preview and print\nClick 'PDF' to export to file";
+            if (report.Name.Contains("Team"))
+            {
+                LoadTeamListingData(db, seasonId.Value);
+            }
+            else if (report.Name.Contains("Schedule"))
+            {
+                LoadScheduleData(db, seasonId.Value);
+            }
+
+            _lblPreview.Visible = false;
+            _dataGrid.Visible = true;
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error loading report:\n\n{ex.Message}", report.Name, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            _lblPreview.Visible = true;
+            _dataGrid.Visible = false;
+            _lblPreview.Text = $"Error: {ex.Message}";
         }
+    }
+
+    private void LoadTeamListingData(BocceDbContext db, int seasonId)
+    {
+        var teams = db.Teams
+            .Where(t => t.Division.SeasonId == seasonId)
+            .OrderBy(t => t.Division.Name)
+            .ThenBy(t => t.SystemName)
+            .Select(t => new
+            {
+                Division = t.Division.Name,
+                Team = t.EffectiveDisplayName,
+                Captain = (t.Captain != null ? t.Captain.FirstName + " " + t.Captain.LastName : ""),
+                PlayerCount = t.TeamPlayers.Count(tp => tp.IsActive)
+            })
+            .ToList();
+
+        _dataGrid.DataSource = teams;
+        _dataGrid.AutoResizeColumns();
+    }
+
+    private void LoadScheduleData(BocceDbContext db, int seasonId)
+    {
+        var schedules = db.Matches
+            .Where(m => m.ScheduleWeek.Division.SeasonId == seasonId)
+            .OrderBy(m => m.ScheduleWeek.Division.Name)
+            .ThenBy(m => m.ScheduleWeek.WeekNumber)
+            .ThenBy(m => m.CourtId)
+            .Select(m => new
+            {
+                Division = m.ScheduleWeek.Division.Name,
+                Week = m.ScheduleWeek.WeekNumber,
+                Date = m.ScheduledDate.HasValue ? m.ScheduledDate.Value.ToString("MMM dd") : "",
+                Time = m.ScheduledTime.HasValue ? m.ScheduledTime.Value.ToString("h:mm tt") : "",
+                Court = m.Court != null ? m.Court.CourtNumber.ToString() : "TBD",
+                Team1 = m.Team1.EffectiveDisplayName,
+                Team2 = m.Team2.EffectiveDisplayName,
+                Status = m.Status
+            })
+            .ToList();
+
+        _dataGrid.DataSource = schedules;
+        _dataGrid.AutoResizeColumns();
     }
 
     private void OnClickPrint(object? sender, EventArgs e)
