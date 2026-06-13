@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Drawing.Printing;
 using BocceManager.Data;
 using BocceManager.Data.Entities;
+using BocceManager.UI.Theme;
 using Microsoft.EntityFrameworkCore;
 
 namespace BocceManager.Services;
@@ -21,7 +22,6 @@ public static class TeamsPrintService
     private const float ColPhoneW   = 120f;
     private const float TableW      = ColTeamW + ColPlayersW + ColPhoneW;
 
-    private const string PrintFont = "Consolas";
 
     private const float DocHdrH     = 40f;
     private const float TimeSlotH   = 28f;
@@ -247,18 +247,18 @@ public static class TeamsPrintService
             float y    = b.Top;
             float yMax = b.Bottom - FooterH;
 
-            using var docHdrFont   = new Font(PrintFont, 16f, FontStyle.Bold);
-            using var timeSlotFont = new Font(PrintFont, 12f, FontStyle.Bold);
-            using var dayHdrFont   = new Font(PrintFont, 10f, FontStyle.Bold);
-            using var colHdrFont   = new Font(PrintFont,  9f, FontStyle.Bold);
-            using var dataFont     = new Font(PrintFont,  9f);
-            using var footerFont   = new Font(PrintFont,  8f);
-            using var darkGreenBrush = new SolidBrush(Color.FromArgb(0, 100, 0));
-            using var lightGreenBrush = new SolidBrush(Color.FromArgb(144, 238, 144));
-            using var whiteBrush   = new SolidBrush(Color.White);
-            using var hdrFill      = new SolidBrush(Color.FromArgb(210, 210, 210));
-            using var altFill      = new SolidBrush(Color.FromArgb(246, 246, 246));
-            using var sepPen       = new Pen(Color.FromArgb(190, 190, 190));
+            using var docHdrFont   = AppTheme.FontPageTitle;
+            using var timeSlotFont = AppTheme.FontSectionHeading;
+            using var dayHdrFont   = AppTheme.FontNavHeader;
+            using var colHdrFont   = AppTheme.FontGridHeader;
+            using var dataFont     = AppTheme.FontDefault;
+            using var footerFont   = AppTheme.FontSmall;
+            using var headerBrush  = new SolidBrush(AppTheme.NavHeader);
+            using var lightBrush   = new SolidBrush(AppTheme.NavHover);
+            using var textBrush    = new SolidBrush(AppTheme.TextPrimary);
+            using var hdrFill      = new SolidBrush(AppTheme.GridHeaderBackground);
+            using var altFill      = new SolidBrush(AppTheme.GridAlternateRow);
+            using var sepPen       = new Pen(AppTheme.GridLines);
             using var leftAlign    = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Near };
             using var centerAlign  = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
 
@@ -268,9 +268,9 @@ public static class TeamsPrintService
             // ── Draw helpers ──────────────────────────────────────────────────
             void DrawTimeSlotLabel(string text)
             {
-                g.FillRectangle(darkGreenBrush, b.Left, y, b.Width, TimeSlotH);
+                g.FillRectangle(headerBrush, b.Left, y, b.Width, TimeSlotH);
                 var timeSlotRect = new RectangleF(b.Left, y, b.Width, TimeSlotH);
-                g.DrawString(text, timeSlotFont, whiteBrush, timeSlotRect, centerAlign);
+                g.DrawString(text, timeSlotFont, new SolidBrush(Color.White), timeSlotRect, centerAlign);
             }
             void DrawColHeader()
             {
@@ -283,15 +283,15 @@ public static class TeamsPrintService
 
                 void DrawColText(string text, float x, float w)
                 {
-                    g.DrawString(text, colHdrFont, Brushes.Black, new RectangleF(x + 2, y + 2, w - 4, ColHdrH - 4), leftAlign);
+                    g.DrawString(text, colHdrFont, new SolidBrush(AppTheme.GridHeaderText), new RectangleF(x + 2, y + 2, w - 4, ColHdrH - 4), leftAlign);
                     g.DrawLine(sepPen, x + w, y, x + w, y + ColHdrH);
                 }
             }
             void DrawDayLabel(string text)
             {
-                g.FillRectangle(lightGreenBrush, b.Left, y, b.Width, DayHdrH);
+                g.FillRectangle(lightBrush, b.Left, y, b.Width, DayHdrH);
                 var dayRect = new RectangleF(b.Left, y, b.Width, DayHdrH);
-                g.DrawString(text, dayHdrFont, Brushes.Black, dayRect, centerAlign);
+                g.DrawString(text, dayHdrFont, textBrush, dayRect, centerAlign);
             }
             // Greedily pack names onto lines, breaking at name boundaries only.
             // Returns the wrapped text (lines joined with \n) and the required row height.
@@ -331,7 +331,7 @@ public static class TeamsPrintService
                 void DrawCell(string text, float x, float w)
                 {
                     if (!string.IsNullOrEmpty(text))
-                        g.DrawString(text, dataFont, Brushes.Black, new RectangleF(x + 2, y + 1, w - 4, rowH - 2), leftAlign);
+                        g.DrawString(text, dataFont, textBrush, new RectangleF(x + 2, y + 1, w - 4, rowH - 2), leftAlign);
                     g.DrawLine(sepPen, x + w, y, x + w, y + rowH);
                 }
             }
@@ -340,9 +340,9 @@ public static class TeamsPrintService
             // Document header — every page
             if (sections.Count > 0)
             {
-                g.FillRectangle(darkGreenBrush, b.Left, y, b.Width, DocHdrH);
+                g.FillRectangle(headerBrush, b.Left, y, b.Width, DocHdrH);
                 var hdrRect = new RectangleF(b.Left, y, b.Width, DocHdrH);
-                g.DrawString(sections[0].DocHeader, docHdrFont, whiteBrush, hdrRect, centerAlign);
+                g.DrawString(sections[0].DocHeader, docHdrFont, new SolidBrush(Color.White), hdrRect, centerAlign);
                 y += DocHdrH;
             }
 
