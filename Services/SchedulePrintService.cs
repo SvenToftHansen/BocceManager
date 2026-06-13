@@ -19,7 +19,7 @@ public static class SchedulePrintService
     private const float PrintWeekW  = 150f;
     private const float PrintCourtW = 162.5f;  // 4 × 162.5 + 150 week = 800 = full margin width
     private const int   PrintCourts = 4;
-    private const float DocHdrH     = 40f;
+    private const float DocHdrH     = 48f;  // Increased to prevent cutoff
     private const float TmplTitleH  = 28f;
     private const float ColHdrH     = 24f;
     private const float DataRowH    = 22f;

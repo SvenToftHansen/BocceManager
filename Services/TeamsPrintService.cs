@@ -23,7 +23,7 @@ public static class TeamsPrintService
     private const float DayGapH     = 12f;   // 1/8 inch gap between days
 
 
-    private const float DocHdrH     = 40f;
+    private const float DocHdrH     = 48f;  // Increased to prevent cutoff
     private const float TimeSlotH   = 28f;
     private const float ColHdrH     = 24f;
     private const float DataRowH    = 18f;
