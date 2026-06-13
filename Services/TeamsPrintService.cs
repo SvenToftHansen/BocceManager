@@ -19,9 +19,7 @@ public static class TeamsPrintService
 
     private const float ColTeamW    = 70f;
     private const float ColCaptainW = 120f;
-    private const float ColPlayersW = 310f;  // Other players
     private const float ColPhoneW   = 110f;
-    private const float TableW      = ColTeamW + ColCaptainW + ColPlayersW + ColPhoneW;
     private const float DayGapH     = 12f;   // 1/8 inch gap between days
 
 
@@ -207,8 +205,8 @@ public static class TeamsPrintService
             float y    = b.Top;
             float yMax = b.Bottom - FooterH;
 
-            var docHdrFont   = AppTheme.FontPageTitle;
-            var timeSlotFont = AppTheme.FontSectionHeading;
+            var docHdrFont   = AppTheme.FontSectionHeading;  // Smaller than PageTitle
+            var timeSlotFont = AppTheme.FontNavHeader;
             var dayHdrFont   = AppTheme.FontNavHeader;
             var colHdrFont   = AppTheme.FontGridHeader;
             var dataFont     = AppTheme.FontDefault;
@@ -224,6 +222,7 @@ public static class TeamsPrintService
 
             float lx = b.Left;
             float tableWidth = b.Width;
+            float ColPlayersW = tableWidth - ColTeamW - ColCaptainW - ColPhoneW;  // Fill remaining space
 
             // ── Draw helpers ──────────────────────────────────────────────────
             void DrawTimeSlotLabel(string text)
