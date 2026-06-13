@@ -247,12 +247,12 @@ public static class TeamsPrintService
             float y    = b.Top;
             float yMax = b.Bottom - FooterH;
 
-            using var docHdrFont   = AppTheme.FontPageTitle;
-            using var timeSlotFont = AppTheme.FontSectionHeading;
-            using var dayHdrFont   = AppTheme.FontNavHeader;
-            using var colHdrFont   = AppTheme.FontGridHeader;
-            using var dataFont     = AppTheme.FontDefault;
-            using var footerFont   = AppTheme.FontSmall;
+            var docHdrFont   = AppTheme.FontPageTitle;
+            var timeSlotFont = AppTheme.FontSectionHeading;
+            var dayHdrFont   = AppTheme.FontNavHeader;
+            var colHdrFont   = AppTheme.FontGridHeader;
+            var dataFont     = AppTheme.FontDefault;
+            var footerFont   = AppTheme.FontSmall;
             using var headerBrush  = new SolidBrush(AppTheme.NavHeader);
             using var lightBrush   = new SolidBrush(AppTheme.NavHover);
             using var textBrush    = new SolidBrush(AppTheme.TextPrimary);
