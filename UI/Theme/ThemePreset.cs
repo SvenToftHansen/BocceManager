@@ -3,10 +3,11 @@ namespace BocceManager.UI.Theme;
 public enum ThemePreset
 {
     Light,
-    Dark,
+    LightRed,
+    LightYellow,
+    LightPurple,
+    LightCyan,
     Classic,
     BocceGreen,
-    MidnightBlue,
-    Slate,
-    HighContrast
+    Slate
 }

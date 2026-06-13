@@ -88,28 +88,106 @@ public static class AppTheme
 
         switch (preset)
         {
-            case ThemePreset.Dark:
-                NavBackground      = C(25,  25,  28);
-                NavTitleBackground = C(15,  15,  18);
-                NavText            = C(210, 210, 215);
-                NavHover           = C(45,  45,  50);
-                NavSelected        = C(0,   120, 215);
-                NavHeader          = C(100, 100, 110);
-                ContentBackground  = C(32,  32,  35);
-                Surface            = C(45,  45,  50);
-                TextPrimary        = C(230, 230, 235);
-                TextSecondary      = C(150, 150, 160);
-                TextMuted          = C(120, 120, 130);
-                Separator          = C(65,  65,  72);
-                Accent             = C(0,   120, 215);
-                GridHeaderBackground = C(20,  20,  24);
-                GridHeaderText       = C(210, 210, 215);
-                GridAlternateRow     = C(38,  38,  42);
-                GridLines            = C(55,  55,  62);
-                ButtonSuccess        = C(39,  174, 96);
-                ButtonDanger         = C(192, 57,  43);
-                EditModeBackground   = C(70,  60,  35);
-                CreateModeBackground = C(50,  70,  45);
+            case ThemePreset.LightRed:
+                NavBackground      = C(180, 50,  50);
+                NavTitleBackground = C(150, 40,  40);
+                NavText            = C(255, 255, 255);
+                NavHover           = C(200, 70,  70);
+                NavSelected        = C(255, 200, 0);
+                NavHeader          = C(220, 100, 100);
+                ContentBackground  = Color.White;
+                Surface            = C(248, 245, 245);
+                TextPrimary        = C(44,  44,  44);
+                TextSecondary      = C(127, 127, 127);
+                TextMuted          = C(100, 100, 100);
+                Separator          = C(220, 180, 180);
+                Accent             = C(200, 50,  50);
+                GridHeaderBackground = C(180, 50,  50);
+                GridHeaderText       = Color.White;
+                GridAlternateRow     = C(248, 245, 245);
+                GridLines           = C(220, 180, 180);
+                ButtonSuccess        = C(46,  204, 113);
+                ButtonDanger         = C(231, 76,  60);
+                EditModeBackground   = C(255, 240, 240);
+                CreateModeBackground = C(240, 255, 240);
+                DisabledBackground   = ContentBackground;
+                DisabledText         = TextPrimary;
+                break;
+
+            case ThemePreset.LightYellow:
+                NavBackground      = C(200, 160, 40);
+                NavTitleBackground = C(180, 140, 30);
+                NavText            = C(255, 255, 255);
+                NavHover           = C(220, 180, 60);
+                NavSelected        = C(50,  100, 200);
+                NavHeader          = C(220, 190, 100);
+                ContentBackground  = Color.White;
+                Surface            = C(250, 248, 240);
+                TextPrimary        = C(44,  44,  44);
+                TextSecondary      = C(127, 127, 127);
+                TextMuted          = C(100, 100, 100);
+                Separator          = C(230, 210, 180);
+                Accent             = C(200, 160, 40);
+                GridHeaderBackground = C(200, 160, 40);
+                GridHeaderText       = Color.White;
+                GridAlternateRow     = C(250, 248, 240);
+                GridLines            = C(230, 210, 180);
+                ButtonSuccess        = C(46,  204, 113);
+                ButtonDanger         = C(231, 76,  60);
+                EditModeBackground   = C(255, 254, 230);
+                CreateModeBackground = C(240, 255, 240);
+                DisabledBackground   = ContentBackground;
+                DisabledText         = TextPrimary;
+                break;
+
+            case ThemePreset.LightPurple:
+                NavBackground      = C(120, 70,  160);
+                NavTitleBackground = C(100, 50,  140);
+                NavText            = C(255, 255, 255);
+                NavHover           = C(140, 90,  180);
+                NavSelected        = C(255, 200, 0);
+                NavHeader          = C(160, 120, 200);
+                ContentBackground  = Color.White;
+                Surface            = C(248, 245, 252);
+                TextPrimary        = C(44,  44,  44);
+                TextSecondary      = C(127, 127, 127);
+                TextMuted          = C(100, 100, 100);
+                Separator          = C(210, 190, 230);
+                Accent             = C(120, 70,  160);
+                GridHeaderBackground = C(120, 70,  160);
+                GridHeaderText       = Color.White;
+                GridAlternateRow     = C(248, 245, 252);
+                GridLines            = C(210, 190, 230);
+                ButtonSuccess        = C(46,  204, 113);
+                ButtonDanger         = C(231, 76,  60);
+                EditModeBackground   = C(245, 240, 255);
+                CreateModeBackground = C(240, 255, 240);
+                DisabledBackground   = ContentBackground;
+                DisabledText         = TextPrimary;
+                break;
+
+            case ThemePreset.LightCyan:
+                NavBackground      = C(30,  140, 160);
+                NavTitleBackground = C(20,  120, 140);
+                NavText            = C(255, 255, 255);
+                NavHover           = C(50,  160, 180);
+                NavSelected        = C(255, 200, 0);
+                NavHeader          = C(100, 180, 200);
+                ContentBackground  = Color.White;
+                Surface            = C(240, 250, 252);
+                TextPrimary        = C(44,  44,  44);
+                TextSecondary      = C(127, 127, 127);
+                TextMuted          = C(100, 100, 100);
+                Separator          = C(190, 230, 240);
+                Accent             = C(30,  140, 160);
+                GridHeaderBackground = C(30,  140, 160);
+                GridHeaderText       = Color.White;
+                GridAlternateRow     = C(240, 250, 252);
+                GridLines            = C(190, 230, 240);
+                ButtonSuccess        = C(46,  204, 113);
+                ButtonDanger         = C(231, 76,  60);
+                EditModeBackground   = C(240, 255, 255);
+                CreateModeBackground = C(240, 255, 240);
                 DisabledBackground   = ContentBackground;
                 DisabledText         = TextPrimary;
                 break;
@@ -166,31 +244,6 @@ public static class AppTheme
                 DisabledText         = TextPrimary;
                 break;
 
-            case ThemePreset.MidnightBlue:
-                NavBackground      = C(13,  27,  62);
-                NavTitleBackground = C(8,   18,  42);
-                NavText            = C(180, 210, 255);
-                NavHover           = C(22,  44,  95);
-                NavSelected        = C(0,   200, 210);
-                NavHeader          = C(90,  130, 195);
-                ContentBackground  = C(18,  35,  75);
-                Surface            = C(25,  48,  100);
-                TextPrimary        = C(200, 220, 255);
-                TextSecondary      = C(130, 165, 220);
-                TextMuted          = C(110, 145, 200);
-                Separator          = C(40,  70,  130);
-                Accent             = C(0,   200, 210);
-                GridHeaderBackground = C(10,  22,  52);
-                GridHeaderText       = C(180, 210, 255);
-                GridAlternateRow     = C(22,  40,  82);
-                GridLines            = C(38,  65,  120);
-                ButtonSuccess        = C(0,   180, 160);
-                ButtonDanger         = C(180, 50,  80);
-                EditModeBackground   = C(45,  55,  95);
-                CreateModeBackground = C(35,  65,  50);
-                DisabledBackground   = ContentBackground;
-                DisabledText         = TextPrimary;
-                break;
 
             case ThemePreset.Slate:
                 NavBackground      = C(52,  62,  72);
@@ -218,31 +271,6 @@ public static class AppTheme
                 DisabledText         = TextPrimary;
                 break;
 
-            case ThemePreset.HighContrast:
-                NavBackground      = C(0,   0,   0);
-                NavTitleBackground = C(0,   0,   0);
-                NavText            = C(255, 255, 0);
-                NavHover           = C(40,  40,  0);
-                NavSelected        = C(255, 255, 255);
-                NavHeader          = C(200, 200, 0);
-                ContentBackground  = C(0,   0,   0);
-                Surface            = C(20,  20,  20);
-                TextPrimary        = C(255, 255, 255);
-                TextSecondary      = C(255, 255, 0);
-                TextMuted          = C(200, 200, 200);
-                Separator          = C(255, 255, 255);
-                Accent             = C(255, 255, 0);
-                GridHeaderBackground = C(0,   0,   0);
-                GridHeaderText       = C(255, 255, 0);
-                GridAlternateRow     = C(15,  15,  15);
-                GridLines            = C(100, 100, 100);
-                ButtonSuccess        = C(0,   200, 0);
-                ButtonDanger         = C(255, 0,   0);
-                EditModeBackground   = C(255, 255, 0);
-                CreateModeBackground = C(0,   255, 0);
-                DisabledBackground   = ContentBackground;
-                DisabledText         = TextPrimary;
-                break;
 
             default: // Light
                 NavBackground      = C(44,  62,  80);
@@ -337,12 +365,13 @@ public static class AppTheme
     public static string DisplayName(ThemePreset preset) => preset switch
     {
         ThemePreset.Light        => "Light",
-        ThemePreset.Dark         => "Dark",
+        ThemePreset.LightRed     => "Light Red",
+        ThemePreset.LightYellow  => "Light Yellow",
+        ThemePreset.LightPurple  => "Light Purple",
+        ThemePreset.LightCyan    => "Light Cyan",
         ThemePreset.Classic      => "Classic",
         ThemePreset.BocceGreen   => "Bocce Green",
-        ThemePreset.MidnightBlue => "Midnight Blue",
         ThemePreset.Slate        => "Slate",
-        ThemePreset.HighContrast => "High Contrast",
         _ => preset.ToString()
     };
 }

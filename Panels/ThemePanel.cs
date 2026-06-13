@@ -168,9 +168,21 @@ public class ThemePanel : UserControl
 
     private static ThemePreview PreviewColors(ThemePreset preset) => preset switch
     {
-        ThemePreset.Dark => new(
-            C(25,25,28), C(210,210,215), C(32,32,35),
-            C(0,120,215), C(230,230,235), C(39,174,96), C(192,57,43)),
+        ThemePreset.LightRed => new(
+            C(180,50,50), C(255,255,255), Color.White,
+            C(200,50,50), C(44,44,44), C(46,204,113), C(231,76,60)),
+
+        ThemePreset.LightYellow => new(
+            C(200,160,40), C(255,255,255), Color.White,
+            C(200,160,40), C(44,44,44), C(46,204,113), C(231,76,60)),
+
+        ThemePreset.LightPurple => new(
+            C(120,70,160), C(255,255,255), Color.White,
+            C(120,70,160), C(44,44,44), C(46,204,113), C(231,76,60)),
+
+        ThemePreset.LightCyan => new(
+            C(30,140,160), C(255,255,255), Color.White,
+            C(30,140,160), C(44,44,44), C(46,204,113), C(231,76,60)),
 
         ThemePreset.Classic => new(
             C(100,100,100), C(255,255,255), C(240,240,240),
@@ -180,17 +192,9 @@ public class ThemePanel : UserControl
             C(27,79,45), C(220,240,228), C(245,252,247),
             C(39,174,96), C(27,79,45), C(39,174,96), C(192,57,43)),
 
-        ThemePreset.MidnightBlue => new(
-            C(13,27,62), C(180,210,255), C(18,35,75),
-            C(0,200,210), C(200,220,255), C(0,180,160), C(180,50,80)),
-
         ThemePreset.Slate => new(
             C(52,62,72), C(215,220,228), C(244,245,248),
             C(220,100,30), C(52,62,72), C(70,170,100), C(192,57,43)),
-
-        ThemePreset.HighContrast => new(
-            C(0,0,0), C(255,255,0), C(0,0,0),
-            C(255,255,0), C(255,255,255), C(0,200,0), C(255,0,0)),
 
         _ => new( // Light (default)
             C(44,62,80), C(236,240,241), Color.White,
