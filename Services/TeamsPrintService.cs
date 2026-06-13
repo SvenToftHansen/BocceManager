@@ -243,7 +243,7 @@ public static class TeamsPrintService
 
                 void DrawColText(string text, float x, float w)
                 {
-                    g.DrawString(text, colHdrFont, new SolidBrush(Color.Black), new RectangleF(x + 2, y + 2, w - 4, ColHdrH - 4), leftAlign);
+                    g.DrawString(text, colHdrFont, new SolidBrush(Color.White), new RectangleF(x + 2, y + 2, w - 4, ColHdrH - 4), leftAlign);
                     g.DrawLine(sepPen, x + w, y, x + w, y + ColHdrH);
                 }
             }
