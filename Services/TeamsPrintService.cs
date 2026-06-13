@@ -195,7 +195,7 @@ public static class TeamsPrintService
         doc.QueryPageSettings += (_, qe) =>
         {
             qe.PageSettings.Landscape = false;
-            qe.PageSettings.Margins   = new Margins(10, 10, 10, 10);
+            qe.PageSettings.Margins   = new Margins(10, 15, 10, 15);  // Extra space top/bottom
         };
         doc.BeginPrint += (_, _) => { secIdx = 0; dayIdx = 0; rowIdx = 0; pageNum = 0; };
 
