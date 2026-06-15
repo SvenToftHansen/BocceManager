@@ -57,12 +57,11 @@ public static class SchedulePrintService
         string docHeader    = $"Golden Vista Bocce Ball  –  {season.League.Name}  –  {season.Name}";
         string courtDisplay = AppParameterService.GetCourtDisplay(db, season.LeagueId);
 
-        var seasonCourts = db.SeasonCourts
-            .Where(sc => sc.SeasonId == seasonId)
-            .Include(sc => sc.Court)
-            .OrderBy(sc => sc.Court.CourtNumber)
+        var seasonCourts = db.Courts
+            .Where(c => c.IsActive)
+            .OrderBy(c => c.SortOrder)
             .AsEnumerable()
-            .Select(sc => (Id: sc.CourtId, Display: CourtLabel(sc.Court, courtDisplay)))
+            .Select(c => (Id: c.Id, Display: CourtLabel(c, courtDisplay)))
             .ToList();
 
         var courtOrder = seasonCourts.Take(PrintCourts).ToList();

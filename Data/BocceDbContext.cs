@@ -65,6 +65,7 @@ public class BocceDbContext : DbContext
     public DbSet<ScheduleTemplate>      ScheduleTemplates      => Set<ScheduleTemplate>();
     public DbSet<ScheduleTemplateWeek>  ScheduleTemplateWeeks  => Set<ScheduleTemplateWeek>();
     public DbSet<ScheduleTemplateMatch> ScheduleTemplateMatches => Set<ScheduleTemplateMatch>();
+    public DbSet<ScheduleDivision>      ScheduleDivisions      => Set<ScheduleDivision>();
 
     // Standings
     public DbSet<TeamStanding> TeamStandings => Set<TeamStanding>();

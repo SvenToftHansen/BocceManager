@@ -110,6 +110,7 @@ Navigation is rebuilt when app starts; visibility depends on whether a default s
 ---
 
 ## References
+- **Master backlog**: `TODOLIST.md` in project root — all pending features, bugs, and tasks. At session start, pick 3–5 items and load into TodoWrite. Update TODOLIST.md when items are completed.
 - Memory system: `/memory/` directory (auto-memory, persists across sessions)
 - Database migrations: `/Data/Migrations/`
 - Print services (legacy): `Services/TeamsPrintService.cs`, `Services/SchedulePrintService.cs`

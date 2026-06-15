@@ -6,16 +6,19 @@ namespace BocceManager.Services;
 
 public static class ScheduleTemplateService
 {
-    public static readonly int[] ValidTeamCounts = [4, 6, 8];
+    public static readonly int[] ValidTeamCounts = [4, 6, 8, 10, 12, 14, 16, 18, 20];
+
+    public static bool IsValidTeamCount(int teamCount) => teamCount >= 4 && teamCount % 2 == 0;
 
     /// <summary>
     /// Generates (or replaces) a schedule template for the given season and team count.
     /// Uses the circle-method round-robin and greedy court balancing.
+    /// For 4-team templates, enforces a fixed pattern for weeks 1-3 for backward compatibility.
     /// </summary>
     public static ScheduleTemplate Generate(BocceDbContext db, int seasonId, int teamCount)
     {
-        if (!ValidTeamCounts.Contains(teamCount))
-            throw new ArgumentException($"Team count must be 4, 6, or 8 (got {teamCount}).");
+        if (!IsValidTeamCount(teamCount))
+            throw new ArgumentException($"Team count must be even and >= 4 (got {teamCount}).");
 
         var season = db.Seasons.Find(seasonId)
             ?? throw new InvalidOperationException("Season not found.");
@@ -25,10 +28,10 @@ public static class ScheduleTemplateService
             throw new InvalidOperationException(
                 "Season must have WeeksInSeason or GamesPerSeason set before generating a template.");
 
-        var courtIds = db.SeasonCourts
-            .Where(sc => sc.SeasonId == seasonId)
-            .OrderBy(sc => sc.CourtId)
-            .Select(sc => sc.CourtId)
+        var courtIds = db.Courts
+            .Where(c => c.IsActive)
+            .OrderBy(c => c.SortOrder)
+            .Select(c => c.Id)
             .ToList();
 
         int courtsNeeded = teamCount / 2;
@@ -36,6 +39,8 @@ public static class ScheduleTemplateService
             throw new InvalidOperationException(
                 $"Season needs at least {courtsNeeded} courts for a {teamCount}-team template " +
                 $"(currently has {courtIds.Count}).");
+
+        courtIds = courtIds.Take(courtsNeeded).ToList();
 
         // Remove existing template (cascade deletes weeks + matches)
         var existing = db.ScheduleTemplates
@@ -58,9 +63,36 @@ public static class ScheduleTemplateService
         // court usage: how many times slot X has played on court Y
         var usage = new Dictionary<(int CourtId, char Slot), int>();
 
+        // Special case for 4-team: fixed pattern for first 3 weeks for backward compatibility
+        List<List<(char Slot1, char Slot2)>> initialRounds = [];
+        if (teamCount == 4)
+        {
+            initialRounds = new List<List<(char Slot1, char Slot2)>>
+            {
+                new() { (Slot1: 'A', Slot2: 'B'), (Slot1: 'C', Slot2: 'D') },  // Week 1
+                new() { (Slot1: 'A', Slot2: 'C'), (Slot1: 'B', Slot2: 'D') },  // Week 2
+                new() { (Slot1: 'A', Slot2: 'D'), (Slot1: 'B', Slot2: 'C') }   // Week 3
+            };
+        }
+
         for (int week = 1; week <= weekCount; week++)
         {
-            var round = rounds[(week - 1) % cycleLen];
+            List<(char Slot1, char Slot2)> round;
+
+            if (teamCount == 4 && week <= 3)
+            {
+                round = initialRounds[week - 1];
+            }
+            else if (teamCount == 4)
+            {
+                // Continue from round 0 (standard rotation) for weeks 4+
+                round = rounds[(week - 4) % cycleLen];
+            }
+            else
+            {
+                round = rounds[(week - 1) % cycleLen];
+            }
+
             var courts = AssignCourts(round, courtIds, usage);
 
             var templateWeek = new ScheduleTemplateWeek
@@ -205,6 +237,11 @@ public static class ScheduleTemplateService
     {
         var template = db.ScheduleTemplates.Find(templateId)
             ?? throw new InvalidOperationException("Template not found.");
+
+        // Delete all division schedules that reference this template
+        var divisionSchedules = db.ScheduleDivisions.Where(s => s.TemplateId == templateId).ToList();
+        db.ScheduleDivisions.RemoveRange(divisionSchedules);
+
         db.ScheduleTemplates.Remove(template);
         db.SaveChanges();
     }

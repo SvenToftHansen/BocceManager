@@ -63,6 +63,26 @@ Currently enforced in DivisionPanel and PlayerPanel only.
   - Generates all reports and merges them into one PDF
   - Output to configured PDF folder
 
+## Season Creation
+
+- [ ] **Clone Season wizard** — when creating a new season, offer option to copy structure from a previous Locked or Completed season
+  - Dropdown to select the source season (filtered to Locked/Completed only)
+  - Checkboxes/option buttons for what to copy:
+    - [ ] Teams (roster structure, not scores)
+    - [ ] Parameters (division settings, court assignments, schedule config, etc.)
+  - Copying is optional — user can create a blank season if preferred
+
 ## Data Import
 
 - [x] Import prior-season players + team history from local PostgreSQL DB into SQLite
+
+## Documentation Refactoring
+
+Organize CLAUDE.md by splitting into focused, modular documentation files:
+
+- [ ] **ARCHITECTURE.md** — Reporting system, database schema, design decisions
+- [ ] **DATABASE.md** — Detailed table definitions, AppParameters reference
+- [ ] **DEVELOPMENT.md** — Common development tasks (adding reports, editing reports, exporting, etc.)
+- [ ] **UI_THEME.md** — Theme constants, available colors/fonts
+- [ ] **NAVIGATION.md** — Menu structure and visibility rules
+- [ ] **CLAUDE.md** — Reduce to high-level overview with links to other docs

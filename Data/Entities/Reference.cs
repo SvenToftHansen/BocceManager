@@ -5,6 +5,7 @@ public class Court
     public int Id { get; set; }
     public int CourtNumber { get; set; }
     public string CourtLetter { get; set; } = "";
+    public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
     public string? Notes { get; set; }
 }

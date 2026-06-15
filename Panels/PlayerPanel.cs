@@ -1,6 +1,7 @@
 using BocceManager.Data;
 using BocceManager.Data.Entities;
 using BocceManager.Services;
+using BocceManager.UI.Controls;
 using BocceManager.UI.Theme;
 using Microsoft.EntityFrameworkCore;
 
@@ -59,8 +60,9 @@ public class PlayerPanel : UserControl
     private bool _isLoadingData = false;
     private bool _isSavingAndReloading = false;
     private bool _seasonIsLocked = false;
+    private bool _isSearching = false;
 
-    private TextBox _txtSearch = null!;
+    private SearchBoxControl _txtSearch = null!;
     private ListBox _lstPlayers = null!;
 
     private TextBox _txtFirstName = null!;
@@ -172,14 +174,12 @@ public class PlayerPanel : UserControl
             ForeColor = AppTheme.TextPrimary
         };
 
-        _txtSearch = new TextBox
+        _txtSearch = new SearchBoxControl("Search name, email, phone, lot")
         {
             Dock = DockStyle.Top,
-            Height = 30,
-            Font = AppTheme.FontDefault,
-            PlaceholderText = "Search name, email, phone, lot"
+            Height = 30
         };
-        _txtSearch.TextChanged += (_, _) => ApplySearchFilter();
+        _txtSearch.SearchTextChanged += (_, _) => ApplySearchFilter();
 
         var searchHint = new Label
         {
@@ -517,48 +517,61 @@ public class PlayerPanel : UserControl
 
     private void ApplySearchFilter(int? preferredPlayerId = null)
     {
-        var currentId = preferredPlayerId ?? ((_lstPlayers.SelectedItem as PlayerListItem)?.Id);
-        var query = _txtSearch.Text;
-
-        var filtered = _allPlayers
-            .Where(p => SearchQueryService.MatchesAnyTerm($"{p.DisplayName} {p.FullName} {p.Email} {p.Phone} {p.LotNumber}", query))
-            .Select(p => new PlayerListItem
-            {
-                Id = p.Id,
-                Label = $"{p.DisplayName}{(p.IsActive ? "" : " (inactive)")}"
-            })
-            .ToList();
-
-        _lstPlayers.BeginUpdate();
-        _lstPlayers.DataSource = null;
-        _lstPlayers.DataSource = filtered;
-        _lstPlayers.EndUpdate();
-
-        if (currentId.HasValue)
+        _isSearching = true;
+        try
         {
-            for (int i = 0; i < _lstPlayers.Items.Count; i++)
-            {
-                if (_lstPlayers.Items[i] is PlayerListItem item && item.Id == currentId.Value)
+            var currentId = preferredPlayerId ?? ((_lstPlayers.SelectedItem as PlayerListItem)?.Id);
+            var query = _txtSearch.SearchText;
+
+            var filtered = _allPlayers
+                .Where(p => SearchQueryService.MatchesAnyTerm($"{p.DisplayName} {p.FullName} {p.Email} {p.Phone} {p.LotNumber}", query))
+                .Select(p => new PlayerListItem
                 {
-                    _lstPlayers.SelectedIndex = i;
-                    PopulatePartnerLookup(_selectedPlayerId, GetSelectedPartnerId());
-                    return;
+                    Id = p.Id,
+                    Label = $"{p.DisplayName}{(p.IsActive ? "" : " (inactive)")}"
+                })
+                .ToList();
+
+            _lstPlayers.BeginUpdate();
+            _lstPlayers.DataSource = null;
+            _lstPlayers.DataSource = filtered;
+            _lstPlayers.EndUpdate();
+
+            if (currentId.HasValue)
+            {
+                for (int i = 0; i < _lstPlayers.Items.Count; i++)
+                {
+                    if (_lstPlayers.Items[i] is PlayerListItem item && item.Id == currentId.Value)
+                    {
+                        _lstPlayers.SelectedIndex = i;
+                        ClearDirty();
+                        PopulatePartnerLookup(_selectedPlayerId, GetSelectedPartnerId());
+                        return;
+                    }
                 }
             }
+
+            if (_lstPlayers.Items.Count > 0)
+            {
+                _lstPlayers.SelectedIndex = 0;
+                ClearDirty();
+            }
+            else
+                ClearEditor();
+
+            PopulatePartnerLookup(_selectedPlayerId, GetSelectedPartnerId());
         }
-
-        if (_lstPlayers.Items.Count > 0)
-            _lstPlayers.SelectedIndex = 0;
-        else
-            ClearEditor();
-
-        PopulatePartnerLookup(_selectedPlayerId, GetSelectedPartnerId());
+        finally
+        {
+            _isSearching = false;
+        }
     }
 
     private void OnPlayerSelectedFromLookup()
     {
         if (_mode == PlayerMode.Create) return;
         if (_isSavingAndReloading) return;  // Skip check during save reload
+        if (_isSearching) return;  // Skip check during search filter
         if (_lstPlayers.SelectedItem is not PlayerListItem item) return;
 
         // Check for unsaved changes
@@ -741,7 +754,7 @@ public class PlayerPanel : UserControl
 
     private void MarkDirty()
     {
-        if (_isLoadingData || _btnSave == null) return;
+        if (_isLoadingData || _isSearching || _btnSave == null) return;
         _isDirty = true;
         _btnSave.Enabled = true;
         UpdateButtonVisibility();

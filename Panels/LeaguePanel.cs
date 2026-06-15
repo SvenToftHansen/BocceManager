@@ -16,7 +16,7 @@ public class LeaguePanel : UserControl
     private bool _isCreatingNew = false;
 
     // Left panel
-    private TextBox _txtSearch  = null!;
+    private SearchBoxControl _txtSearch  = null!;
     private ListBox _lstLeagues = null!;
 
     // Editor fields
@@ -110,19 +110,13 @@ public class LeaguePanel : UserControl
         panel.BackColor = AppTheme.Surface;
         panel.Padding = new Padding(8, 8, 8, 8);
 
-        _txtSearch = new TextBox
+        _txtSearch = new SearchBoxControl
         {
             Dock = DockStyle.Top,
-            Font = AppTheme.FontDefault,
-            ForeColor = AppTheme.TextSecondary,
-            BackColor = AppTheme.ContentBackground,
-            Text = "Search...",
             Height = 28,
             Margin = new Padding(0, 0, 0, 6)
         };
-        _txtSearch.Enter += (_, _) => { if (_txtSearch.Text == "Search...") { _txtSearch.Text = ""; _txtSearch.ForeColor = AppTheme.TextPrimary; } };
-        _txtSearch.Leave += (_, _) => { if (string.IsNullOrEmpty(_txtSearch.Text)) { _txtSearch.Text = "Search..."; _txtSearch.ForeColor = AppTheme.TextSecondary; } };
-        _txtSearch.TextChanged += (_, _) => FilterLeagueList();
+        _txtSearch.SearchTextChanged += (_, _) => FilterLeagueList();
 
         _lstLeagues = new ListBox
         {
@@ -468,7 +462,7 @@ public class LeaguePanel : UserControl
 
     private void FilterLeagueList()
     {
-        var query = _txtSearch.Text == "Search..." ? "" : _txtSearch.Text;
+        var query = _txtSearch.SearchText;
 
         _isLoadingData = true;
         _lstLeagues.SelectedIndexChanged -= OnListLeagueSelected;

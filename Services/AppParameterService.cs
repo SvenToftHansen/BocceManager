@@ -125,4 +125,23 @@ public static class AppParameterService
         }
         db.SaveChanges();
     }
+
+    public static string? GetAppParameter(BocceDbContext db, string key)
+    {
+        return db.AppParameters.FirstOrDefault(p => p.Key == key)?.Value;
+    }
+
+    public static void SetAppParameter(BocceDbContext db, string key, string value)
+    {
+        var param = db.AppParameters.FirstOrDefault(p => p.Key == key);
+        if (param == null)
+        {
+            db.AppParameters.Add(new AppParameter { Key = key, Value = value });
+        }
+        else
+        {
+            param.Value = value;
+        }
+        db.SaveChanges();
+    }
 }

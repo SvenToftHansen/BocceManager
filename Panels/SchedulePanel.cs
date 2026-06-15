@@ -14,6 +14,8 @@ public class SchedulePanel : UserControl
     private int?      _selectedTemplateId;
     private DateOnly? _seasonStartDate;
     private string    _courtDisplay = "number";
+    private bool      _locked;
+    private bool      _loading;
 
     // ── Left panel ─────────────────────────────────────────────────────────────
     private ListBox _lstTemplates = null!;
@@ -24,18 +26,11 @@ public class SchedulePanel : UserControl
     private Button _btnPrint    = null!;
 
     // ── Right panel ────────────────────────────────────────────────────────────
-    private Label         _lblTemplateTitle = null!;
-    private Label         _lblStatus        = null!;
-    private DataGridView  _grid             = null!;
-    private DataGridViewTextBoxColumn    _colWeek  = null!;
-    private DataGridViewComboBoxColumn   _colSlot1 = null!;
-    private DataGridViewTextBoxColumn    _colVs    = null!;
-    private DataGridViewComboBoxColumn   _colSlot2 = null!;
-    private DataGridViewComboBoxColumn   _colCourt = null!;
+    private Label        _lblTemplateTitle = null!;
+    private Label        _lblStatus        = null!;
+    private DataGridView _grid             = null!;
+    private DataGridViewTextBoxColumn _colWeek = null!;
     private Button _btnLock = null!;
-    private bool   _inSwap;
-    private bool   _locked;
-    private bool   _loading;
 
     private List<(int Id, string Display)> _seasonCourts = [];
 
@@ -69,23 +64,14 @@ public class SchedulePanel : UserControl
         };
         Controls.Add(tabs);
 
-        // ── Tab 1: Templates ──────────────────────────────────────────────────
         var templatesTab = new TabPage("  Templates  ");
         tabs.TabPages.Add(templatesTab);
 
-        // ── Tab 2: Division Schedules (placeholder) ───────────────────────────
         var divSchedulesTab = new TabPage("  Division Schedules  ");
-        divSchedulesTab.Controls.Add(new Label
-        {
-            Dock = DockStyle.Fill,
-            Text = "Division Schedules — coming soon.",
-            Font = AppTheme.FontDefault,
-            ForeColor = AppTheme.TextSecondary,
-            TextAlign = ContentAlignment.MiddleCenter
-        });
+        BuildDivisionSchedulesTab(divSchedulesTab);
         tabs.TabPages.Add(divSchedulesTab);
 
-        // Outer: 2 columns — left list (220px) | right detail (fill)
+        // Outer: left list (220px) | right detail (fill)
         var outer = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -99,7 +85,7 @@ public class SchedulePanel : UserControl
         outer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         templatesTab.Controls.Add(outer);
 
-        // ── Left panel: 3 rows (header | list | toolbar) ──────────────────────
+        // ── Left panel ────────────────────────────────────────────────────────
         var leftLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -110,12 +96,12 @@ public class SchedulePanel : UserControl
             Margin  = Padding.Empty,
             CellBorderStyle = TableLayoutPanelCellBorderStyle.None
         };
-        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));   // header
-        leftLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));   // list
-        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));   // toolbar
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         outer.Controls.Add(leftLayout, 0, 0);
 
-        var lblHeader = new Label
+        leftLayout.Controls.Add(new Label
         {
             Text = "Templates",
             Dock = DockStyle.Fill,
@@ -124,8 +110,7 @@ public class SchedulePanel : UserControl
             TextAlign = ContentAlignment.MiddleLeft,
             Padding = new Padding(8, 0, 0, 0),
             Font = new Font("Segoe UI", 11f, FontStyle.Bold)
-        };
-        leftLayout.Controls.Add(lblHeader, 0, 0);
+        }, 0, 0);
 
         _lstTemplates = new ListBox
         {
@@ -157,7 +142,7 @@ public class SchedulePanel : UserControl
         leftToolbar.Controls.Add(_btnDelete);
         leftLayout.Controls.Add(leftToolbar, 0, 2);
 
-        // ── Right panel: 3 rows (title | status | grid) ───────────────────────
+        // ── Right panel ───────────────────────────────────────────────────────
         var rightLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -168,21 +153,24 @@ public class SchedulePanel : UserControl
             Margin  = Padding.Empty,
             CellBorderStyle = TableLayoutPanelCellBorderStyle.None
         };
-        rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));  // title
-        rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));  // status
-        rightLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // grid
+        rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        rightLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         outer.Controls.Add(rightLayout, 1, 0);
 
-        // Title row: template label (fill) + Lock button + Print button
+        // Title row: label | Lock | Print
         var titleRow = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1,
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            RowCount = 1,
             BackColor = AppTheme.Surface,
-            Padding = Padding.Empty, Margin = Padding.Empty,
+            Padding = Padding.Empty,
+            Margin = Padding.Empty,
             CellBorderStyle = TableLayoutPanelCellBorderStyle.None
         };
         titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
+        titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 106));
 
         _lblTemplateTitle = new Label
@@ -200,13 +188,13 @@ public class SchedulePanel : UserControl
         _btnLock = new Button
         {
             Dock = DockStyle.Fill,
-            Text = "🔒 Lock",
+            Text = "🔓 Unlocked",
             FlatStyle = FlatStyle.Flat,
             BackColor = AppTheme.Surface,
             ForeColor = AppTheme.TextPrimary,
             Font = AppTheme.FontButton,
             Cursor = Cursors.Hand,
-            Margin = new Padding(4, 4, 4, 4),
+            Margin = new Padding(4),
             Enabled = false
         };
         _btnLock.FlatAppearance.BorderSize = 1;
@@ -255,36 +243,59 @@ public class SchedulePanel : UserControl
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
             AllowUserToResizeRows = false,
-            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            SelectionMode = DataGridViewSelectionMode.CellSelect,
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            ReadOnly = true,
             Font = new Font("Segoe UI", 10f),
             DefaultCellStyle = new DataGridViewCellStyle
             {
                 BackColor = AppTheme.Surface,
                 ForeColor = AppTheme.TextPrimary,
                 SelectionBackColor = AppTheme.NavSelected,
-                SelectionForeColor = AppTheme.NavText
+                SelectionForeColor = AppTheme.NavText,
+                Alignment = DataGridViewContentAlignment.MiddleCenter
             },
             ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
             {
                 BackColor = AppTheme.NavBackground,
                 ForeColor = AppTheme.NavText,
-                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold)
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                Alignment = DataGridViewContentAlignment.MiddleCenter
             },
             EnableHeadersVisualStyles = false,
             ColumnHeadersHeight = 30
         };
-        _colWeek  = new DataGridViewTextBoxColumn  { Name = "Week",  HeaderText = "Week Of", ReadOnly = true, FillWeight = 16 };
-        _colSlot1 = new DataGridViewComboBoxColumn { Name = "Slot1", HeaderText = "Team 1",  FillWeight = 14, DisplayStyleForCurrentCellOnly = true };
-        _colVs    = new DataGridViewTextBoxColumn  { Name = "Vs",    HeaderText = "",         ReadOnly = true, FillWeight = 5  };
-        _colSlot2 = new DataGridViewComboBoxColumn { Name = "Slot2", HeaderText = "Team 2",  FillWeight = 14, DisplayStyleForCurrentCellOnly = true };
-        _colCourt = new DataGridViewComboBoxColumn { Name = "Court", HeaderText = "Court",   FillWeight = 30, DisplayStyleForCurrentCellOnly = true };
 
-        _grid.DataError                    += (_, de) => de.ThrowException = false;
-        _grid.CellClick                    += OnCellClick;
-        _grid.CellValueChanged             += OnCellEdit;
-        _grid.CurrentCellDirtyStateChanged += OnCurrentCellDirty;
-        _grid.Columns.AddRange(_colWeek, _colSlot1, _colVs, _colSlot2, _colCourt);
+        _colWeek = new DataGridViewTextBoxColumn
+        {
+            Name = "Week",
+            HeaderText = "Week Of",
+            ReadOnly = true,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
+            Width = 145,
+            MinimumWidth = 145,
+            Resizable = DataGridViewTriState.False,
+            SortMode = DataGridViewColumnSortMode.NotSortable,
+            DefaultCellStyle = new DataGridViewCellStyle
+            {
+                Alignment = DataGridViewContentAlignment.MiddleLeft,
+                Padding = new Padding(8, 0, 0, 0),
+                BackColor = AppTheme.ContentBackground,
+                ForeColor = AppTheme.TextSecondary,
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold)
+            }
+        };
+
+        _grid.DataError += (_, de) => de.ThrowException = false;
+        _grid.CellClick += OnCellClick;
+        _grid.CellMouseEnter += (_, e) =>
+        {
+            if (!_locked && e.ColumnIndex > 0 && e.RowIndex >= 0)
+                _grid.Cursor = Cursors.Hand;
+        };
+        _grid.CellMouseLeave += (_, _) => _grid.Cursor = Cursors.Default;
+        _grid.Columns.Add(_colWeek);
+
         rightLayout.Controls.Add(_grid, 0, 2);
     }
 
@@ -303,18 +314,13 @@ public class SchedulePanel : UserControl
             {
                 var season = db.Seasons.Find(_selectedSeasonId.Value);
                 _seasonStartDate = season?.StartDate;
+                _courtDisplay = AppParameterService.GetAppParameter(db, "CourtDisplay") ?? "number";
 
-                if (season != null)
-                    _courtDisplay = AppParameterService.GetCourtDisplay(db, season.LeagueId);
-
-                _seasonCourts = db.SeasonCourts
-                    .Where(sc => sc.SeasonId == _selectedSeasonId.Value)
-                    .Include(sc => sc.Court)
-                    .OrderBy(sc => sc.Court.CourtNumber)
+                _seasonCourts = db.Courts
+                    .Where(c => c.IsActive)
+                    .OrderBy(c => c.CourtNumber)
                     .AsEnumerable()
-                    .Select(sc => (
-                        sc.CourtId,
-                        Display: CourtLabel(sc.Court, _courtDisplay)))
+                    .Select(c => (c.Id, Display: CourtLabel(c, _courtDisplay)))
                     .ToList();
             }
             else
@@ -325,6 +331,7 @@ public class SchedulePanel : UserControl
         catch { }
 
         LoadTemplateList();
+        LoadDivisionsList();
     }
 
     private static string CourtLabel(Court court, string display) =>
@@ -338,7 +345,7 @@ public class SchedulePanel : UserControl
             return $"Week {weekNumber}";
         DateOnly start = _seasonStartDate.Value.AddDays((weekNumber - 1) * 7);
         DateOnly end   = start.AddDays(6);
-        return $"{start:MMM d} - {end:MMM d}";
+        return $"{start:MMM d} – {end:MMM d}";
     }
 
     private void LoadTemplateList()
@@ -353,7 +360,7 @@ public class SchedulePanel : UserControl
                 using var db = new BocceDbContext();
                 var templates = ScheduleTemplateService.GetTemplatesForSeason(db, _selectedSeasonId.Value);
                 foreach (var t in templates)
-                    _lstTemplates.Items.Add(new TemplateItem(t.Id, t.TeamCount, t.WeekCount, t.GeneratedAt));
+                    _lstTemplates.Items.Add(new TemplateItem(t.Id, t.TeamCount, t.WeekCount, t.GeneratedAt, t.IsLocked));
             }
             catch { }
         }
@@ -366,7 +373,7 @@ public class SchedulePanel : UserControl
             _selectedTemplateId = null;
             _btnDelete.Enabled  = false;
             _btnPrint.Enabled   = false;
-            _grid.Rows.Clear();
+            ClearGrid();
             _lblTemplateTitle.Text = "";
             _lblStatus.Text = _selectedSeasonId.HasValue
                 ? "No templates yet. Click Generate to build templates from season divisions."
@@ -378,36 +385,95 @@ public class SchedulePanel : UserControl
         }
     }
 
+    private void ClearGrid()
+    {
+        _grid.Rows.Clear();
+        while (_grid.Columns.Count > 1)
+            _grid.Columns.RemoveAt(1);
+    }
+
+    private void RebuildCourtColumns(List<(int Id, string Display)> courts)
+    {
+        while (_grid.Columns.Count > 1)
+            _grid.Columns.RemoveAt(1);
+
+        foreach (var (id, display) in courts)
+        {
+            var col = new DataGridViewTextBoxColumn
+            {
+                Name = $"Court_{id}",
+                HeaderText = display,
+                ReadOnly = true,
+                Tag = id,
+                SortMode = DataGridViewColumnSortMode.NotSortable
+            };
+            _grid.Columns.Add(col);
+        }
+    }
+
     private void LoadTemplateDetail(int templateId)
     {
         _loading = true;
         _grid.Rows.Clear();
-        _colCourt.Items.Clear();
-        foreach (var court in _seasonCourts)
-            _colCourt.Items.Add(court.Display);
 
         try
         {
             using var db = new BocceDbContext();
             var rows = ScheduleTemplateService.GetTemplateRows(db, templateId);
 
-            foreach (var r in rows)
+            if (rows.Count == 0)
             {
-                var courtEntry = _seasonCourts.FirstOrDefault(c => c.Id == r.CourtId);
-                string courtDisplay = courtEntry != default
-                    ? courtEntry.Display
-                    : $"Court #{r.CourtId}";
+                RebuildCourtColumns([]);
+                _lblStatus.Text = "Template has no matches.";
+                return;
+            }
 
-                string weekLabel = WeekLabel(r.WeekNumber);
-                int rowIdx = _grid.Rows.Add(weekLabel, r.Slot1, "vs", r.Slot2, courtDisplay);
-                _grid.Rows[rowIdx].Tag = r;
+            // Courts used in this template, natural order by CourtNumber
+            var courtIds = rows.Select(r => r.CourtId).Distinct().ToList();
+            var courts = db.Courts
+                .Where(c => courtIds.Contains(c.Id))
+                .OrderBy(c => c.CourtNumber)
+                .AsEnumerable()
+                .Select(c => (c.Id, Display: CourtLabel(c, _courtDisplay)))
+                .ToList();
+
+            RebuildCourtColumns(courts);
+
+            // One row per week — pivot matches into court columns
+            var byWeek = rows.GroupBy(r => r.WeekNumber).OrderBy(g => g.Key).ToList();
+
+            foreach (var weekGroup in byWeek)
+            {
+                var matchesByCourt = weekGroup.ToDictionary(
+                    r => r.CourtId,
+                    r => new MatchEntry(r.MatchId, r.Slot1, r.Slot2));
+
+                var values = new object[1 + courts.Count];
+                values[0] = WeekLabel(weekGroup.Key);
+
+                for (int i = 0; i < courts.Count; i++)
+                {
+                    if (matchesByCourt.TryGetValue(courts[i].Id, out var m))
+                    {
+                        // Always display in alpha order
+                        string s1 = string.Compare(m.Slot1, m.Slot2, StringComparison.Ordinal) <= 0 ? m.Slot1 : m.Slot2;
+                        string s2 = string.Compare(m.Slot1, m.Slot2, StringComparison.Ordinal) <= 0 ? m.Slot2 : m.Slot1;
+                        values[i + 1] = $"{s1} vs {s2}";
+                    }
+                    else
+                    {
+                        values[i + 1] = "";
+                    }
+                }
+
+                int rowIdx = _grid.Rows.Add(values);
+                _grid.Rows[rowIdx].Tag = new WeekDisplayRow(weekGroup.Key, matchesByCourt);
             }
 
             if (_grid.Rows.Count > 0)
                 _grid.FirstDisplayedScrollingRowIndex = 0;
 
-            int weekCount = rows.Select(r => r.WeekNumber).Distinct().Count();
-            _lblStatus.Text = $"{rows.Count} matches across {weekCount} weeks.";
+            _lblStatus.Text = $"{rows.Count} matches across {byWeek.Count} weeks.  Click a court cell to swap teams.";
         }
         catch (Exception ex)
         {
@@ -430,7 +496,7 @@ public class SchedulePanel : UserControl
             _btnPrint.Enabled      = false;
             _btnLock.Enabled       = false;
             _lblTemplateTitle.Text = "";
-            _grid.Rows.Clear();
+            ClearGrid();
             _locked = false;
             ApplyLockState();
             return;
@@ -441,21 +507,11 @@ public class SchedulePanel : UserControl
         _btnPrint.Enabled      = true;
         _lblTemplateTitle.Text = $"{item.TeamCount}-Team Template  —  {item.WeekCount} weeks  (generated {item.GeneratedAt:yyyy-MM-dd HH:mm})";
 
-        // Unlock whenever a different template is loaded
         _btnLock.Enabled = true;
-        _locked          = false;
+        _locked          = item.IsLocked;
         ApplyLockState();
 
-        // Repopulate slot comboboxes before loading rows (values must match items)
-        _grid.Rows.Clear();
-        _colSlot1.Items.Clear();
-        _colSlot2.Items.Clear();
-        for (int i = 0; i < item.TeamCount; i++)
-        {
-            string letter = ((char)('A' + i)).ToString();
-            _colSlot1.Items.Add(letter);
-            _colSlot2.Items.Add(letter);
-        }
+        ClearGrid();
         LoadTemplateDetail(item.Id);
     }
 
@@ -478,8 +534,7 @@ public class SchedulePanel : UserControl
         if (_seasonCourts.Count == 0)
         {
             MessageBox.Show(
-                "This season has no courts configured.\n\n" +
-                "Go to Administration → Courts to add courts, then assign them to this season in Season settings.",
+                "No active courts found.\n\nGo to Administration → Courts to add courts.",
                 "Generate Templates", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
@@ -488,29 +543,26 @@ public class SchedulePanel : UserControl
         {
             using var db = new BocceDbContext();
 
+            // Collect team counts from divisions (round odd counts down to even)
             var divCounts = db.Divisions
                 .Where(d => d.SeasonId == _selectedSeasonId.Value && d.TeamsInDivision > 0)
-                .Select(d => d.TeamsInDivision)
+                .Select(d => d.TeamsInDivision % 2 == 1 ? d.TeamsInDivision - 1 : d.TeamsInDivision)
+                .Where(d => d > 0)
                 .Distinct()
                 .ToList();
 
             var season = db.Seasons.Find(_selectedSeasonId.Value);
-            if (season?.MaxTeamsInDivision > 0 && !divCounts.Contains(season.MaxTeamsInDivision))
-                divCounts.Add(season.MaxTeamsInDivision);
-
-            var invalid = divCounts.Where(n => !ScheduleTemplateService.ValidTeamCounts.Contains(n)).ToList();
-            if (invalid.Any())
+            if (season?.MaxTeamsInDivision > 0)
             {
-                MessageBox.Show(
-                    $"Some divisions have invalid team counts: {string.Join(", ", invalid)}.\n\nOnly 4, 6, and 8 are supported.",
-                    "Generate Templates", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                int maxEven = season.MaxTeamsInDivision % 2 == 1 ? season.MaxTeamsInDivision - 1 : season.MaxTeamsInDivision;
+                if (maxEven > 0 && !divCounts.Contains(maxEven))
+                    divCounts.Add(maxEven);
             }
 
             if (divCounts.Count == 0)
             {
                 MessageBox.Show(
-                    "No divisions with a teams-in-division value found for this season.\n\n" +
+                    "No divisions with valid team counts found for this season.\n\n" +
                     "Set Teams in Division on each division (or the season default) before generating.",
                     "Generate Templates", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
@@ -524,23 +576,37 @@ public class SchedulePanel : UserControl
                 return;
             }
 
+            // Check which templates are locked vs unlocked
             var existing = db.ScheduleTemplates
                 .Where(t => t.SeasonId == _selectedSeasonId.Value)
-                .Select(t => t.TeamCount).ToList();
-            var toReplace = divCounts.Intersect(existing).ToList();
-            if (toReplace.Any())
-            {
-                string msg = "Templates already exist for:\n\n" +
-                             string.Join("\n", toReplace.Select(n => $"  • {n}-team")) +
-                             "\n\nThey will be replaced. Continue?";
-                if (MessageBox.Show(msg, "Generate Templates", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
-                    return;
-            }
+                .ToDictionary(t => t.TeamCount, t => t.IsLocked);
+
+            var locked   = divCounts.Where(tc => existing.ContainsKey(tc) && existing[tc]).ToList();
+            var unlocked = divCounts.Where(tc => !existing.ContainsKey(tc) || !existing[tc]).ToList();
+
+            var statusMsg = "Teams in divisions (rounded down if odd):\n\n";
+            if (unlocked.Any())
+                statusMsg += "Will generate:\n" + string.Join("\n", unlocked.OrderBy(n => n).Select(n => $"  • {n}-team"));
+            if (locked.Any())
+                statusMsg += (unlocked.Any() ? "\n\n" : "") + "Locked (will skip):\n" + string.Join("\n", locked.OrderBy(n => n).Select(n => $"  • {n}-team"));
+
+            statusMsg += "\n\nContinue?";
+
+            if (MessageBox.Show(statusMsg, "Generate Templates", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                return;
 
             var generated = new List<string>();
             var errors    = new List<string>();
+            var skipped   = new List<string>();
+
             foreach (int tc in divCounts.OrderBy(n => n))
             {
+                if (existing.ContainsKey(tc) && existing[tc])
+                {
+                    skipped.Add($"{tc}-team (locked)");
+                    continue;
+                }
+
                 try
                 {
                     ScheduleTemplateService.Generate(db, _selectedSeasonId.Value, tc);
@@ -552,8 +618,14 @@ public class SchedulePanel : UserControl
                 }
             }
 
-            string body = (generated.Any() ? "Generated:\n" + string.Join("\n", generated.Select(s => $"  • {s}")) : "")
-                        + (errors.Any() ? "\n\nErrors:\n" + string.Join("\n", errors.Select(s => $"  • {s}")) : "");
+            string body = "";
+            if (generated.Any())
+                body += "Generated:\n" + string.Join("\n", generated.Select(s => $"  • {s}"));
+            if (skipped.Any())
+                body += (generated.Any() ? "\n\n" : "") + "Skipped:\n" + string.Join("\n", skipped.Select(s => $"  • {s}"));
+            if (errors.Any())
+                body += (generated.Any() || skipped.Any() ? "\n\n" : "") + "Errors:\n" + string.Join("\n", errors.Select(s => $"  • {s}"));
+
             MessageBox.Show(body.Trim(), "Generate Templates", MessageBoxButtons.OK,
                 errors.Any() ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
         }
@@ -570,14 +642,20 @@ public class SchedulePanel : UserControl
     {
         if (_lstTemplates.SelectedItem is not TemplateItem item) return;
 
-        if (MessageBox.Show(
-                $"Delete the {item.TeamCount}-team template ({item.WeekCount} weeks)?\n\nThis cannot be undone.",
-                "Delete Template", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
-            return;
-
         try
         {
             using var db = new BocceDbContext();
+            var divisionScheduleCount = db.ScheduleDivisions.Count(s => s.TemplateId == item.Id);
+
+            var message = $"Delete the {item.TeamCount}-team template ({item.WeekCount} weeks)?";
+            if (divisionScheduleCount > 0)
+                message += $"\n\n⚠️ This template has {divisionScheduleCount} division schedule(s) attached.\nThey will be permanently removed.";
+            message += "\n\nThis cannot be undone.";
+
+            if (MessageBox.Show(message, "Delete Template", MessageBoxButtons.YesNo,
+                divisionScheduleCount > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Question) != DialogResult.Yes)
+                return;
+
             ScheduleTemplateService.DeleteTemplate(db, item.Id);
         }
         catch (Exception ex)
@@ -588,6 +666,7 @@ public class SchedulePanel : UserControl
         }
 
         LoadTemplateList();
+        LoadDivisionsList();
     }
 
     // ── Print ──────────────────────────────────────────────────────────────────
@@ -618,155 +697,660 @@ public class SchedulePanel : UserControl
 
     private void OnLockToggle(object? sender, EventArgs e)
     {
+        if (_selectedTemplateId == null) return;
         _locked = !_locked;
+
+        try
+        {
+            using var db = new BocceDbContext();
+            var tmpl = db.ScheduleTemplates.Find(_selectedTemplateId.Value);
+            if (tmpl != null)
+            {
+                tmpl.IsLocked = _locked;
+                db.SaveChanges();
+            }
+        }
+        catch (Exception ex)
+        {
+            _locked = !_locked;  // revert on failure
+            MessageBox.Show($"Could not save lock state:\n{ex.Message}", "Error",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        // Keep the in-memory TemplateItem in sync so switching templates restores correctly
+        if (_lstTemplates.SelectedItem is TemplateItem currentItem)
+            currentItem.IsLocked = _locked;
+
         ApplyLockState();
     }
 
     private void ApplyLockState()
     {
-        _colSlot1.ReadOnly = _locked;
-        _colSlot2.ReadOnly = _locked;
-        _colCourt.ReadOnly = _locked;
         if (_locked)
         {
-            _btnLock.Text      = "🔒 Locked";
+            _btnLock.Text = "🔒 Locked";
             _btnLock.BackColor = Color.FromArgb(180, 100, 0);
             _btnLock.ForeColor = Color.White;
             _btnLock.FlatAppearance.BorderColor = Color.FromArgb(180, 100, 0);
         }
         else
         {
-            _btnLock.Text      = "🔓 Unlocked";
+            _btnLock.Text = "🔓 Unlocked";
             _btnLock.BackColor = AppTheme.Surface;
             _btnLock.ForeColor = AppTheme.TextPrimary;
             _btnLock.FlatAppearance.BorderColor = AppTheme.Separator;
         }
     }
 
-    // ── Cell editing: single-click to open ComboBox ───────────────────────────
+    // ── Cell click → team swap popup ──────────────────────────────────────────
 
     private void OnCellClick(object? sender, DataGridViewCellEventArgs e)
     {
-        if (_locked || e.RowIndex < 0) return;
-        if (e.ColumnIndex == _colSlot1.Index || e.ColumnIndex == _colSlot2.Index || e.ColumnIndex == _colCourt.Index)
-            _grid.BeginEdit(true);
+        if (_locked || _loading || e.RowIndex < 0 || e.ColumnIndex <= 0) return;
+        if (_grid.Rows[e.RowIndex].Tag is not WeekDisplayRow weekRow) return;
+        if (_grid.Columns[e.ColumnIndex].Tag is not int courtId) return;
+        if (!weekRow.Matches.TryGetValue(courtId, out var match)) return;
+
+        // All valid team letters derived from this week's matches
+        var allSlots = weekRow.Matches.Values
+            .SelectMany(m => new[] { m.Slot1, m.Slot2 })
+            .Distinct()
+            .OrderBy(s => s)
+            .ToList();
+
+        // Current assignment in alpha order for display
+        string cur1 = string.Compare(match.Slot1, match.Slot2, StringComparison.Ordinal) <= 0 ? match.Slot1 : match.Slot2;
+        string cur2 = string.Compare(match.Slot1, match.Slot2, StringComparison.Ordinal) <= 0 ? match.Slot2 : match.Slot1;
+
+        var (newSlot1, newSlot2, ok) = ShowTeamSwapDialog(cur1, cur2, allSlots);
+        if (!ok) return;
+
+        // Normalize to alpha order
+        if (string.Compare(newSlot1, newSlot2, StringComparison.Ordinal) > 0)
+            (newSlot1, newSlot2) = (newSlot2, newSlot1);
+
+        if (newSlot1 == cur1 && newSlot2 == cur2) return;
+
+        ApplyCascadeSwap(e.RowIndex, courtId, newSlot1, newSlot2, weekRow);
     }
 
-    // Fire swap immediately when dropdown selection changes (not on focus-leave)
-    private void OnCurrentCellDirty(object? sender, EventArgs e)
+    private (string Slot1, string Slot2, bool Ok) ShowTeamSwapDialog(
+        string cur1, string cur2, List<string> allSlots)
     {
-        if (_locked || !_grid.IsCurrentCellDirty) return;
-        var col = _grid.CurrentCell?.ColumnIndex;
-        if (col == _colSlot1.Index || col == _colSlot2.Index || col == _colCourt.Index)
-            _grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+        using var dlg = new Form
+        {
+            Text = "Change Court Teams",
+            Width = 300,
+            Height = 165,
+            StartPosition = FormStartPosition.CenterParent,
+            BackColor = AppTheme.ContentBackground,
+            Font = AppTheme.FontDefault,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false
+        };
+
+        var lblPrompt = new Label
+        {
+            Text = "Assign teams to this court:",
+            Location = new Point(16, 12),
+            Size = new Size(260, 18),
+            ForeColor = AppTheme.TextSecondary,
+            Font = new Font("Segoe UI", 9f)
+        };
+
+        var cmbA = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Location = new Point(16, 36),
+            Size = new Size(80, 28),
+            Font = AppTheme.FontDefault
+        };
+        foreach (var s in allSlots) cmbA.Items.Add(s);
+        cmbA.SelectedItem = cur1;
+
+        var lblVs = new Label
+        {
+            Text = "vs",
+            Location = new Point(106, 40),
+            Size = new Size(28, 20),
+            TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = AppTheme.TextSecondary
+        };
+
+        var cmbB = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Location = new Point(144, 36),
+            Size = new Size(80, 28),
+            Font = AppTheme.FontDefault
+        };
+        foreach (var s in allSlots) cmbB.Items.Add(s);
+        cmbB.SelectedItem = cur2;
+
+        var btnOk = new Button
+        {
+            Text = "OK",
+            Location = new Point(112, 96),
+            Size = new Size(70, 28),
+            DialogResult = DialogResult.OK,
+            BackColor = AppTheme.Accent,
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat
+        };
+        btnOk.FlatAppearance.BorderSize = 0;
+
+        var btnCancel = new Button
+        {
+            Text = "Cancel",
+            Location = new Point(192, 96),
+            Size = new Size(70, 28),
+            DialogResult = DialogResult.Cancel,
+            BackColor = AppTheme.Surface,
+            ForeColor = AppTheme.TextPrimary,
+            FlatStyle = FlatStyle.Flat
+        };
+        btnCancel.FlatAppearance.BorderColor = AppTheme.Separator;
+
+        dlg.Controls.AddRange(new Control[] { lblPrompt, cmbA, lblVs, cmbB, btnOk, btnCancel });
+        dlg.AcceptButton = btnOk;
+        dlg.CancelButton = btnCancel;
+
+        if (dlg.ShowDialog(this) != DialogResult.OK)
+            return ("", "", false);
+
+        string s1 = cmbA.SelectedItem?.ToString() ?? "";
+        string s2 = cmbB.SelectedItem?.ToString() ?? "";
+
+        if (string.IsNullOrEmpty(s1) || string.IsNullOrEmpty(s2) || s1 == s2)
+        {
+            MessageBox.Show("Please select two different teams.", "Invalid Selection",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return ("", "", false);
+        }
+
+        return (s1, s2, true);
     }
 
-    // ── Cell editing: swap on commit ──────────────────────────────────────────
-
-    private void OnCellEdit(object? sender, DataGridViewCellEventArgs e)
+    private void ApplyCascadeSwap(
+        int rowIndex, int targetCourtId, string newSlot1, string newSlot2, WeekDisplayRow weekRow)
     {
-        if (_inSwap || _loading) return;
-        var row = _grid.Rows[e.RowIndex];
-        if (row.Tag is not ScheduleTemplateService.TemplateRow orig) return;
+        var targetMatch = weekRow.Matches[targetCourtId];
+        var oldSlots = new HashSet<string>(StringComparer.Ordinal) { targetMatch.Slot1, targetMatch.Slot2 };
+        var newSlots = new HashSet<string>(StringComparer.Ordinal) { newSlot1, newSlot2 };
 
-        if (e.ColumnIndex == _colSlot1.Index || e.ColumnIndex == _colSlot2.Index)
+        // Teams moving into the target court (alphabetical for positional consistency)
+        var arriving = newSlots.Except(oldSlots).OrderBy(s => s).ToList();
+        // Teams displaced from the target court (same positional order)
+        var leaving  = oldSlots.Except(newSlots).OrderBy(s => s).ToList();
+
+        // Find the source court for each arriving team
+        var sourceCourts = new List<(int CourtId, MatchEntry Match)>();
+        foreach (var team in arriving)
         {
-            string newVal = row.Cells[e.ColumnIndex].Value?.ToString() ?? "";
-            string oldVal = e.ColumnIndex == _colSlot1.Index ? orig.Slot1 : orig.Slot2;
-            if (newVal == oldVal) return;
-
-            // Find the partner in the same week that currently holds newVal
-            DataGridViewRow? partner    = null;
-            bool             inSlot1    = false;
-            foreach (DataGridViewRow other in _grid.Rows)
+            foreach (var (cid, m) in weekRow.Matches)
             {
-                if (other.Index == e.RowIndex || other.Tag is not ScheduleTemplateService.TemplateRow otherOrig) continue;
-                if (otherOrig.WeekNumber != orig.WeekNumber) continue;
-                if (otherOrig.Slot1 == newVal) { partner = other; inSlot1 = true;  break; }
-                if (otherOrig.Slot2 == newVal) { partner = other; inSlot1 = false; break; }
+                if (cid == targetCourtId) continue;
+                if (m.Slot1 == team || m.Slot2 == team)
+                {
+                    sourceCourts.Add((cid, m));
+                    break;
+                }
             }
-
-            if (partner == null)
-            {
-                // No partner — revert (shouldn't happen in a valid template)
-                _inSwap = true;
-                row.Cells[e.ColumnIndex].Value = oldVal;
-                _inSwap = false;
-                return;
-            }
-
-            var    pOrig      = (ScheduleTemplateService.TemplateRow)partner.Tag!;
-            string pNewSlot1  = inSlot1 ? oldVal : pOrig.Slot1;
-            string pNewSlot2  = inSlot1 ? pOrig.Slot2 : oldVal;
-            string newSlot1   = e.ColumnIndex == _colSlot1.Index ? newVal : orig.Slot1;
-            string newSlot2   = e.ColumnIndex == _colSlot2.Index ? newVal : orig.Slot2;
-
-            try
-            {
-                using var db = new BocceDbContext();
-                ScheduleTemplateService.UpdateMatchSlots(db, pOrig.MatchId,  pNewSlot1, pNewSlot2);
-                ScheduleTemplateService.UpdateMatchSlots(db, orig.MatchId,   newSlot1,  newSlot2);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Swap failed:\n\n{ex.Message}", "Edit Schedule",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                _inSwap = true;
-                row.Cells[e.ColumnIndex].Value = oldVal;
-                _inSwap = false;
-                return;
-            }
-
-            _inSwap = true;
-            partner.Cells[_colSlot1.Index].Value = pNewSlot1;
-            partner.Cells[_colSlot2.Index].Value = pNewSlot2;
-            partner.Tag = pOrig with { Slot1 = pNewSlot1, Slot2 = pNewSlot2 };
-            row.Tag     = orig with { Slot1 = newSlot1,   Slot2 = newSlot2 };
-            _inSwap = false;
         }
-        else if (e.ColumnIndex == _colCourt.Index)
+
+        try
         {
-            string newDisplay    = row.Cells[e.ColumnIndex].Value?.ToString() ?? "";
-            var    newCourtEntry = _seasonCourts.FirstOrDefault(c => c.Display == newDisplay);
-            if (newCourtEntry == default || newCourtEntry.Id == orig.CourtId) return;
+            using var db = new BocceDbContext();
 
-            // Find the partner in the same week currently on the target court
-            DataGridViewRow? partner = null;
-            foreach (DataGridViewRow other in _grid.Rows)
+            // Update target match
+            var dbTarget = db.ScheduleTemplateMatches.Find(targetMatch.MatchId)!;
+            dbTarget.Slot1 = newSlot1;
+            dbTarget.Slot2 = newSlot2;
+
+            // Positionally swap the displaced teams into each source court
+            for (int i = 0; i < arriving.Count; i++)
             {
-                if (other.Index == e.RowIndex || other.Tag is not ScheduleTemplateService.TemplateRow otherOrig) continue;
-                if (otherOrig.WeekNumber != orig.WeekNumber) continue;
-                if (otherOrig.CourtId == newCourtEntry.Id) { partner = other; break; }
+                if (i >= sourceCourts.Count) break;
+                var (_, srcMatch) = sourceCourts[i];
+                var arrivingTeam  = arriving[i];
+                var leavingTeam   = i < leaving.Count ? leaving[i] : leaving[0];
+
+                var dbSrc = db.ScheduleTemplateMatches.Find(srcMatch.MatchId)!;
+                dbSrc.Slot1 = dbSrc.Slot1 == arrivingTeam ? leavingTeam : dbSrc.Slot1;
+                dbSrc.Slot2 = dbSrc.Slot2 == arrivingTeam ? leavingTeam : dbSrc.Slot2;
+                if (string.Compare(dbSrc.Slot1, dbSrc.Slot2, StringComparison.Ordinal) > 0)
+                    (dbSrc.Slot1, dbSrc.Slot2) = (dbSrc.Slot2, dbSrc.Slot1);
             }
 
-            if (partner == null) return;
+            db.SaveChanges();
 
-            var pOrig         = (ScheduleTemplateService.TemplateRow)partner.Tag!;
-            var oldCourtEntry = _seasonCourts.FirstOrDefault(c => c.Id == orig.CourtId);
-            if (oldCourtEntry == default) return;
-
-            try
+            // Rebuild the updated match dictionary for this row's tag
+            var updated = new Dictionary<int, MatchEntry>(weekRow.Matches)
             {
-                using var db = new BocceDbContext();
-                ScheduleTemplateService.UpdateMatchCourt(db, pOrig.MatchId, orig.CourtId);
-                ScheduleTemplateService.UpdateMatchCourt(db, orig.MatchId,  newCourtEntry.Id);
+                [targetCourtId] = new MatchEntry(targetMatch.MatchId, newSlot1, newSlot2)
+            };
+
+            for (int i = 0; i < arriving.Count; i++)
+            {
+                if (i >= sourceCourts.Count) break;
+                var (srcCourtId, srcMatch) = sourceCourts[i];
+                var arrivingTeam = arriving[i];
+                var leavingTeam  = i < leaving.Count ? leaving[i] : leaving[0];
+
+                string s1 = srcMatch.Slot1 == arrivingTeam ? leavingTeam : srcMatch.Slot1;
+                string s2 = srcMatch.Slot2 == arrivingTeam ? leavingTeam : srcMatch.Slot2;
+                if (string.Compare(s1, s2, StringComparison.Ordinal) > 0) (s1, s2) = (s2, s1);
+                updated[srcCourtId] = new MatchEntry(srcMatch.MatchId, s1, s2);
             }
-            catch (Exception ex)
+
+            // Update the row in the grid
+            var gridRow = _grid.Rows[rowIndex];
+            gridRow.Tag = weekRow with { Matches = updated };
+
+            for (int ci = 1; ci < _grid.Columns.Count; ci++)
             {
-                MessageBox.Show($"Court swap failed:\n\n{ex.Message}", "Edit Schedule",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                _inSwap = true;
-                row.Cells[e.ColumnIndex].Value = oldCourtEntry.Display;
-                _inSwap = false;
+                if (_grid.Columns[ci].Tag is int cid && updated.TryGetValue(cid, out var um))
+                {
+                    string s1 = string.Compare(um.Slot1, um.Slot2, StringComparison.Ordinal) <= 0 ? um.Slot1 : um.Slot2;
+                    string s2 = string.Compare(um.Slot1, um.Slot2, StringComparison.Ordinal) <= 0 ? um.Slot2 : um.Slot1;
+                    gridRow.Cells[ci].Value = $"{s1} vs {s2}";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Swap failed:\n\n{ex.Message}", "Edit Schedule",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    // ── Division Schedules Tab ────────────────────────────────────────────────
+
+    private CheckedListBox _chkListDivisions = null!;
+    private DataGridView _gridDivisionSchedules = null!;
+    private Button _btnGenerateCurrent = null!;
+    private Button _btnGenerateAll = null!;
+    private Button _btnDeleteDivSchedule = null!;
+    private Button _btnPrintDivSchedule = null!;
+    private Label _lblDivStatus = null!;
+    private List<(int Id, string Name)> _divisionsForSchedule = [];
+
+    private void BuildDivisionSchedulesTab(TabPage tab)
+    {
+        tab.BackColor = AppTheme.ContentBackground;
+
+        var outer = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Padding = Padding.Empty,
+            Margin = Padding.Empty,
+            CellBorderStyle = TableLayoutPanelCellBorderStyle.None
+        };
+        outer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
+        outer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        // Left panel
+        var leftLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 3,
+            BackColor = AppTheme.Surface,
+            Padding = Padding.Empty,
+            Margin = Padding.Empty,
+            CellBorderStyle = TableLayoutPanelCellBorderStyle.None
+        };
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
+
+        leftLayout.Controls.Add(new Label
+        {
+            Text = "Divisions",
+            Dock = DockStyle.Fill,
+            ForeColor = AppTheme.TextPrimary,
+            BackColor = AppTheme.Surface,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(8, 0, 0, 0),
+            Font = new Font("Segoe UI", 11f, FontStyle.Bold)
+        }, 0, 0);
+
+        _chkListDivisions = new CheckedListBox
+        {
+            Dock = DockStyle.Fill,
+            BackColor = AppTheme.Surface,
+            ForeColor = AppTheme.TextPrimary,
+            Font = new Font("Segoe UI", 10f),
+            BorderStyle = BorderStyle.None,
+            CheckOnClick = true
+        };
+        leftLayout.Controls.Add(_chkListDivisions, 0, 1);
+
+        var leftToolbar = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = AppTheme.Separator,
+            Padding = new Padding(8)
+        };
+
+        _btnGenerateCurrent = MakeButton("Gen Current", AppTheme.Accent);
+        _btnGenerateCurrent.Click += (_, _) => OnGenerateDivisionSchedule(false);
+        _btnGenerateCurrent.Location = new Point(8, 8);
+        leftToolbar.Controls.Add(_btnGenerateCurrent);
+
+        _btnGenerateAll = MakeButton("Gen All", AppTheme.Accent);
+        _btnGenerateAll.Click += (_, _) => OnGenerateDivisionSchedule(true);
+        _btnGenerateAll.Location = new Point(8, 40);
+        leftToolbar.Controls.Add(_btnGenerateAll);
+
+        _btnDeleteDivSchedule = MakeButton("Delete", AppTheme.ButtonDanger);
+        _btnDeleteDivSchedule.Click += (_, _) => OnDeleteDivisionSchedule();
+        _btnDeleteDivSchedule.Enabled = false;
+        _btnDeleteDivSchedule.Location = new Point(112, 8);
+        leftToolbar.Controls.Add(_btnDeleteDivSchedule);
+
+        leftLayout.Controls.Add(leftToolbar, 0, 2);
+        outer.Controls.Add(leftLayout, 0, 0);
+
+        // Right panel
+        var rightLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 3,
+            BackColor = AppTheme.ContentBackground,
+            Padding = Padding.Empty,
+            Margin = Padding.Empty,
+            CellBorderStyle = TableLayoutPanelCellBorderStyle.None
+        };
+        rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        rightLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var titleRow = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = AppTheme.Surface,
+            Padding = Padding.Empty,
+            Margin = Padding.Empty,
+            CellBorderStyle = TableLayoutPanelCellBorderStyle.None
+        };
+        titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 106));
+
+        var lblTitle = new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = "Division Schedule",
+            ForeColor = AppTheme.TextPrimary,
+            BackColor = AppTheme.Surface,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(10, 0, 0, 0),
+            Font = new Font("Segoe UI", 11f, FontStyle.Bold)
+        };
+        titleRow.Controls.Add(lblTitle, 0, 0);
+
+        _btnPrintDivSchedule = new Button
+        {
+            Dock = DockStyle.Fill,
+            Text = "Print...",
+            FlatStyle = FlatStyle.Flat,
+            BackColor = AppTheme.Surface,
+            ForeColor = AppTheme.TextPrimary,
+            Font = AppTheme.FontButton,
+            Cursor = Cursors.Hand,
+            Margin = new Padding(4, 4, 8, 4),
+            Enabled = false
+        };
+        _btnPrintDivSchedule.FlatAppearance.BorderSize = 1;
+        _btnPrintDivSchedule.FlatAppearance.BorderColor = AppTheme.Separator;
+        _btnPrintDivSchedule.Click += (_, _) => OnPrintDivisionSchedule();
+        titleRow.Controls.Add(_btnPrintDivSchedule, 1, 0);
+        rightLayout.Controls.Add(titleRow, 0, 0);
+
+        _lblDivStatus = new Label
+        {
+            Dock = DockStyle.Fill,
+            ForeColor = AppTheme.TextSecondary,
+            BackColor = AppTheme.ContentBackground,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(10, 0, 0, 0),
+            Font = new Font("Segoe UI", 9.5f),
+            Text = "Select divisions and click Generate."
+        };
+        rightLayout.Controls.Add(_lblDivStatus, 0, 1);
+
+        _gridDivisionSchedules = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            BackgroundColor = AppTheme.ContentBackground,
+            GridColor = AppTheme.Separator,
+            BorderStyle = BorderStyle.None,
+            RowHeadersVisible = false,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            AllowUserToResizeRows = false,
+            SelectionMode = DataGridViewSelectionMode.CellSelect,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            ReadOnly = true,
+            Font = new Font("Segoe UI", 10f),
+            DefaultCellStyle = new DataGridViewCellStyle
+            {
+                BackColor = AppTheme.Surface,
+                ForeColor = AppTheme.TextPrimary,
+                SelectionBackColor = AppTheme.NavSelected,
+                SelectionForeColor = AppTheme.NavText,
+                Alignment = DataGridViewContentAlignment.MiddleCenter
+            },
+            ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
+            {
+                BackColor = AppTheme.NavBackground,
+                ForeColor = AppTheme.NavText,
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                Alignment = DataGridViewContentAlignment.MiddleCenter
+            },
+            EnableHeadersVisualStyles = false,
+            ColumnHeadersHeight = 30
+        };
+        _gridDivisionSchedules.DataError += (_, de) => de.ThrowException = false;
+
+        _gridDivisionSchedules.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "Date",
+            HeaderText = "Match Date",
+            ReadOnly = true,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
+            Width = 120,
+            DefaultCellStyle = new DataGridViewCellStyle
+            {
+                Alignment = DataGridViewContentAlignment.MiddleLeft,
+                Padding = new Padding(8, 0, 0, 0)
+            }
+        });
+
+        _gridDivisionSchedules.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "Match",
+            HeaderText = "Match",
+            ReadOnly = true,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
+        });
+
+        _gridDivisionSchedules.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "Court",
+            HeaderText = "Court",
+            ReadOnly = true,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
+            Width = 80
+        });
+
+        rightLayout.Controls.Add(_gridDivisionSchedules, 0, 2);
+        outer.Controls.Add(rightLayout, 1, 0);
+
+        tab.Controls.Add(outer);
+    }
+
+    private void LoadDivisionsList()
+    {
+        using var db = new BocceDbContext();
+        var currentLeague = AppParameterService.GetDefaultLeagueId(db);
+        var currentSeason = AppParameterService.GetDefaultSeasonId(db);
+
+        _chkListDivisions.Items.Clear();
+        _divisionsForSchedule.Clear();
+
+        if (!currentLeague.HasValue || !currentSeason.HasValue) return;
+
+        var divisions = db.Divisions
+            .Where(d => d.Season.LeagueId == currentLeague && d.SeasonId == currentSeason)
+            .Where(d => d.Teams.Any())
+            .OrderBy(d => d.SortName)
+            .Select(d => new { d.Id, d.Name })
+            .ToList();
+
+        foreach (var div in divisions)
+        {
+            _divisionsForSchedule.Add((div.Id, div.Name));
+            _chkListDivisions.Items.Add(div.Name);
+        }
+    }
+
+    private void OnGenerateDivisionSchedule(bool generateAll)
+    {
+        try
+        {
+            using var db = new BocceDbContext();
+            var currentLeague = AppParameterService.GetDefaultLeagueId(db);
+            var currentSeason = AppParameterService.GetDefaultSeasonId(db);
+
+            if (!currentLeague.HasValue || !currentSeason.HasValue)
+            {
+                MessageBox.Show("Please select a league and season.");
                 return;
             }
 
-            _inSwap = true;
-            partner.Cells[_colCourt.Index].Value = oldCourtEntry.Display;
-            partner.Tag = pOrig with { CourtId = orig.CourtId };
-            row.Tag     = orig with { CourtId = newCourtEntry.Id };
-            _inSwap = false;
+            var season = db.Seasons.Find(currentSeason);
+            if (season == null || !season.StartDate.HasValue)
+            {
+                MessageBox.Show("Season must have a start date.");
+                return;
+            }
+
+            List<int> divisionIds = generateAll
+                ? _divisionsForSchedule.Select(d => d.Id).ToList()
+                : Enumerable.Range(0, _chkListDivisions.Items.Count)
+                    .Where(i => _chkListDivisions.GetItemChecked(i))
+                    .Select(i => _divisionsForSchedule[i].Id)
+                    .ToList();
+
+            if (!divisionIds.Any())
+            {
+                MessageBox.Show("Please select at least one division.");
+                return;
+            }
+
+            int generatedCount = 0;
+            foreach (var divId in divisionIds)
+            {
+                if (GenerateDivisionScheduleForOne(db, divId, season))
+                    generatedCount++;
+            }
+
+            db.SaveChanges();
+            MessageBox.Show($"Generated schedules for {generatedCount} division(s).");
+            LoadDivisionsList();
         }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error generating schedules: {ex.Message}");
+        }
+    }
+
+    private bool GenerateDivisionScheduleForOne(BocceDbContext db, int divisionId, Season season)
+    {
+        var division = db.Divisions.Include(d => d.Teams)
+            .Include(d => d.DaySlot)
+            .Include(d => d.TimeSlot)
+            .FirstOrDefault(d => d.Id == divisionId);
+
+        if (division == null || !division.Teams.Any()) return false;
+
+        if (!division.DaySlotId.HasValue || !division.TimeSlotId.HasValue) return false;
+
+        var daySlot = division.DaySlot;
+        if (daySlot == null) return false;
+
+        var teamCount = division.Teams.Count;
+        var template = db.ScheduleTemplates
+            .Include(t => t.Weeks).ThenInclude(w => w.Matches)
+            .FirstOrDefault(t => t.SeasonId == season.Id && t.TeamCount == teamCount);
+
+        if (template == null) return false;
+
+        // Delete existing division schedules for this template
+        var existing = db.ScheduleDivisions
+            .Where(s => s.DivisionId == divisionId && s.TemplateId == template.Id)
+            .ToList();
+        db.ScheduleDivisions.RemoveRange(existing);
+
+        var startDate = season.StartDate!.Value;
+        var targetDayOfWeek = (DayOfWeek)daySlot.DayNbr;
+
+        // Find first occurrence of target day
+        var daysUntilTarget = ((int)targetDayOfWeek - (int)startDate.DayOfWeek + 7) % 7;
+        var firstMatchDate = startDate.AddDays(daysUntilTarget);
+
+        var teams = division.Teams.OrderBy(t => t.DisplayName).ToList();
+        var teamMap = new Dictionary<string, int>();
+
+        for (int i = 0; i < teams.Count; i++)
+        {
+            var letterIndex = i;
+            var letter = char.ConvertFromUtf32(65 + letterIndex);
+            teamMap[letter] = teams[i].Id;
+        }
+
+        foreach (var week in template.Weeks)
+        {
+            var matchDate = firstMatchDate.AddDays(week.WeekNumber * 7);
+
+            foreach (var match in week.Matches)
+            {
+                if (!teamMap.ContainsKey(match.Slot1) || !teamMap.ContainsKey(match.Slot2))
+                    continue;
+
+                var divSchedule = new ScheduleDivision
+                {
+                    DivisionId = divisionId,
+                    TemplateId = template.Id,
+                    TemplateWeekNumber = week.WeekNumber,
+                    MatchDate = matchDate,
+                    Team1Id = teamMap[match.Slot1],
+                    Team2Id = teamMap[match.Slot2],
+                    CourtId = match.CourtId
+                };
+
+                db.ScheduleDivisions.Add(divSchedule);
+            }
+        }
+
+        return true;
+    }
+
+    private void OnDeleteDivisionSchedule()
+    {
+        MessageBox.Show("Delete functionality coming soon.");
+    }
+
+    private void OnPrintDivisionSchedule()
+    {
+        MessageBox.Show("Print functionality coming soon.");
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
@@ -783,12 +1367,16 @@ public class SchedulePanel : UserControl
         FlatAppearance = { BorderSize = 0 }
     };
 
-    private sealed class TemplateItem(int id, int teamCount, int weekCount, DateTime generatedAt)
+    private sealed class TemplateItem(int id, int teamCount, int weekCount, DateTime generatedAt, bool isLocked)
     {
-        public int Id           { get; } = id;
-        public int TeamCount    { get; } = teamCount;
-        public int WeekCount    { get; } = weekCount;
+        public int      Id          { get; } = id;
+        public int      TeamCount   { get; } = teamCount;
+        public int      WeekCount   { get; } = weekCount;
         public DateTime GeneratedAt { get; } = generatedAt;
+        public bool     IsLocked    { get; set; } = isLocked;
         public override string ToString() => $"{TeamCount}-Team  ({WeekCount} wks)";
     }
+
+    private record WeekDisplayRow(int WeekNumber, Dictionary<int, MatchEntry> Matches);
+    private record MatchEntry(int MatchId, string Slot1, string Slot2);
 }

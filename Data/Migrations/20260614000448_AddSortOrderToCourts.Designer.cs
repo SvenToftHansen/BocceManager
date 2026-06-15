@@ -3,6 +3,7 @@ using System;
 using BocceManager.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BocceManager.Data.Migrations
 {
     [DbContext(typeof(BocceDbContext))]
-    partial class BocceDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260614000448_AddSortOrderToCourts")]
+    partial class AddSortOrderToCourts
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1105,53 +1108,6 @@ namespace BocceManager.Data.Migrations
                     b.ToTable("ReportParameters");
                 });
 
-            modelBuilder.Entity("BocceManager.Data.Entities.ScheduleDivision", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int?>("CourtId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("DivisionId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateOnly>("MatchDate")
-                        .HasColumnType("date");
-
-                    b.Property<int>("Team1Id")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Team2Id")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("TemplateId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("TemplateWeekNumber")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CourtId");
-
-                    b.HasIndex("DivisionId");
-
-                    b.HasIndex("Team1Id");
-
-                    b.HasIndex("Team2Id");
-
-                    b.HasIndex("TemplateId");
-
-                    b.ToTable("ScheduleDivisions");
-                });
-
             modelBuilder.Entity("BocceManager.Data.Entities.ScheduleTemplate", b =>
                 {
                     b.Property<int>("Id")
@@ -1162,9 +1118,6 @@ namespace BocceManager.Data.Migrations
 
                     b.Property<DateTime>("GeneratedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsLocked")
-                        .HasColumnType("boolean");
 
                     b.Property<int>("SeasonId")
                         .HasColumnType("integer");
@@ -2239,47 +2192,6 @@ namespace BocceManager.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Report");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.ScheduleDivision", b =>
-                {
-                    b.HasOne("BocceManager.Data.Entities.Court", "Court")
-                        .WithMany()
-                        .HasForeignKey("CourtId");
-
-                    b.HasOne("BocceManager.Data.Entities.Division", "Division")
-                        .WithMany()
-                        .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("BocceManager.Data.Entities.Team", "Team1")
-                        .WithMany()
-                        .HasForeignKey("Team1Id")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("BocceManager.Data.Entities.Team", "Team2")
-                        .WithMany()
-                        .HasForeignKey("Team2Id")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("BocceManager.Data.Entities.ScheduleTemplate", "Template")
-                        .WithMany()
-                        .HasForeignKey("TemplateId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Court");
-
-                    b.Navigation("Division");
-
-                    b.Navigation("Team1");
-
-                    b.Navigation("Team2");
-
-                    b.Navigation("Template");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.ScheduleTemplate", b =>

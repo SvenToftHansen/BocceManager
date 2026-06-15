@@ -23,7 +23,7 @@ public class DivisionPanel : UserControl
 
     // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // ── Left panel ────────────────────────────────────────────────────────────
-    private TextBox  _txtSearch    = null!;
+    private SearchBoxControl _txtSearch = null!;
     private ListBox  _lstDivisions = null!;
     private List<(int Id, string Display)> _allDivisions = [];
 
@@ -170,18 +170,12 @@ public class DivisionPanel : UserControl
             TextAlign = ContentAlignment.MiddleLeft
         };
 
-        _txtSearch = new TextBox
+        _txtSearch = new SearchBoxControl
         {
             Dock = DockStyle.Top,
-            Font = AppTheme.FontDefault,
-            ForeColor = AppTheme.TextSecondary,
-            BackColor = AppTheme.ContentBackground,
-            Text = "Search...",
             Height = 28
         };
-        _txtSearch.Enter += (_, _) => { if (_txtSearch.Text == "Search...") { _txtSearch.Text = ""; _txtSearch.ForeColor = AppTheme.TextPrimary; } };
-        _txtSearch.Leave += (_, _) => { if (string.IsNullOrEmpty(_txtSearch.Text)) { _txtSearch.Text = "Search..."; _txtSearch.ForeColor = AppTheme.TextSecondary; } };
-        _txtSearch.TextChanged += (_, _) => FilterDivisionList();
+        _txtSearch.SearchTextChanged += (_, _) => FilterDivisionList();
 
         _lstDivisions = new ListBox
         {
@@ -635,8 +629,7 @@ public class DivisionPanel : UserControl
 
     private void FilterDivisionList()
     {
-        // Safely get search text, handling cases where _txtSearch might not be initialized
-        var query = (_txtSearch?.Text == "Search..." || string.IsNullOrEmpty(_txtSearch?.Text)) ? "" : _txtSearch.Text;
+        var query = _txtSearch?.SearchText ?? "";
         var prev  = _lstDivisions.SelectedItem is ListItem sel ? sel.Id : (int?)null;
 
         _isLoadingData = true;

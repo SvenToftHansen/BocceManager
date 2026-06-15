@@ -7,6 +7,7 @@ public class ScheduleTemplate
     public int TeamCount { get; set; }   // 4, 6, or 8
     public int WeekCount { get; set; }
     public DateTime GeneratedAt { get; set; } = DateTime.UtcNow;
+    public bool IsLocked { get; set; } = false;
 
     public Season Season { get; set; } = null!;
     public ICollection<ScheduleTemplateWeek> Weeks { get; set; } = [];
