@@ -1027,6 +1027,7 @@ public class SchedulePanel : UserControl
             BorderStyle = BorderStyle.None,
             CheckOnClick = true
         };
+        _chkListDivisions.SelectedIndexChanged += (_, _) => OnDivisionSelected();
         leftLayout.Controls.Add(_chkListDivisions, 0, 1);
 
         var leftToolbar = new Panel
@@ -1221,6 +1222,74 @@ public class SchedulePanel : UserControl
         }
     }
 
+    private void OnDivisionSelected()
+    {
+        if (_chkListDivisions.SelectedIndex < 0)
+        {
+            _gridDivisionSchedules.Rows.Clear();
+            _lblDivStatus.Text = "Select a division to view its schedule.";
+            _btnDeleteDivSchedule.Enabled = false;
+            _btnPrintDivSchedule.Enabled = false;
+            return;
+        }
+
+        var divisionId = _divisionsForSchedule[_chkListDivisions.SelectedIndex].Id;
+        LoadDivisionScheduleGrid(divisionId);
+    }
+
+    private void LoadDivisionScheduleGrid(int divisionId)
+    {
+        try
+        {
+            using var db = new BocceDbContext();
+            var schedules = db.ScheduleDivisions
+                .Include(s => s.Team1)
+                .Include(s => s.Team2)
+                .Include(s => s.Court)
+                .Where(s => s.DivisionId == divisionId)
+                .OrderBy(s => s.MatchDate)
+                .ThenBy(s => s.Id)
+                .ToList();
+
+            _gridDivisionSchedules.Rows.Clear();
+
+            if (!schedules.Any())
+            {
+                _lblDivStatus.Text = "No schedule generated for this division.";
+                _btnDeleteDivSchedule.Enabled = false;
+                _btnPrintDivSchedule.Enabled = false;
+                return;
+            }
+
+            foreach (var schedule in schedules)
+            {
+                var team1Name = schedule.Team1?.DisplayName ?? "Unknown";
+                var team2Name = schedule.Team2?.DisplayName ?? "Unknown";
+                var courtLabel = schedule.Court != null
+                    ? _courtDisplay == "letter" && schedule.Court.CourtLetter != ""
+                        ? $"Court {schedule.Court.CourtLetter}"
+                        : $"Court {schedule.Court.CourtNumber}"
+                    : "";
+
+                var row = new DataGridViewRow();
+                row.Cells.Add(new DataGridViewTextBoxCell { Value = schedule.MatchDate.ToString("ddd, MMM d") });
+                row.Cells.Add(new DataGridViewTextBoxCell { Value = $"{team1Name} vs {team2Name}" });
+                row.Cells.Add(new DataGridViewTextBoxCell { Value = courtLabel });
+
+                _gridDivisionSchedules.Rows.Add(row);
+            }
+
+            _lblDivStatus.Text = $"Showing {schedules.Count} match(es) for {_divisionsForSchedule[_chkListDivisions.SelectedIndex].Name}";
+            _btnDeleteDivSchedule.Enabled = true;
+            _btnPrintDivSchedule.Enabled = true;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error loading schedule: {ex.Message}");
+            _lblDivStatus.Text = "Error loading schedule.";
+        }
+    }
+
     private void OnGenerateDivisionSchedule(bool generateAll)
     {
         try
@@ -1264,7 +1333,18 @@ public class SchedulePanel : UserControl
 
             db.SaveChanges();
             MessageBox.Show($"Generated schedules for {generatedCount} division(s).");
+
+            // Reload divisions and display the first generated schedule
             LoadDivisionsList();
+            if (divisionIds.Any())
+            {
+                var firstGenId = divisionIds.First();
+                var firstIdx = _divisionsForSchedule.FindIndex(d => d.Id == firstGenId);
+                if (firstIdx >= 0)
+                {
+                    _chkListDivisions.SelectedIndex = firstIdx;
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -1345,7 +1425,34 @@ public class SchedulePanel : UserControl
 
     private void OnDeleteDivisionSchedule()
     {
-        MessageBox.Show("Delete functionality coming soon.");
+        if (_chkListDivisions.SelectedIndex < 0) return;
+
+        var divisionName = _divisionsForSchedule[_chkListDivisions.SelectedIndex].Name;
+
+        if (MessageBox.Show(
+            $"Delete all schedules for {divisionName}?\n\nThis cannot be undone.",
+            "Delete Division Schedule",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning) != DialogResult.Yes)
+            return;
+
+        try
+        {
+            using var db = new BocceDbContext();
+            var divisionId = _divisionsForSchedule[_chkListDivisions.SelectedIndex].Id;
+            var schedules = db.ScheduleDivisions.Where(s => s.DivisionId == divisionId).ToList();
+            var count = schedules.Count;
+
+            db.ScheduleDivisions.RemoveRange(schedules);
+            db.SaveChanges();
+
+            MessageBox.Show($"Deleted {count} schedule record(s).");
+            LoadDivisionScheduleGrid(divisionId);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error deleting schedule: {ex.Message}");
+        }
     }
 
     private void OnPrintDivisionSchedule()
