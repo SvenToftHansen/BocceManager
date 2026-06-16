@@ -1345,8 +1345,13 @@ public class SchedulePanel : UserControl
                     {
                         foreach (var match in matchesForCourt)
                         {
-                            var team1 = StripTeamLetter(match.Team1?.DisplayName ?? "Unknown");
-                            var team2 = StripTeamLetter(match.Team2?.DisplayName ?? "Unknown");
+                            var team1Name = match.Team1?.DisplayName ?? "Unknown";
+                            var team2Name = match.Team2?.DisplayName ?? "Unknown";
+
+                            // Strip first 3 characters (e.g., "A - " from "A - Hansen")
+                            var team1 = team1Name.Length > 3 ? team1Name.Substring(3).Trim() : team1Name;
+                            var team2 = team2Name.Length > 3 ? team2Name.Substring(3).Trim() : team2Name;
+
                             if (matchText != "") matchText += "\n";
                             matchText += $"{team1} vs {team2}";
                         }
@@ -1371,15 +1376,6 @@ public class SchedulePanel : UserControl
             MessageBox.Show($"Error loading schedule: {ex.Message}");
             _lblDivStatus.Text = "Error loading schedule.";
         }
-    }
-
-    private string StripTeamLetter(string displayName)
-    {
-        // Remove team letter prefix: "A - Hansen" → "Hansen"
-        if (string.IsNullOrEmpty(displayName)) return displayName;
-        if (displayName.Length > 2 && displayName[1] == ' ' && displayName[2] == '-' && char.IsLetter(displayName[0]))
-            return displayName.Substring(4).Trim();
-        return displayName;
     }
 
     private void OnGenerateDivisionSchedule(bool generateAll)
