@@ -968,12 +968,13 @@ public class SchedulePanel : UserControl
     // ── Division Schedules Tab ────────────────────────────────────────────────
 
     private CheckedListBox _chkListDivisions = null!;
-    private Panel _gridDivisionSchedules = null!;
+    private DataGridView _gridDivisionSchedules = null!;
     private Button _btnGenerateCurrent = null!;
     private Button _btnGenerateAll = null!;
     private Button _btnDeleteDivSchedule = null!;
     private Button _btnPrintDivSchedule = null!;
     private Label _lblDivStatus = null!;
+    private Label _lblDayHeader = null!;
     private List<(int Id, string Name)> _divisionsForSchedule = [];
 
     private void BuildDivisionSchedulesTab(TabPage tab)
@@ -1060,13 +1061,14 @@ public class SchedulePanel : UserControl
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 3,
+            RowCount = 4,
             BackColor = AppTheme.ContentBackground,
             Padding = Padding.Empty,
             Margin = Padding.Empty,
             CellBorderStyle = TableLayoutPanelCellBorderStyle.None
         };
         rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
         rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         rightLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
@@ -1113,6 +1115,18 @@ public class SchedulePanel : UserControl
         titleRow.Controls.Add(_btnPrintDivSchedule, 1, 0);
         rightLayout.Controls.Add(titleRow, 0, 0);
 
+        _lblDayHeader = new Label
+        {
+            Dock = DockStyle.Fill,
+            ForeColor = AppTheme.TextPrimary,
+            BackColor = AppTheme.Surface,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(10, 0, 0, 0),
+            Font = new Font("Segoe UI", 10f, FontStyle.Bold),
+            Text = ""
+        };
+        rightLayout.Controls.Add(_lblDayHeader, 0, 1);
+
         _lblDivStatus = new Label
         {
             Dock = DockStyle.Fill,
@@ -1123,15 +1137,44 @@ public class SchedulePanel : UserControl
             Font = new Font("Segoe UI", 9.5f),
             Text = "Select divisions and click Generate."
         };
-        rightLayout.Controls.Add(_lblDivStatus, 0, 1);
+        rightLayout.Controls.Add(_lblDivStatus, 0, 2);
 
-        _gridDivisionSchedules = new Panel
+        _gridDivisionSchedules = new DataGridView
         {
             Dock = DockStyle.Fill,
-            BackColor = AppTheme.ContentBackground,
-            AutoScroll = true
+            BackgroundColor = AppTheme.ContentBackground,
+            GridColor = AppTheme.Separator,
+            BorderStyle = BorderStyle.None,
+            RowHeadersVisible = false,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            AllowUserToResizeRows = false,
+            SelectionMode = DataGridViewSelectionMode.CellSelect,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            ReadOnly = true,
+            Font = new Font("Segoe UI", 9.5f),
+            DefaultCellStyle = new DataGridViewCellStyle
+            {
+                BackColor = AppTheme.Surface,
+                ForeColor = AppTheme.TextPrimary,
+                SelectionBackColor = AppTheme.NavSelected,
+                SelectionForeColor = AppTheme.NavText,
+                Alignment = DataGridViewContentAlignment.MiddleCenter,
+                WrapMode = DataGridViewTriState.True
+            },
+            ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
+            {
+                BackColor = AppTheme.NavBackground,
+                ForeColor = AppTheme.NavText,
+                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                Alignment = DataGridViewContentAlignment.MiddleCenter
+            },
+            EnableHeadersVisualStyles = false,
+            ColumnHeadersHeight = 28,
+            RowTemplate = { Height = 45 }
         };
-        rightLayout.Controls.Add(_gridDivisionSchedules, 0, 2);
+        _gridDivisionSchedules.DataError += (_, de) => de.ThrowException = false;
+        rightLayout.Controls.Add(_gridDivisionSchedules, 0, 3);
         outer.Controls.Add(rightLayout, 1, 0);
 
         tab.Controls.Add(outer);
@@ -1166,7 +1209,9 @@ public class SchedulePanel : UserControl
     {
         if (_chkListDivisions.SelectedIndex < 0)
         {
-            _gridDivisionSchedules.Controls.Clear();
+            _gridDivisionSchedules.Rows.Clear();
+            _gridDivisionSchedules.Columns.Clear();
+            _lblDayHeader.Text = "";
             _lblDivStatus.Text = "Select a division to view its schedule.";
             _btnDeleteDivSchedule.Enabled = false;
             _btnPrintDivSchedule.Enabled = false;
@@ -1191,132 +1236,104 @@ public class SchedulePanel : UserControl
                 .Include(s => s.Court)
                 .Where(s => s.DivisionId == divisionId)
                 .OrderBy(s => s.MatchDate)
-                .ThenBy(s => s.Id)
+                .ThenBy(s => s.Court!.CourtNumber)
                 .ToList();
 
-            _gridDivisionSchedules.Controls.Clear();
+            _gridDivisionSchedules.Columns.Clear();
+            _gridDivisionSchedules.Rows.Clear();
 
             if (!schedules.Any())
             {
                 _lblDivStatus.Text = "No schedule generated for this division.";
+                _lblDayHeader.Text = "";
                 _btnDeleteDivSchedule.Enabled = false;
                 _btnPrintDivSchedule.Enabled = false;
                 return;
             }
 
-            // Group by MatchDate
-            var schedulesByDay = schedules.GroupBy(s => s.MatchDate).ToList();
+            // Set day header
+            var dayName = schedules.First().MatchDate.ToString("dddd");
+            var timeStr = division?.TimeSlot?.Timeslot12h ?? "TBD";
+            _lblDayHeader.Text = $"{dayName} {timeStr}";
 
-            foreach (var dayGroup in schedulesByDay)
+            // Get all unique courts across all schedules
+            var allCourts = schedules
+                .Select(s => s.Court)
+                .Distinct()
+                .OrderBy(c => c?.CourtNumber ?? int.MaxValue)
+                .ToList();
+
+            // Add date column
+            _gridDivisionSchedules.Columns.Add(new DataGridViewTextBoxColumn
             {
-                var matchDate = dayGroup.Key;
-                var dayName = matchDate.ToString("dddd");
-                var timeStr = division?.TimeSlot?.Timeslot12h ?? "TBD";
-
-                // Day header
-                var dayHeader = new Label
+                Name = "Date",
+                HeaderText = "Date of",
+                ReadOnly = true,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells,
+                DefaultCellStyle = new DataGridViewCellStyle
                 {
-                    Text = $"{dayName} {timeStr}",
-                    Dock = DockStyle.Top,
-                    Height = 24,
-                    Font = new Font("Segoe UI", 10f, FontStyle.Bold),
-                    ForeColor = AppTheme.TextPrimary,
-                    BackColor = AppTheme.Surface,
-                    Padding = new Padding(8, 2, 0, 0)
-                };
-                _gridDivisionSchedules.Controls.Add(dayHeader);
-
-                // Get unique courts for this day
-                var courts = dayGroup.Select(s => s.Court).Distinct().OrderBy(c => c?.CourtNumber).ToList();
-                var courtLabels = courts.Select(c => c != null
-                    ? _courtDisplay == "letter" && c.CourtLetter != ""
-                        ? c.CourtLetter
-                        : c.CourtNumber.ToString()
-                    : "").ToList();
-
-                // Court header row
-                var courtHeaderPanel = new Panel
-                {
-                    Dock = DockStyle.Top,
-                    Height = 20,
-                    BackColor = AppTheme.NavBackground,
-                    Padding = new Padding(8, 0, 8, 0)
-                };
-
-                int x = 8;
-                var courtWidth = Math.Max(100, (courtHeaderPanel.Width - 16) / courts.Count);
-
-                for (int i = 0; i < courts.Count; i++)
-                {
-                    var courtLabel = new Label
-                    {
-                        Text = $"Court {courtLabels[i]}",
-                        Left = x,
-                        Top = 2,
-                        Width = courtWidth,
-                        Height = 16,
-                        Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
-                        ForeColor = AppTheme.NavText,
-                        BackColor = AppTheme.NavBackground,
-                        TextAlign = ContentAlignment.MiddleCenter,
-                        AutoSize = false
-                    };
-                    courtHeaderPanel.Controls.Add(courtLabel);
-                    x += courtWidth;
+                    Alignment = DataGridViewContentAlignment.MiddleLeft,
+                    Padding = new Padding(4, 0, 0, 0)
                 }
+            });
 
-                _gridDivisionSchedules.Controls.Add(courtHeaderPanel);
+            // Add court columns
+            foreach (var court in allCourts)
+            {
+                var courtLabel = court != null
+                    ? _courtDisplay == "letter" && court.CourtLetter != ""
+                        ? $"Court {court.CourtLetter}"
+                        : $"Court {court.CourtNumber}"
+                    : "No Court";
 
-                // Matches for this day - build row of matches by court
-                var matchPanel = new Panel
+                _gridDivisionSchedules.Columns.Add(new DataGridViewTextBoxColumn
                 {
-                    Dock = DockStyle.Top,
-                    Height = 40,
-                    BackColor = AppTheme.Surface,
-                    Padding = new Padding(8, 4, 8, 4)
-                };
+                    Name = $"Court_{court?.Id}",
+                    HeaderText = courtLabel,
+                    ReadOnly = true,
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells,
+                    DefaultCellStyle = new DataGridViewCellStyle
+                    {
+                        Alignment = DataGridViewContentAlignment.MiddleCenter,
+                        WrapMode = DataGridViewTriState.True
+                    }
+                });
+            }
 
-                x = 8;
-                for (int i = 0; i < courts.Count; i++)
+            // Group schedules by date and build rows
+            var schedulesByDate = schedules.GroupBy(s => s.MatchDate).OrderBy(g => g.Key);
+
+            foreach (var dateGroup in schedulesByDate)
+            {
+                var dateStr = dateGroup.Key.ToString("MMM d");
+                var row = new DataGridViewRow();
+                row.Cells.Add(new DataGridViewTextBoxCell { Value = dateStr });
+
+                // Add cells for each court
+                foreach (var court in allCourts)
                 {
-                    var courtMatches = dayGroup.Where(s => s.CourtId == courts[i]?.Id).ToList();
+                    var matchesForCourt = dateGroup.Where(s => s.CourtId == court?.Id).ToList();
                     var matchText = "";
 
-                    foreach (var match in courtMatches)
+                    if (matchesForCourt.Any())
                     {
-                        var team1 = match.Team1?.DisplayName ?? "Unknown";
-                        var team2 = match.Team2?.DisplayName ?? "Unknown";
-                        if (matchText != "") matchText += "\n";
-                        matchText += $"{team1} vs {team2}";
+                        foreach (var match in matchesForCourt)
+                        {
+                            var team1 = match.Team1?.DisplayName ?? "Unknown";
+                            var team2 = match.Team2?.DisplayName ?? "Unknown";
+                            if (matchText != "") matchText += "\n";
+                            matchText += $"{team1} vs {team2}";
+                        }
+                    }
+                    else
+                    {
+                        matchText = "-";
                     }
 
-                    var matchLabel = new Label
-                    {
-                        Text = matchText,
-                        Left = x,
-                        Top = 4,
-                        Width = courtWidth,
-                        Height = 32,
-                        Font = new Font("Segoe UI", 9f),
-                        ForeColor = AppTheme.TextPrimary,
-                        BackColor = AppTheme.Surface,
-                        TextAlign = ContentAlignment.TopCenter,
-                        AutoSize = false
-                    };
-                    matchPanel.Controls.Add(matchLabel);
-                    x += courtWidth;
+                    row.Cells.Add(new DataGridViewTextBoxCell { Value = matchText });
                 }
 
-                _gridDivisionSchedules.Controls.Add(matchPanel);
-
-                // Separator
-                var sep = new Panel
-                {
-                    Dock = DockStyle.Top,
-                    Height = 1,
-                    BackColor = AppTheme.Separator
-                };
-                _gridDivisionSchedules.Controls.Add(sep);
+                _gridDivisionSchedules.Rows.Add(row);
             }
 
             _lblDivStatus.Text = $"Showing {schedules.Count} match(es)";
