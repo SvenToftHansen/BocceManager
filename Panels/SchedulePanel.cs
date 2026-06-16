@@ -968,7 +968,7 @@ public class SchedulePanel : UserControl
     // ── Division Schedules Tab ────────────────────────────────────────────────
 
     private CheckedListBox _chkListDivisions = null!;
-    private DataGridView _gridDivisionSchedules = null!;
+    private Panel _gridDivisionSchedules = null!;
     private Button _btnGenerateCurrent = null!;
     private Button _btnGenerateAll = null!;
     private Button _btnDeleteDivSchedule = null!;
@@ -1024,8 +1024,7 @@ public class SchedulePanel : UserControl
             BackColor = AppTheme.Surface,
             ForeColor = AppTheme.TextPrimary,
             Font = new Font("Segoe UI", 10f),
-            BorderStyle = BorderStyle.None,
-            CheckOnClick = true
+            BorderStyle = BorderStyle.None
         };
         _chkListDivisions.SelectedIndexChanged += (_, _) => OnDivisionSelected();
         leftLayout.Controls.Add(_chkListDivisions, 0, 1);
@@ -1037,14 +1036,14 @@ public class SchedulePanel : UserControl
             Padding = new Padding(8)
         };
 
-        _btnGenerateCurrent = MakeButton("Gen Current", AppTheme.Accent);
+        _btnGenerateCurrent = MakeButton("Generate", AppTheme.Accent);
         _btnGenerateCurrent.Click += (_, _) => OnGenerateDivisionSchedule(false);
         _btnGenerateCurrent.Location = new Point(8, 8);
         leftToolbar.Controls.Add(_btnGenerateCurrent);
 
         _btnGenerateAll = MakeButton("Gen All", AppTheme.Accent);
         _btnGenerateAll.Click += (_, _) => OnGenerateDivisionSchedule(true);
-        _btnGenerateAll.Location = new Point(8, 40);
+        _btnGenerateAll.Location = new Point(112, 8);
         leftToolbar.Controls.Add(_btnGenerateAll);
 
         _btnDeleteDivSchedule = MakeButton("Delete", AppTheme.ButtonDanger);
@@ -1126,71 +1125,12 @@ public class SchedulePanel : UserControl
         };
         rightLayout.Controls.Add(_lblDivStatus, 0, 1);
 
-        _gridDivisionSchedules = new DataGridView
+        _gridDivisionSchedules = new Panel
         {
             Dock = DockStyle.Fill,
-            BackgroundColor = AppTheme.ContentBackground,
-            GridColor = AppTheme.Separator,
-            BorderStyle = BorderStyle.None,
-            RowHeadersVisible = false,
-            AllowUserToAddRows = false,
-            AllowUserToDeleteRows = false,
-            AllowUserToResizeRows = false,
-            SelectionMode = DataGridViewSelectionMode.CellSelect,
-            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-            ReadOnly = true,
-            Font = new Font("Segoe UI", 10f),
-            DefaultCellStyle = new DataGridViewCellStyle
-            {
-                BackColor = AppTheme.Surface,
-                ForeColor = AppTheme.TextPrimary,
-                SelectionBackColor = AppTheme.NavSelected,
-                SelectionForeColor = AppTheme.NavText,
-                Alignment = DataGridViewContentAlignment.MiddleCenter
-            },
-            ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
-            {
-                BackColor = AppTheme.NavBackground,
-                ForeColor = AppTheme.NavText,
-                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
-                Alignment = DataGridViewContentAlignment.MiddleCenter
-            },
-            EnableHeadersVisualStyles = false,
-            ColumnHeadersHeight = 30
+            BackColor = AppTheme.ContentBackground,
+            AutoScroll = true
         };
-        _gridDivisionSchedules.DataError += (_, de) => de.ThrowException = false;
-
-        _gridDivisionSchedules.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "Date",
-            HeaderText = "Match Date",
-            ReadOnly = true,
-            AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
-            Width = 120,
-            DefaultCellStyle = new DataGridViewCellStyle
-            {
-                Alignment = DataGridViewContentAlignment.MiddleLeft,
-                Padding = new Padding(8, 0, 0, 0)
-            }
-        });
-
-        _gridDivisionSchedules.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "Match",
-            HeaderText = "Match",
-            ReadOnly = true,
-            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
-        });
-
-        _gridDivisionSchedules.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "Court",
-            HeaderText = "Court",
-            ReadOnly = true,
-            AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
-            Width = 80
-        });
-
         rightLayout.Controls.Add(_gridDivisionSchedules, 0, 2);
         outer.Controls.Add(rightLayout, 1, 0);
 
@@ -1226,7 +1166,7 @@ public class SchedulePanel : UserControl
     {
         if (_chkListDivisions.SelectedIndex < 0)
         {
-            _gridDivisionSchedules.Rows.Clear();
+            _gridDivisionSchedules.Controls.Clear();
             _lblDivStatus.Text = "Select a division to view its schedule.";
             _btnDeleteDivSchedule.Enabled = false;
             _btnPrintDivSchedule.Enabled = false;
@@ -1242,6 +1182,9 @@ public class SchedulePanel : UserControl
         try
         {
             using var db = new BocceDbContext();
+            var division = db.Divisions.Include(d => d.DaySlot).Include(d => d.TimeSlot)
+                .FirstOrDefault(d => d.Id == divisionId);
+
             var schedules = db.ScheduleDivisions
                 .Include(s => s.Team1)
                 .Include(s => s.Team2)
@@ -1251,7 +1194,7 @@ public class SchedulePanel : UserControl
                 .ThenBy(s => s.Id)
                 .ToList();
 
-            _gridDivisionSchedules.Rows.Clear();
+            _gridDivisionSchedules.Controls.Clear();
 
             if (!schedules.Any())
             {
@@ -1261,25 +1204,122 @@ public class SchedulePanel : UserControl
                 return;
             }
 
-            foreach (var schedule in schedules)
+            // Group by MatchDate
+            var schedulesByDay = schedules.GroupBy(s => s.MatchDate).ToList();
+
+            foreach (var dayGroup in schedulesByDay)
             {
-                var team1Name = schedule.Team1?.DisplayName ?? "Unknown";
-                var team2Name = schedule.Team2?.DisplayName ?? "Unknown";
-                var courtLabel = schedule.Court != null
-                    ? _courtDisplay == "letter" && schedule.Court.CourtLetter != ""
-                        ? $"Court {schedule.Court.CourtLetter}"
-                        : $"Court {schedule.Court.CourtNumber}"
-                    : "";
+                var matchDate = dayGroup.Key;
+                var dayName = matchDate.ToString("dddd");
+                var timeStr = division?.TimeSlot?.Timeslot12h ?? "TBD";
 
-                var row = new DataGridViewRow();
-                row.Cells.Add(new DataGridViewTextBoxCell { Value = schedule.MatchDate.ToString("ddd, MMM d") });
-                row.Cells.Add(new DataGridViewTextBoxCell { Value = $"{team1Name} vs {team2Name}" });
-                row.Cells.Add(new DataGridViewTextBoxCell { Value = courtLabel });
+                // Day header
+                var dayHeader = new Label
+                {
+                    Text = $"{dayName} {timeStr}",
+                    Dock = DockStyle.Top,
+                    Height = 24,
+                    Font = new Font("Segoe UI", 10f, FontStyle.Bold),
+                    ForeColor = AppTheme.TextPrimary,
+                    BackColor = AppTheme.Surface,
+                    Padding = new Padding(8, 2, 0, 0)
+                };
+                _gridDivisionSchedules.Controls.Add(dayHeader);
 
-                _gridDivisionSchedules.Rows.Add(row);
+                // Get unique courts for this day
+                var courts = dayGroup.Select(s => s.Court).Distinct().OrderBy(c => c?.CourtNumber).ToList();
+                var courtLabels = courts.Select(c => c != null
+                    ? _courtDisplay == "letter" && c.CourtLetter != ""
+                        ? c.CourtLetter
+                        : c.CourtNumber.ToString()
+                    : "").ToList();
+
+                // Court header row
+                var courtHeaderPanel = new Panel
+                {
+                    Dock = DockStyle.Top,
+                    Height = 20,
+                    BackColor = AppTheme.NavBackground,
+                    Padding = new Padding(8, 0, 8, 0)
+                };
+
+                int x = 8;
+                var courtWidth = Math.Max(100, (courtHeaderPanel.Width - 16) / courts.Count);
+
+                for (int i = 0; i < courts.Count; i++)
+                {
+                    var courtLabel = new Label
+                    {
+                        Text = $"Court {courtLabels[i]}",
+                        Left = x,
+                        Top = 2,
+                        Width = courtWidth,
+                        Height = 16,
+                        Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                        ForeColor = AppTheme.NavText,
+                        BackColor = AppTheme.NavBackground,
+                        TextAlign = ContentAlignment.MiddleCenter,
+                        AutoSize = false
+                    };
+                    courtHeaderPanel.Controls.Add(courtLabel);
+                    x += courtWidth;
+                }
+
+                _gridDivisionSchedules.Controls.Add(courtHeaderPanel);
+
+                // Matches for this day - build row of matches by court
+                var matchPanel = new Panel
+                {
+                    Dock = DockStyle.Top,
+                    Height = 40,
+                    BackColor = AppTheme.Surface,
+                    Padding = new Padding(8, 4, 8, 4)
+                };
+
+                x = 8;
+                for (int i = 0; i < courts.Count; i++)
+                {
+                    var courtMatches = dayGroup.Where(s => s.CourtId == courts[i]?.Id).ToList();
+                    var matchText = "";
+
+                    foreach (var match in courtMatches)
+                    {
+                        var team1 = match.Team1?.DisplayName ?? "Unknown";
+                        var team2 = match.Team2?.DisplayName ?? "Unknown";
+                        if (matchText != "") matchText += "\n";
+                        matchText += $"{team1} vs {team2}";
+                    }
+
+                    var matchLabel = new Label
+                    {
+                        Text = matchText,
+                        Left = x,
+                        Top = 4,
+                        Width = courtWidth,
+                        Height = 32,
+                        Font = new Font("Segoe UI", 9f),
+                        ForeColor = AppTheme.TextPrimary,
+                        BackColor = AppTheme.Surface,
+                        TextAlign = ContentAlignment.TopCenter,
+                        AutoSize = false
+                    };
+                    matchPanel.Controls.Add(matchLabel);
+                    x += courtWidth;
+                }
+
+                _gridDivisionSchedules.Controls.Add(matchPanel);
+
+                // Separator
+                var sep = new Panel
+                {
+                    Dock = DockStyle.Top,
+                    Height = 1,
+                    BackColor = AppTheme.Separator
+                };
+                _gridDivisionSchedules.Controls.Add(sep);
             }
 
-            _lblDivStatus.Text = $"Showing {schedules.Count} match(es) for {_divisionsForSchedule[_chkListDivisions.SelectedIndex].Name}";
+            _lblDivStatus.Text = $"Showing {schedules.Count} match(es)";
             _btnDeleteDivSchedule.Enabled = true;
             _btnPrintDivSchedule.Enabled = true;
         }
@@ -1313,14 +1353,13 @@ public class SchedulePanel : UserControl
 
             List<int> divisionIds = generateAll
                 ? _divisionsForSchedule.Select(d => d.Id).ToList()
-                : Enumerable.Range(0, _chkListDivisions.Items.Count)
-                    .Where(i => _chkListDivisions.GetItemChecked(i))
-                    .Select(i => _divisionsForSchedule[i].Id)
-                    .ToList();
+                : _chkListDivisions.SelectedIndex >= 0
+                    ? [_divisionsForSchedule[_chkListDivisions.SelectedIndex].Id]
+                    : [];
 
             if (!divisionIds.Any())
             {
-                MessageBox.Show("Please select at least one division.");
+                MessageBox.Show(generateAll ? "No divisions to generate." : "Please select a division.");
                 return;
             }
 
