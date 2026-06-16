@@ -1295,7 +1295,8 @@ public class SchedulePanel : UserControl
                 Name = "Date",
                 HeaderText = "Date of",
                 ReadOnly = true,
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells,
+                Width = 75,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
                 DefaultCellStyle = new DataGridViewCellStyle
                 {
                     Alignment = DataGridViewContentAlignment.MiddleLeft,
@@ -1317,7 +1318,7 @@ public class SchedulePanel : UserControl
                     Name = $"Court_{court?.Id}",
                     HeaderText = courtLabel,
                     ReadOnly = true,
-                    AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells,
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
                     DefaultCellStyle = new DataGridViewCellStyle
                     {
                         Alignment = DataGridViewContentAlignment.MiddleCenter,
