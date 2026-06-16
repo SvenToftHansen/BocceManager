@@ -967,7 +967,7 @@ public class SchedulePanel : UserControl
 
     // ── Division Schedules Tab ────────────────────────────────────────────────
 
-    private CheckedListBox _chkListDivisions = null!;
+    private ListBox _lstDivisions = null!;
     private DataGridView _gridDivisionSchedules = null!;
     private Button _btnGenerateCurrent = null!;
     private Button _btnGenerateAll = null!;
@@ -1019,16 +1019,17 @@ public class SchedulePanel : UserControl
             Font = new Font("Segoe UI", 11f, FontStyle.Bold)
         }, 0, 0);
 
-        _chkListDivisions = new CheckedListBox
+        _lstDivisions = new ListBox
         {
             Dock = DockStyle.Fill,
             BackColor = AppTheme.Surface,
             ForeColor = AppTheme.TextPrimary,
             Font = new Font("Segoe UI", 10f),
-            BorderStyle = BorderStyle.None
+            BorderStyle = BorderStyle.None,
+            IntegralHeight = false
         };
-        _chkListDivisions.SelectedIndexChanged += (_, _) => OnDivisionSelected();
-        leftLayout.Controls.Add(_chkListDivisions, 0, 1);
+        _lstDivisions.SelectedIndexChanged += (_, _) => OnDivisionSelected();
+        leftLayout.Controls.Add(_lstDivisions, 0, 1);
 
         var leftToolbar = new Panel
         {
@@ -1186,7 +1187,7 @@ public class SchedulePanel : UserControl
         var currentLeague = AppParameterService.GetDefaultLeagueId(db);
         var currentSeason = AppParameterService.GetDefaultSeasonId(db);
 
-        _chkListDivisions.Items.Clear();
+        _lstDivisions.Items.Clear();
         _divisionsForSchedule.Clear();
 
         if (!currentLeague.HasValue || !currentSeason.HasValue) return;
@@ -1201,13 +1202,13 @@ public class SchedulePanel : UserControl
         foreach (var div in divisions)
         {
             _divisionsForSchedule.Add((div.Id, div.Name));
-            _chkListDivisions.Items.Add(div.Name);
+            _lstDivisions.Items.Add(div.Name);
         }
     }
 
     private void OnDivisionSelected()
     {
-        if (_chkListDivisions.SelectedIndex < 0)
+        if (_lstDivisions.SelectedIndex < 0)
         {
             _gridDivisionSchedules.Rows.Clear();
             _gridDivisionSchedules.Columns.Clear();
@@ -1218,7 +1219,7 @@ public class SchedulePanel : UserControl
             return;
         }
 
-        var divisionId = _divisionsForSchedule[_chkListDivisions.SelectedIndex].Id;
+        var divisionId = _divisionsForSchedule[_lstDivisions.SelectedIndex].Id;
         LoadDivisionScheduleGrid(divisionId);
     }
 
@@ -1256,12 +1257,11 @@ public class SchedulePanel : UserControl
             var timeStr = division?.TimeSlot?.Timeslot12h ?? "TBD";
             _lblDayHeader.Text = $"{dayName} {timeStr}";
 
-            // Get all unique courts across all schedules
-            var allCourts = schedules
-                .Select(s => s.Court)
-                .Distinct()
-                .OrderBy(c => c?.CourtNumber ?? int.MaxValue)
-                .ToList();
+            // Get all courts from the season
+            var seasonId = division?.SeasonId;
+            var allCourts = seasonId.HasValue
+                ? db.Courts.Where(c => c.IsActive).OrderBy(c => c.CourtNumber).ToList()
+                : [];
 
             // Add date column
             _gridDivisionSchedules.Columns.Add(new DataGridViewTextBoxColumn
@@ -1319,8 +1319,8 @@ public class SchedulePanel : UserControl
                     {
                         foreach (var match in matchesForCourt)
                         {
-                            var team1 = match.Team1?.DisplayName ?? "Unknown";
-                            var team2 = match.Team2?.DisplayName ?? "Unknown";
+                            var team1 = StripTeamLetter(match.Team1?.DisplayName ?? "Unknown");
+                            var team2 = StripTeamLetter(match.Team2?.DisplayName ?? "Unknown");
                             if (matchText != "") matchText += "\n";
                             matchText += $"{team1} vs {team2}";
                         }
@@ -1347,6 +1347,15 @@ public class SchedulePanel : UserControl
         }
     }
 
+    private string StripTeamLetter(string displayName)
+    {
+        // Remove team letter prefix: "A - Hansen" → "Hansen"
+        if (string.IsNullOrEmpty(displayName)) return displayName;
+        if (displayName.Length > 2 && displayName[1] == ' ' && displayName[2] == '-' && char.IsLetter(displayName[0]))
+            return displayName.Substring(4).Trim();
+        return displayName;
+    }
+
     private void OnGenerateDivisionSchedule(bool generateAll)
     {
         try
@@ -1370,8 +1379,8 @@ public class SchedulePanel : UserControl
 
             List<int> divisionIds = generateAll
                 ? _divisionsForSchedule.Select(d => d.Id).ToList()
-                : _chkListDivisions.SelectedIndex >= 0
-                    ? [_divisionsForSchedule[_chkListDivisions.SelectedIndex].Id]
+                : _lstDivisions.SelectedIndex >= 0
+                    ? [_divisionsForSchedule[_lstDivisions.SelectedIndex].Id]
                     : [];
 
             if (!divisionIds.Any())
@@ -1398,7 +1407,7 @@ public class SchedulePanel : UserControl
                 var firstIdx = _divisionsForSchedule.FindIndex(d => d.Id == firstGenId);
                 if (firstIdx >= 0)
                 {
-                    _chkListDivisions.SelectedIndex = firstIdx;
+                    _lstDivisions.SelectedIndex = firstIdx;
                 }
             }
         }
@@ -1481,9 +1490,9 @@ public class SchedulePanel : UserControl
 
     private void OnDeleteDivisionSchedule()
     {
-        if (_chkListDivisions.SelectedIndex < 0) return;
+        if (_lstDivisions.SelectedIndex < 0) return;
 
-        var divisionName = _divisionsForSchedule[_chkListDivisions.SelectedIndex].Name;
+        var divisionName = _divisionsForSchedule[_lstDivisions.SelectedIndex].Name;
 
         if (MessageBox.Show(
             $"Delete all schedules for {divisionName}?\n\nThis cannot be undone.",
@@ -1495,7 +1504,7 @@ public class SchedulePanel : UserControl
         try
         {
             using var db = new BocceDbContext();
-            var divisionId = _divisionsForSchedule[_chkListDivisions.SelectedIndex].Id;
+            var divisionId = _divisionsForSchedule[_lstDivisions.SelectedIndex].Id;
             var schedules = db.ScheduleDivisions.Where(s => s.DivisionId == divisionId).ToList();
             var count = schedules.Count;
 
