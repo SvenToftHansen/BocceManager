@@ -1348,9 +1348,9 @@ public class SchedulePanel : UserControl
                             var team1Name = match.Team1?.DisplayName ?? "Unknown";
                             var team2Name = match.Team2?.DisplayName ?? "Unknown";
 
-                            // Strip first 3 characters (e.g., "A - " from "A - Hansen")
-                            var team1 = team1Name.Length > 3 ? team1Name.Substring(3).Trim() : team1Name;
-                            var team2 = team2Name.Length > 3 ? team2Name.Substring(3).Trim() : team2Name;
+                            // Strip first 2 characters (e.g., "A-" from "A-Hansen")
+                            var team1 = team1Name.Length > 2 ? team1Name.Substring(2) : team1Name;
+                            var team2 = team2Name.Length > 2 ? team2Name.Substring(2) : team2Name;
 
                             if (matchText != "") matchText += "\n";
                             matchText += $"{team1} vs {team2}";
