@@ -1038,22 +1038,48 @@ public class SchedulePanel : UserControl
             Padding = new Padding(8)
         };
 
+        // Row 1: Generate buttons
         _btnGenerateCurrent = MakeButton("Generate", AppTheme.Accent);
         _btnGenerateCurrent.Click += (_, _) => OnGenerateDivisionSchedule(false);
         _btnGenerateCurrent.Location = new Point(8, 8);
+        _btnGenerateCurrent.Size = new Size(85, 28);
         leftToolbar.Controls.Add(_btnGenerateCurrent);
 
         _btnGenerateAll = MakeButton("Gen All", AppTheme.Accent);
         _btnGenerateAll.Click += (_, _) => OnGenerateDivisionSchedule(true);
-        _btnGenerateAll.Location = new Point(112, 8);
+        _btnGenerateAll.Location = new Point(101, 8);
+        _btnGenerateAll.Size = new Size(85, 28);
         leftToolbar.Controls.Add(_btnGenerateAll);
 
+        // Row 2: Delete buttons
         _btnDeleteDivSchedule = MakeButton("Delete", AppTheme.ButtonDanger);
-        _btnDeleteDivSchedule.Click += (_, _) => OnDeleteDivisionSchedule();
+        _btnDeleteDivSchedule.Click += (_, _) => OnDeleteDivisionSchedule(false);
         _btnDeleteDivSchedule.Enabled = false;
-        _btnDeleteDivSchedule.Location = new Point(112, 8);
+        _btnDeleteDivSchedule.Location = new Point(8, 40);
+        _btnDeleteDivSchedule.Size = new Size(85, 28);
         leftToolbar.Controls.Add(_btnDeleteDivSchedule);
 
+        var btnDeleteAll = MakeButton("Del All", AppTheme.ButtonDanger);
+        btnDeleteAll.Click += (_, _) => OnDeleteDivisionSchedule(true);
+        btnDeleteAll.Location = new Point(101, 40);
+        btnDeleteAll.Size = new Size(85, 28);
+        leftToolbar.Controls.Add(btnDeleteAll);
+
+        // Row 3: Print buttons
+        _btnPrintDivSchedule = MakeButton("Print", AppTheme.Accent);
+        _btnPrintDivSchedule.Click += (_, _) => OnPrintDivisionSchedule(false);
+        _btnPrintDivSchedule.Enabled = false;
+        _btnPrintDivSchedule.Location = new Point(8, 72);
+        _btnPrintDivSchedule.Size = new Size(85, 28);
+        leftToolbar.Controls.Add(_btnPrintDivSchedule);
+
+        var btnPrintAll = MakeButton("Print All", AppTheme.Accent);
+        btnPrintAll.Click += (_, _) => OnPrintDivisionSchedule(true);
+        btnPrintAll.Location = new Point(101, 72);
+        btnPrintAll.Size = new Size(85, 28);
+        leftToolbar.Controls.Add(btnPrintAll);
+
+        leftLayout.RowStyles[2] = new RowStyle(SizeType.Absolute, 108);
         leftLayout.Controls.Add(leftToolbar, 0, 2);
         outer.Controls.Add(leftLayout, 0, 0);
 
@@ -1112,7 +1138,7 @@ public class SchedulePanel : UserControl
         };
         _btnPrintDivSchedule.FlatAppearance.BorderSize = 1;
         _btnPrintDivSchedule.FlatAppearance.BorderColor = AppTheme.Separator;
-        _btnPrintDivSchedule.Click += (_, _) => OnPrintDivisionSchedule();
+        _btnPrintDivSchedule.Click += (_, _) => OnPrintDivisionSchedule(false);
         titleRow.Controls.Add(_btnPrintDivSchedule, 1, 0);
         rightLayout.Controls.Add(titleRow, 0, 0);
 
@@ -1389,6 +1415,25 @@ public class SchedulePanel : UserControl
                 return;
             }
 
+            // Check if any divisions already have schedules
+            var existingCount = db.ScheduleDivisions
+                .Where(s => divisionIds.Contains(s.DivisionId))
+                .Count();
+
+            if (existingCount > 0)
+            {
+                var msg = generateAll
+                    ? $"This will overwrite {existingCount} existing division schedule(s). Continue?"
+                    : $"This division already has {existingCount} schedule record(s). Overwrite them?";
+
+                if (MessageBox.Show(
+                    msg,
+                    "Overwrite Existing Schedules",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning) != DialogResult.Yes)
+                    return;
+            }
+
             int generatedCount = 0;
             foreach (var divId in divisionIds)
             {
@@ -1488,31 +1533,65 @@ public class SchedulePanel : UserControl
         return true;
     }
 
-    private void OnDeleteDivisionSchedule()
+    private void OnDeleteDivisionSchedule(bool deleteAll)
     {
-        if (_lstDivisions.SelectedIndex < 0) return;
-
-        var divisionName = _divisionsForSchedule[_lstDivisions.SelectedIndex].Name;
-
-        if (MessageBox.Show(
-            $"Delete all schedules for {divisionName}?\n\nThis cannot be undone.",
-            "Delete Division Schedule",
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Warning) != DialogResult.Yes)
-            return;
+        if (!deleteAll && _lstDivisions.SelectedIndex < 0) return;
 
         try
         {
             using var db = new BocceDbContext();
-            var divisionId = _divisionsForSchedule[_lstDivisions.SelectedIndex].Id;
-            var schedules = db.ScheduleDivisions.Where(s => s.DivisionId == divisionId).ToList();
-            var count = schedules.Count;
 
-            db.ScheduleDivisions.RemoveRange(schedules);
-            db.SaveChanges();
+            if (deleteAll)
+            {
+                var allSchedules = db.ScheduleDivisions.ToList();
+                if (!allSchedules.Any())
+                {
+                    MessageBox.Show("No schedules to delete.");
+                    return;
+                }
 
-            MessageBox.Show($"Deleted {count} schedule record(s).");
-            LoadDivisionScheduleGrid(divisionId);
+                if (MessageBox.Show(
+                    $"Delete ALL division schedules ({allSchedules.Count} records)?\n\nThis cannot be undone.",
+                    "Delete All Schedules",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning) != DialogResult.Yes)
+                    return;
+
+                db.ScheduleDivisions.RemoveRange(allSchedules);
+                db.SaveChanges();
+
+                MessageBox.Show($"Deleted {allSchedules.Count} schedule record(s).");
+                _gridDivisionSchedules.Rows.Clear();
+                _gridDivisionSchedules.Columns.Clear();
+                _lblDayHeader.Text = "";
+                _lblDivStatus.Text = "All schedules deleted.";
+            }
+            else
+            {
+                var divisionName = _divisionsForSchedule[_lstDivisions.SelectedIndex].Name;
+                var divisionId = _divisionsForSchedule[_lstDivisions.SelectedIndex].Id;
+
+                var schedules = db.ScheduleDivisions.Where(s => s.DivisionId == divisionId).ToList();
+                if (!schedules.Any())
+                {
+                    MessageBox.Show("No schedules to delete for this division.");
+                    return;
+                }
+
+                if (MessageBox.Show(
+                    $"Delete all schedules for {divisionName}?\n\nThis cannot be undone.",
+                    "Delete Division Schedule",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning) != DialogResult.Yes)
+                    return;
+
+                var count = schedules.Count;
+                db.ScheduleDivisions.RemoveRange(schedules);
+                db.SaveChanges();
+
+                MessageBox.Show($"Deleted {count} schedule record(s).");
+                LoadDivisionScheduleGrid(divisionId);
+            }
         }
         catch (Exception ex)
         {
@@ -1520,9 +1599,12 @@ public class SchedulePanel : UserControl
         }
     }
 
-    private void OnPrintDivisionSchedule()
+    private void OnPrintDivisionSchedule(bool printAll)
     {
-        MessageBox.Show("Print functionality coming soon.");
+        if (printAll)
+            MessageBox.Show("Print all schedules functionality coming soon.");
+        else
+            MessageBox.Show("Print schedule functionality coming soon.");
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
