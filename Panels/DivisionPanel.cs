@@ -40,7 +40,8 @@ public class DivisionPanel : UserControl
     private Label         _lblCreated    = null!;
 
     // â”€â”€ Parameters tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    private ThemedNumericUpDown _numTeamsInDiv  = null!;
+    private Label _lblMaxTeams  = null!;
+    private Label _lblTeamCount = null!;
     private ThemedNumericUpDown _numPlayersMin  = null!;
     private ThemedNumericUpDown _numPlayersMax  = null!;
 
@@ -188,29 +189,18 @@ public class DivisionPanel : UserControl
         };
         _lstDivisions.SelectedIndexChanged += OnListDivisionSelected;
 
+        var toolbar = BuildSaveToolbar();
+        toolbar.Dock = DockStyle.Bottom;
+
         panel.Controls.Add(_lstDivisions);
+        panel.Controls.Add(toolbar);
         panel.Controls.Add(_txtSearch);
         panel.Controls.Add(lblTitle);
     }
 
     private void BuildRightPanel(SplitterPanel panel)
     {
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 2
-        };
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 54f));
-
-        var tabs    = BuildTabs();
-        var toolbar = BuildSaveToolbar();
-        toolbar.Dock = DockStyle.Fill;
-
-        layout.Controls.Add(tabs,    0, 0);
-        layout.Controls.Add(toolbar, 0, 1);
-        panel.Controls.Add(layout);
+        panel.Controls.Add(BuildTabs());
     }
 
     private TabControl BuildTabs()
@@ -278,7 +268,6 @@ public class DivisionPanel : UserControl
 
         scroll.Controls.AddRange([.. cc]);
         page.Controls.Add(scroll);
-        LoadSlotCombos();
         return page;
     }
 
@@ -296,10 +285,13 @@ public class DivisionPanel : UserControl
 
         Add(SecHdr("Division Parameters", lx, y)); y += 34;
 
-        Add(Lbl("Teams in Division", lx, y));
-        _numTeamsInDiv = Num(ix, y, 0, 99);
-        _numTeamsInDiv.ValueChanged += (_, _) => MarkDirty();
-        Add(_numTeamsInDiv, Hint("Max/target teams for this division. 0 = inherit from season or league. Even preferred; odd = one bye per round.", ix + 100, y + 4)); y += 44;
+        Add(Lbl("Max Teams in Division", lx, y));
+        _lblMaxTeams = new Label { Location = new Point(ix, y + 3), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary };
+        Add(_lblMaxTeams); y += 38;
+
+        Add(Lbl("Team Count", lx, y));
+        _lblTeamCount = new Label { Location = new Point(ix, y + 3), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary };
+        Add(_lblTeamCount); y += 38;
 
         Add(Sep(lx, y, iw + ix - lx)); y += 10;
         Add(SecHdr("Player Limits  (override season values when set)", lx, y)); y += 34;
@@ -360,7 +352,7 @@ public class DivisionPanel : UserControl
         _teamsGrid.CellValueChanged   += OnTeamActiveChanged;
 
         // â”€â”€ Players sub-panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        var playerPanel = new Panel { Dock = DockStyle.Bottom, Height = 330, BackColor = AppTheme.ContentBackground };
+        var playerPanel = new Panel { Dock = DockStyle.Bottom, Height = 276, BackColor = AppTheme.ContentBackground };
 
         _playersGrid = new DataGridView
         {
@@ -487,15 +479,23 @@ public class DivisionPanel : UserControl
 
     private Panel BuildSaveToolbar()
     {
-        var toolbar = new Panel
+        var outer = new Panel { Height = 76, BackColor = AppTheme.Surface };
+
+        var tbl = new TableLayoutPanel
         {
-            Dock = DockStyle.Bottom, Height = 54,
-            BackColor = AppTheme.Surface, Padding = new Padding(12, 10, 12, 10)
+            Dock = DockStyle.Fill,
+            ColumnCount = 2, RowCount = 2,
+            Padding = new Padding(6, 6, 6, 6),
+            CellBorderStyle = TableLayoutPanelCellBorderStyle.None
         };
+        tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+        tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+        tbl.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
+        tbl.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
 
         _btnAdd = new Button
         {
-            Text = "+ Add Division", Location = new Point(12, 10), Size = new Size(140, 32),
+            Text = "+Add", Dock = DockStyle.Fill, Margin = new Padding(0, 0, 3, 3),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
             Visible = !_teamsOnlyMode
@@ -504,17 +504,25 @@ public class DivisionPanel : UserControl
 
         _btnSave = new Button
         {
-            Text = "Save Changes", Location = new Point(160, 10), Size = new Size(140, 32),
+            Text = "Save", Dock = DockStyle.Fill, Margin = new Padding(3, 0, 0, 3),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
-            Enabled = false,
-            Visible = !_teamsOnlyMode
+            Enabled = false, Visible = !_teamsOnlyMode
         };
         _btnSave.Click += (_, _) => SaveDivision();
 
+        _btnDelete = new Button
+        {
+            Text = "Delete", Dock = DockStyle.Fill, Margin = new Padding(0, 3, 3, 0),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
+            Enabled = false, Visible = !_teamsOnlyMode
+        };
+        _btnDelete.Click += (_, _) => DeleteDivision();
+
         _btnCancel = new Button
         {
-            Text = "Cancel", Location = new Point(308, 10), Size = new Size(140, 32),
+            Text = "Cancel", Dock = DockStyle.Fill, Margin = new Padding(3, 3, 0, 0),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand,
             FlatAppearance = { BorderSize = 1, BorderColor = AppTheme.Separator },
@@ -522,18 +530,13 @@ public class DivisionPanel : UserControl
         };
         _btnCancel.Click += (_, _) => CancelAddDivision();
 
-        _btnDelete = new Button
-        {
-            Text = "Delete Division", Location = new Point(308, 10), Size = new Size(140, 32),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 0 }, Enabled = false,
-            Visible = !_teamsOnlyMode
-        };
-        _btnDelete.Click += (_, _) => DeleteDivision();
+        tbl.Controls.Add(_btnAdd,    0, 0);
+        tbl.Controls.Add(_btnSave,   1, 0);
+        tbl.Controls.Add(_btnDelete, 0, 1);
+        tbl.Controls.Add(_btnCancel, 1, 1);
 
-        toolbar.Controls.AddRange([_btnAdd, _btnSave, _btnCancel, _btnDelete]);
-        return toolbar;
+        outer.Controls.Add(tbl);
+        return outer;
     }
 
     // â”€â”€ Data Loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -774,12 +777,18 @@ public class DivisionPanel : UserControl
             _lblSystemName.Text = d.ShortName;
             _lblSortKey.Text    = d.SortName;
 
-            // Handle parameter inheritance: Division inherits from Season
-            int teamsInDiv = d.TeamsInDivision > 0 ? d.TeamsInDivision : (season?.MaxTeamsInDivision ?? 0);
+            // Max Teams in Division: season value, falling back to league
+            int maxTeams = season?.MaxTeamsInDivision > 0
+                ? season.MaxTeamsInDivision
+                : (season?.League?.MaxTeamsInDivision ?? 0);
+            _lblMaxTeams.Text = maxTeams > 0 ? maxTeams.ToString() : "--";
+
+            // Team Count is auto-updated by LoadTeams; show current persisted value here
+            _lblTeamCount.Text = d.TeamCount > 0 ? d.TeamCount.ToString() : "0";
+
             int playersMin = (d.PlayersPerTeamMinimum ?? 0) > 0 ? (d.PlayersPerTeamMinimum ?? 0) : (season?.PlayersPerTeamMinimum ?? 0);
             int playersMax = (d.PlayersPerTeamMaximum ?? 0) > 0 ? (d.PlayersPerTeamMaximum ?? 0) : (season?.PlayersPerTeamMaximum ?? 0);
 
-            _numTeamsInDiv.Value = teamsInDiv;
             _numPlayersMin.Value = playersMin;
             _numPlayersMax.Value = playersMax;
         }
@@ -811,7 +820,8 @@ public class DivisionPanel : UserControl
         _lblSortKey.Text    = "";
         _chkActive.Checked = true;
         _lblCreated.Text   = "";
-        _numTeamsInDiv.Value = 0;
+        _lblMaxTeams.Text  = "";
+        _lblTeamCount.Text = "";
         _numPlayersMin.Value = 0;
         _numPlayersMax.Value = 0;
         _btnDelete.Enabled  = false;
@@ -935,17 +945,6 @@ public class DivisionPanel : UserControl
             return;
         }
 
-        // Teams in division must be 0 (inherit) or one of 4, 6, 8
-        int teamsInDivValue = (int)_numTeamsInDiv.Value;
-        if (teamsInDivValue != 0 && teamsInDivValue != 4 && teamsInDivValue != 6 && teamsInDivValue != 8)
-        {
-            MessageBox.Show(
-                "Teams in Division must be 4, 6, or 8 (or 0 to inherit from season/league).\n\n" +
-                $"You entered {teamsInDivValue}.",
-                "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-
         // Check for duplicate division names in the same season
         try
         {
@@ -988,8 +987,6 @@ public class DivisionPanel : UserControl
 
             div.Name     = name;
             div.IsActive = _chkActive.Checked;
-            // Save displayed values (which might be inherited from parent)
-            div.TeamsInDivision       = (int)_numTeamsInDiv.Value;
             div.PlayersPerTeamMinimum = (int)_numPlayersMin.Value > 0 ? (int)_numPlayersMin.Value : null;
             div.PlayersPerTeamMaximum = (int)_numPlayersMax.Value > 0 ? (int)_numPlayersMax.Value : null;
 
@@ -1139,6 +1136,22 @@ public class DivisionPanel : UserControl
         }
         catch { }
         _teamsGrid.SelectionChanged += OnTeamSelected;
+
+        // Persist actual team count to division record
+        int teamCount = _teamsGrid.Rows.Count;
+        if (_lblTeamCount != null) _lblTeamCount.Text = teamCount.ToString();
+        try
+        {
+            using var db = new BocceDbContext();
+            var div = db.Divisions.Find(divisionId);
+            if (div != null && div.TeamCount != teamCount)
+            {
+                div.TeamCount = teamCount;
+                db.SaveChanges();
+            }
+        }
+        catch { }
+
         ClearPlayersPanel();
         UpdateTeamButtonsState();
     }
@@ -1214,7 +1227,6 @@ public class DivisionPanel : UserControl
 
     private static int ResolveMaxTeamsForDivision(Division div, Season? season, League? league)
     {
-        if (div.TeamsInDivision > 0) return div.TeamsInDivision;
         if (season?.MaxTeamsInDivision > 0) return season.MaxTeamsInDivision;
         return league?.MaxTeamsInDivision ?? 0;
     }
@@ -1285,11 +1297,8 @@ public class DivisionPanel : UserControl
             int maxTeams     = ResolveMaxTeams();
             if (maxTeams > 0 && currentCount >= maxTeams)
             {
-                string source = div.TeamsInDivision > 0 ? "this division's Parameters tab"
-                    : "the season or league default";
                 MessageBox.Show(
-                    $"Maximum of {maxTeams} team(s) already reached ({source}).\n\n" +
-                    "Increase \"Teams in Division\" on the Parameters tab to allow more.",
+                    $"Maximum of {maxTeams} team(s) already reached (from season or league default).",
                     "Maximum Teams Reached", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }

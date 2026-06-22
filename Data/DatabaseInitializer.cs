@@ -1,4 +1,4 @@
-using System.Data.Common;
+﻿using System.Data.Common;
 using BocceManager.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -291,6 +291,21 @@ public static class DatabaseInitializer
                 new AppParameter { Key = "LeagueCaptainEmail",  Value = "",                        Description = "Email address of the league captain" }
             );
         }
+
+        // Upsert all named parameters (safe on existing databases)
+        var existingKeys = db.AppParameters.Select(p => p.Key).ToHashSet();
+        (string Key, string Desc)[] ensure =
+        [
+            ("BackupFolder",      "Folder where database backups are saved"),
+            ("DocumentsFolder",   "Folder where imported document files are stored"),
+            ("ReportPdfLocation", "Default folder for PDF report exports"),
+            ("WebsiteApiUrl",     "URL for web report upload (placeholder)"),
+            ("WebsiteApiKey",     "API key for website integration (placeholder)"),
+            ("ClubRulesDocument", "Path to the club rules PDF or Word document"),
+        ];
+        foreach (var (key, desc) in ensure)
+            if (!existingKeys.Contains(key))
+                db.AppParameters.Add(new AppParameter { Key = key, Value = "", Description = desc });
 
         // Seed chart of accounts if empty
         if (!db.GlAccounts.Any())

@@ -3,6 +3,7 @@ using System;
 using BocceManager.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BocceManager.Data.Migrations
 {
     [DbContext(typeof(BocceDbContext))]
-    partial class BocceDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260619023437_AddScoreColumnsToScheduleDivisions")]
+    partial class AddScoreColumnsToScheduleDivisions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -60,7 +63,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("LeagueId");
 
-                    b.ToTable("Announcements", (string)null);
+                    b.ToTable("Announcements");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.AppParameter", b =>
@@ -90,7 +93,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("Key")
                         .IsUnique();
 
-                    b.ToTable("AppParameters", (string)null);
+                    b.ToTable("AppParameters");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.BocceMatch", b =>
@@ -142,7 +145,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("Team2Id");
 
-                    b.ToTable("Matches", (string)null);
+                    b.ToTable("Matches");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.ClubDocument", b =>
@@ -179,7 +182,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ClubDocuments", (string)null);
+                    b.ToTable("ClubDocuments");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.Court", b =>
@@ -208,7 +211,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Courts", (string)null);
+                    b.ToTable("Courts");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.DaySlot", b =>
@@ -235,7 +238,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("DaySlots", (string)null);
+                    b.ToTable("DaySlots");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.Division", b =>
@@ -273,8 +276,7 @@ namespace BocceManager.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("TeamCount")
-                        .HasColumnName("TeamsInDivision")
+                    b.Property<int>("TeamsInDivision")
                         .HasColumnType("integer");
 
                     b.Property<int?>("TimeSlotId")
@@ -288,7 +290,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("TimeSlotId");
 
-                    b.ToTable("Divisions", (string)null);
+                    b.ToTable("Divisions");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.DivisionParameter", b =>
@@ -321,7 +323,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("DivisionId", "Key")
                         .IsUnique();
 
-                    b.ToTable("DivisionParameters", (string)null);
+                    b.ToTable("DivisionParameters");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.EmailList", b =>
@@ -349,7 +351,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("LeagueId");
 
-                    b.ToTable("EmailLists", (string)null);
+                    b.ToTable("EmailLists");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.EmailListMember", b =>
@@ -376,7 +378,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("EmailListId", "PlayerId")
                         .IsUnique();
 
-                    b.ToTable("EmailListMembers", (string)null);
+                    b.ToTable("EmailListMembers");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.EmailLog", b =>
@@ -410,7 +412,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("LeagueId");
 
-                    b.ToTable("EmailLogs", (string)null);
+                    b.ToTable("EmailLogs");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.Game", b =>
@@ -446,7 +448,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("MatchId");
 
-                    b.ToTable("Games", (string)null);
+                    b.ToTable("Games");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.GlAccount", b =>
@@ -483,7 +485,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("GlAccounts", (string)null);
+                    b.ToTable("GlAccounts");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.InitiationFee", b =>
@@ -516,7 +518,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("PlayerId");
 
-                    b.ToTable("InitiationFees", (string)null);
+                    b.ToTable("InitiationFees");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.JournalEntry", b =>
@@ -561,7 +563,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("DebitAccountId");
 
-                    b.ToTable("JournalEntries", (string)null);
+                    b.ToTable("JournalEntries");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.League", b =>
@@ -599,7 +601,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Leagues", (string)null);
+                    b.ToTable("Leagues");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.LeagueOfficial", b =>
@@ -636,7 +638,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("LeagueId", "PlayerId")
                         .IsUnique();
 
-                    b.ToTable("LeagueOfficials", (string)null);
+                    b.ToTable("LeagueOfficials");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.LeagueParameter", b =>
@@ -669,7 +671,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("LeagueId", "Key")
                         .IsUnique();
 
-                    b.ToTable("LeagueParameters", (string)null);
+                    b.ToTable("LeagueParameters");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.LookingForTeam", b =>
@@ -703,7 +705,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("LeagueId", "PlayerId", "SeasonId")
                         .IsUnique();
 
-                    b.ToTable("LookingForTeams", (string)null);
+                    b.ToTable("LookingForTeams");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.MatchTeamResult", b =>
@@ -750,7 +752,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("TeamId");
 
-                    b.ToTable("MatchTeamResults", (string)null);
+                    b.ToTable("MatchTeamResults");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.NewIdea", b =>
@@ -773,7 +775,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("NewIdeas", (string)null);
+                    b.ToTable("NewIdeas");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.PendingPlayer", b =>
@@ -824,7 +826,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PendingPlayers", (string)null);
+                    b.ToTable("PendingPlayers");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.Player", b =>
@@ -865,7 +867,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("PartnerPlayerId");
 
-                    b.ToTable("Players", (string)null);
+                    b.ToTable("Players");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.PlayerParameter", b =>
@@ -898,7 +900,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("PlayerId", "Key")
                         .IsUnique();
 
-                    b.ToTable("PlayerParameters", (string)null);
+                    b.ToTable("PlayerParameters");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.PlayoffGame", b =>
@@ -934,7 +936,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("PlayoffMatchId");
 
-                    b.ToTable("PlayoffGames", (string)null);
+                    b.ToTable("PlayoffGames");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.PlayoffMatch", b =>
@@ -999,7 +1001,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("WinnerId");
 
-                    b.ToTable("PlayoffMatches", (string)null);
+                    b.ToTable("PlayoffMatches");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.PlayoffRound", b =>
@@ -1026,7 +1028,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("SeasonId");
 
-                    b.ToTable("PlayoffRounds", (string)null);
+                    b.ToTable("PlayoffRounds");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.Report", b =>
@@ -1066,7 +1068,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("Reports", (string)null);
+                    b.ToTable("Reports");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.ReportParameter", b =>
@@ -1103,7 +1105,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("ReportId", "ParameterName")
                         .IsUnique();
 
-                    b.ToTable("ReportParameters", (string)null);
+                    b.ToTable("ReportParameters");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.ScheduleDivision", b =>
@@ -1162,7 +1164,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("TemplateId");
 
-                    b.ToTable("ScheduleDivisions", (string)null);
+                    b.ToTable("ScheduleDivisions");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.ScheduleTemplate", b =>
@@ -1193,7 +1195,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("SeasonId", "TeamCount")
                         .IsUnique();
 
-                    b.ToTable("ScheduleTemplates", (string)null);
+                    b.ToTable("ScheduleTemplates");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.ScheduleTemplateMatch", b =>
@@ -1224,7 +1226,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("TemplateWeekId");
 
-                    b.ToTable("ScheduleTemplateMatches", (string)null);
+                    b.ToTable("ScheduleTemplateMatches");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.ScheduleTemplateWeek", b =>
@@ -1245,7 +1247,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("TemplateId");
 
-                    b.ToTable("ScheduleTemplateWeeks", (string)null);
+                    b.ToTable("ScheduleTemplateWeeks");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.ScheduleWeek", b =>
@@ -1269,7 +1271,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("DivisionId");
 
-                    b.ToTable("ScheduleWeeks", (string)null);
+                    b.ToTable("ScheduleWeeks");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.Season", b =>
@@ -1378,7 +1380,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("LeagueId");
 
-                    b.ToTable("Seasons", (string)null);
+                    b.ToTable("Seasons");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.SeasonCourt", b =>
@@ -1402,7 +1404,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("SeasonId", "CourtId")
                         .IsUnique();
 
-                    b.ToTable("SeasonCourts", (string)null);
+                    b.ToTable("SeasonCourts");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.SeasonDaySlot", b =>
@@ -1426,7 +1428,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("SeasonId", "DaySlotId")
                         .IsUnique();
 
-                    b.ToTable("SeasonDaySlots", (string)null);
+                    b.ToTable("SeasonDaySlots");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.SeasonFee", b =>
@@ -1465,7 +1467,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("PlayerId", "SeasonId")
                         .IsUnique();
 
-                    b.ToTable("SeasonFees", (string)null);
+                    b.ToTable("SeasonFees");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.SeasonParameter", b =>
@@ -1498,7 +1500,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("SeasonId", "Key")
                         .IsUnique();
 
-                    b.ToTable("SeasonParameters", (string)null);
+                    b.ToTable("SeasonParameters");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.SeasonTimeSlot", b =>
@@ -1522,7 +1524,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("SeasonId", "TimeSlotId")
                         .IsUnique();
 
-                    b.ToTable("SeasonTimeSlots", (string)null);
+                    b.ToTable("SeasonTimeSlots");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.SpareList", b =>
@@ -1549,7 +1551,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("LeagueId", "PlayerId")
                         .IsUnique();
 
-                    b.ToTable("SpareLists", (string)null);
+                    b.ToTable("SpareLists");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.SpareRequest", b =>
@@ -1603,7 +1605,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("SparePlayerId");
 
-                    b.ToTable("SpareRequests", (string)null);
+                    b.ToTable("SpareRequests");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.Team", b =>
@@ -1648,7 +1650,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("DivisionId", "TeamLetter")
                         .IsUnique();
 
-                    b.ToTable("Teams", (string)null);
+                    b.ToTable("Teams");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicant", b =>
@@ -1691,7 +1693,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("SeasonId");
 
-                    b.ToTable("TeamApplicants", (string)null);
+                    b.ToTable("TeamApplicants");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicantDaySlot", b =>
@@ -1715,7 +1717,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("TeamApplicantId", "DaySlotId")
                         .IsUnique();
 
-                    b.ToTable("TeamApplicantDaySlots", (string)null);
+                    b.ToTable("TeamApplicantDaySlots");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicantPlayer", b =>
@@ -1743,7 +1745,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("TeamApplicantId", "PlayerId")
                         .IsUnique();
 
-                    b.ToTable("TeamApplicantPlayers", (string)null);
+                    b.ToTable("TeamApplicantPlayers");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicantTimeSlot", b =>
@@ -1767,7 +1769,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("TeamApplicantId", "TimeSlotId")
                         .IsUnique();
 
-                    b.ToTable("TeamApplicantTimeSlots", (string)null);
+                    b.ToTable("TeamApplicantTimeSlots");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.TeamParameter", b =>
@@ -1800,7 +1802,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("TeamId", "Key")
                         .IsUnique();
 
-                    b.ToTable("TeamParameters", (string)null);
+                    b.ToTable("TeamParameters");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.TeamPlayer", b =>
@@ -1834,7 +1836,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("TeamId", "PlayerId")
                         .IsUnique();
 
-                    b.ToTable("TeamPlayers", (string)null);
+                    b.ToTable("TeamPlayers");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.TeamStanding", b =>
@@ -1888,7 +1890,7 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("TeamId", "DivisionId")
                         .IsUnique();
 
-                    b.ToTable("TeamStandings", (string)null);
+                    b.ToTable("TeamStandings");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.TimeSlot", b =>
@@ -1915,7 +1917,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("TimeSlots", (string)null);
+                    b.ToTable("TimeSlots");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.Announcement", b =>

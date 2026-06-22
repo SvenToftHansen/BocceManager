@@ -23,10 +23,10 @@ public static class ScheduleTemplateService
         var season = db.Seasons.Find(seasonId)
             ?? throw new InvalidOperationException("Season not found.");
 
-        int weekCount = season.WeeksInSeason > 0 ? season.WeeksInSeason : season.GamesPerSeason;
+        int weekCount = season.WeeksInSeason;
         if (weekCount <= 0)
             throw new InvalidOperationException(
-                "Season must have WeeksInSeason or GamesPerSeason set before generating a template.");
+                "Season must have Weeks in Season set before generating a template.");
 
         var courtIds = db.Courts
             .Where(c => c.IsActive)

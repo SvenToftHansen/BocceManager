@@ -1,12 +1,24 @@
-using BocceManager.Data;
+﻿using BocceManager.Data;
 using BocceManager.Data.Entities;
 
 namespace BocceManager.Services;
 
 public static class DocumentService
 {
-    public static string DocumentsFolder =>
-        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Documents");
+    public static string DocumentsFolder
+    {
+        get
+        {
+            try
+            {
+                using var db = new BocceManager.Data.BocceDbContext();
+                var path = AppParameterService.GetAppParameter(db, "DocumentsFolder");
+                if (!string.IsNullOrWhiteSpace(path)) return path;
+            }
+            catch { }
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Documents");
+        }
+    }
 
     public static void EnsureFolder() => Directory.CreateDirectory(DocumentsFolder);
 
@@ -18,8 +30,17 @@ public static class DocumentService
         EnsureFolder();
         var ext = Path.GetExtension(sourcePath).ToLowerInvariant();
         var docType = ext == ".pdf" ? "pdf" : "docx";
-        var fileName = $"{Guid.NewGuid():N}{ext}";
-        File.Copy(sourcePath, Path.Combine(DocumentsFolder, fileName));
+        var baseName = Path.GetFileNameWithoutExtension(sourcePath);
+        var fileName = baseName + ext;
+        var destPath = Path.Combine(DocumentsFolder, fileName);
+        if (File.Exists(destPath))
+        {
+            int counter = 1;
+            do { fileName = baseName + " (" + counter++ + ")" + ext; }
+            while (File.Exists(Path.Combine(DocumentsFolder, fileName)));
+            destPath = Path.Combine(DocumentsFolder, fileName);
+        }
+        File.Copy(sourcePath, destPath);
 
         var doc = new ClubDocument
         {

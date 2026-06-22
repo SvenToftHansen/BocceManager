@@ -31,7 +31,6 @@ public class SeasonPanel : UserControl
     private TextBox        _txtName           = null!;
     private DateTimePicker _dtpStartDate      = null!;
     private ThemedNumericUpDown _numWeeks          = null!;
-    private ThemedNumericUpDown _numGamesPerSeason = null!;
     private DateTimePicker _dtpPlayoffStart   = null!;
     private CheckBox       _chkIsCurrent      = null!;
     private CheckBox       _chkIsLocked       = null!;
@@ -43,7 +42,6 @@ public class SeasonPanel : UserControl
 
     // ── Editor – scoring ──────────────────────────────────────────────────────
     private ComboBox      _cmbGameInterval   = null!;
-    private CheckBox      _chkTimeslotDriven = null!;
     private ThemedNumericUpDown _numPlayersMin     = null!;
     private ThemedNumericUpDown _numPlayersMax     = null!;
     private ThemedNumericUpDown _numPtsWin         = null!;
@@ -51,16 +49,13 @@ public class SeasonPanel : UserControl
     private ThemedNumericUpDown _numPtsLoss        = null!;
     private ThemedNumericUpDown _numPtsNoShow      = null!;
     private ThemedNumericUpDown _numPtsToWin       = null!;
-    private ThemedNumericUpDown _numGamesPerMatch  = null!;
     private ComboBox      _cmbScoringMode    = null!;
 
     // ── Editor – playoff settings ─────────────────────────────────────────────
     private ThemedNumericUpDown _numTeamsPlayoffs     = null!;
     private CheckBox      _chkFirstPlace        = null!;
     private ComboBox      _cmbPlayoffType       = null!;
-    private ThemedNumericUpDown _numPlayoffGames      = null!;
-    private ComboBox      _cmbPlayoffScoring    = null!;
-    private CheckBox      _chkPlayoffTiebreaker = null!;
+    private ComboBox      _cmbPlayoffTiebreaker = null!;
 
     private Button _btnAdd    = null!;
     private Button _btnSave   = null!;
@@ -268,11 +263,6 @@ public class SeasonPanel : UserControl
         _numWeeks.ValueChanged += (_, _) => MarkDirty();
         Add(_numWeeks, Hint("Required before divisions can be auto-built", ix + 100, y + 4)); y += 44;
 
-        Add(Lbl("Games per Season", lx, y));
-        _numGamesPerSeason = Num(ix, y, 0, 999);
-        _numGamesPerSeason.ValueChanged += (_, _) => MarkDirty();
-        Add(_numGamesPerSeason, Hint("Total games each team plays", ix + 100, y + 4)); y += 44;
-
         // ── Status ────────────────────────────────────────────────────────
         Add(Sep(lx, y, iw + ix - lx)); y += 10;
         Add(SecHdr("Status", lx, y)); y += 34;
@@ -334,11 +324,6 @@ public class SeasonPanel : UserControl
         _cmbGameInterval.SelectedIndexChanged += (_, _) => MarkDirty();
         Add(_cmbGameInterval); y += 44;
 
-        Add(Lbl("Timeslot Driven", lx, y));
-        _chkTimeslotDriven = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary, Checked = true };
-        _chkTimeslotDriven.CheckedChanged += (_, _) => MarkDirty();
-        Add(_chkTimeslotDriven, Hint("Divisions play at fixed day/time slots", ix + 26, y + 4)); y += 38;
-
         Add(Lbl("Players / Team Min", lx, y));
         _numPlayersMin = Num(ix, y, 0, 99);
         _numPlayersMin.ValueChanged += (_, _) => MarkDirty();
@@ -374,21 +359,15 @@ public class SeasonPanel : UserControl
         _numPtsToWin.ValueChanged += (_, _) => MarkDirty();
         Add(_numPtsToWin); y += 38;
 
-        Add(Lbl("Games per Match", lx, y));
-        _numGamesPerMatch = Num(ix, y, 1, 99, 2);
-        _numGamesPerMatch.ValueChanged += (_, _) => MarkDirty();
-        Add(_numGamesPerMatch); y += 38;
-
         Add(Lbl("Scoring Mode", lx, y));
         _cmbScoringMode = StrCombo(ix, y, 260,
-            ("games_mode",       "Games Mode"),
-            ("match_score_mode", "Match Score Mode"),
-            ("match_play",       "Match Play"));
+            ("games_mode",       "Individual Games"),
+            ("match_score_mode", "Match Games"));
         _cmbScoringMode.SelectedIndexChanged += (_, _) => MarkDirty();
         Add(_cmbScoringMode); y += 28;
         Add(new Label
         {
-            Text = "Games Mode: most games won wins match  |  Match Score: cumulative points across games  |  Match Play: win/loss per match overall",
+            Text = "Individual Games: can have 2 wins, 1 win + 1 loss, or 2 losses  |  Match Games: cumulative score from both games (Win/Loss/Tie)",
             Location = new Point(lx, y), Size = new Size(iw + ix - lx - 10, 28),
             Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted
         }); y += 32;
@@ -419,23 +398,15 @@ public class SeasonPanel : UserControl
         _cmbPlayoffType.SelectedIndexChanged += (_, _) => MarkDirty();
         Add(_cmbPlayoffType); y += 44;
 
-        Add(Lbl("Playoff Games / Match", lx, y));
-        _numPlayoffGames = Num(ix, y, 1, 99, 2);
-        _numPlayoffGames.ValueChanged += (_, _) => MarkDirty();
-        Add(_numPlayoffGames); y += 38;
-
-        Add(Lbl("Playoff Scoring Mode", lx, y));
-        _cmbPlayoffScoring = StrCombo(ix, y, 260,
-            ("match_play",       "Match Play"),
-            ("games_mode",       "Games Mode"),
-            ("match_score_mode", "Match Score Mode"));
-        _cmbPlayoffScoring.SelectedIndexChanged += (_, _) => MarkDirty();
-        Add(_cmbPlayoffScoring); y += 44;
-
-        Add(Lbl("Playoff Tiebreaker End", lx, y));
-        _chkPlayoffTiebreaker = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary, Checked = true };
-        _chkPlayoffTiebreaker.CheckedChanged += (_, _) => MarkDirty();
-        Add(_chkPlayoffTiebreaker); y += 50;
+        Add(Lbl("Playoff Tiebreaker", lx, y));
+        _cmbPlayoffTiebreaker = StrCombo(ix, y, 260,
+            ("none",  "None"),
+            ("1b1p",  "1 Ball by One Player"),
+            ("1b4p",  "1 Ball by Each Player (4)"),
+            ("2b1p",  "2 Balls for One Player"),
+            ("2b4p",  "2 Balls for Each Player (4)"));
+        _cmbPlayoffTiebreaker.SelectedIndexChanged += (_, _) => MarkDirty();
+        Add(_cmbPlayoffTiebreaker); y += 50;
 
         scroll.Controls.AddRange([.. cc]);
         page.Controls.Add(scroll);
@@ -791,7 +762,6 @@ public class SeasonPanel : UserControl
             _txtName.Text            = s.Name;
             _dtpStartDate.Value      = s.StartDate?.ToDateTime(TimeOnly.MinValue) ?? DateTime.Today;
             _numWeeks.Value          = s.WeeksInSeason;
-            _numGamesPerSeason.Value = s.GamesPerSeason;
 
             _dtpPlayoffStart.Checked = s.PlayoffStartDate.HasValue;
             if (s.PlayoffStartDate.HasValue)
@@ -805,7 +775,6 @@ public class SeasonPanel : UserControl
 
             _numMaxTeamsDiv.Value = s.MaxTeamsInDivision;
             SelStr(_cmbGameInterval, s.GameInterval);
-            _chkTimeslotDriven.Checked = s.TimeslotDriven;
             _numPlayersMin.Value     = s.PlayersPerTeamMinimum ?? 0;
             _numPlayersMax.Value     = s.PlayersPerTeamMaximum ?? 0;
             _numPtsWin.Value         = s.PointsForWin;
@@ -813,15 +782,12 @@ public class SeasonPanel : UserControl
             _numPtsLoss.Value        = s.PointsForLoss;
             _numPtsNoShow.Value      = s.PointsForNoShow;
             _numPtsToWin.Value       = s.PointsToWinGame;
-            _numGamesPerMatch.Value  = s.GamesPerMatch;
             SelStr(_cmbScoringMode, s.ScoringMode);
 
             _numTeamsPlayoffs.Value      = s.TeamsInPlayoffs;
             _chkFirstPlace.Checked       = s.FirstPlaceGuaranteed;
             SelStr(_cmbPlayoffType, s.PlayoffType);
-            _numPlayoffGames.Value       = s.PlayoffGamesPerMatch;
-            SelStr(_cmbPlayoffScoring, s.PlayoffScoringMode);
-            _chkPlayoffTiebreaker.Checked = s.PlayoffTiebreakerEnd;
+            SelStr(_cmbPlayoffTiebreaker, s.PlayoffTiebreakerFormat ?? "none");
         }
         catch { }
         finally
@@ -848,23 +814,20 @@ public class SeasonPanel : UserControl
 
         _txtName.Text = "";
         _dtpStartDate.Value = DateTime.Today;
-        _numWeeks.Value = 0; _numGamesPerSeason.Value = 0;
+        _numWeeks.Value = 0;
         _dtpPlayoffStart.Checked = false;
         _chkIsCurrent.Checked = false; _chkIsLocked.Checked = false; _cmbStatus.SelectedIndex = 0; _lblCreatedAt.Text = "";
 
         _numMaxTeamsDiv.Value = 0;
         if (_cmbGameInterval.Items.Count > 0) _cmbGameInterval.SelectedIndex = 0;
-        _chkTimeslotDriven.Checked = true;
         _numPlayersMin.Value = 0; _numPlayersMax.Value = 0;
         _numPtsWin.Value = 2; _numPtsTie.Value = 1; _numPtsLoss.Value = 0;
-        _numPtsNoShow.Value = -1; _numPtsToWin.Value = 12; _numGamesPerMatch.Value = 2;
+        _numPtsNoShow.Value = -1; _numPtsToWin.Value = 12;
         if (_cmbScoringMode.Items.Count > 0) _cmbScoringMode.SelectedIndex = 0;
 
         _numTeamsPlayoffs.Value = 0; _chkFirstPlace.Checked = true;
         if (_cmbPlayoffType.Items.Count > 0) _cmbPlayoffType.SelectedIndex = 0;
-        _numPlayoffGames.Value = 2;
-        if (_cmbPlayoffScoring.Items.Count > 0) _cmbPlayoffScoring.SelectedIndex = 0;
-        _chkPlayoffTiebreaker.Checked = true;
+        if (_cmbPlayoffTiebreaker.Items.Count > 0) _cmbPlayoffTiebreaker.SelectedIndex = 0;
 
         _btnDelete.Enabled = false;
         _btnCancel.Visible = false;
@@ -1054,7 +1017,6 @@ public class SeasonPanel : UserControl
 
         _dtpStartDate.Value      = picked.Value.ToDateTime(TimeOnly.MinValue);
         _numWeeks.Value          = source.WeeksInSeason;
-        _numGamesPerSeason.Value = source.GamesPerSeason;
 
         _dtpPlayoffStart.Checked = source.PlayoffStartDate.HasValue;
         if (source.PlayoffStartDate.HasValue)
@@ -1065,7 +1027,6 @@ public class SeasonPanel : UserControl
 
         _numMaxTeamsDiv.Value = source.MaxTeamsInDivision;
         SelStr(_cmbGameInterval, source.GameInterval);
-        _chkTimeslotDriven.Checked = source.TimeslotDriven;
         _numPlayersMin.Value   = source.PlayersPerTeamMinimum ?? 0;
         _numPlayersMax.Value   = source.PlayersPerTeamMaximum ?? 0;
         _numPtsWin.Value       = source.PointsForWin;
@@ -1073,15 +1034,12 @@ public class SeasonPanel : UserControl
         _numPtsLoss.Value      = source.PointsForLoss;
         _numPtsNoShow.Value    = source.PointsForNoShow;
         _numPtsToWin.Value     = source.PointsToWinGame;
-        _numGamesPerMatch.Value = source.GamesPerMatch;
         SelStr(_cmbScoringMode, source.ScoringMode);
 
         _numTeamsPlayoffs.Value      = source.TeamsInPlayoffs;
         _chkFirstPlace.Checked       = source.FirstPlaceGuaranteed;
         SelStr(_cmbPlayoffType, source.PlayoffType);
-        _numPlayoffGames.Value       = source.PlayoffGamesPerMatch;
-        SelStr(_cmbPlayoffScoring, source.PlayoffScoringMode);
-        _chkPlayoffTiebreaker.Checked = source.PlayoffTiebreakerEnd;
+        SelStr(_cmbPlayoffTiebreaker, source.PlayoffTiebreakerFormat ?? "none");
 
         using (var db = new BocceDbContext())
         {
@@ -1278,14 +1236,12 @@ public class SeasonPanel : UserControl
         s.Name             = _txtName.Text.Trim();
         s.StartDate        = DateOnly.FromDateTime(_dtpStartDate.Value);
         s.WeeksInSeason    = (int)_numWeeks.Value;
-        s.GamesPerSeason   = (int)_numGamesPerSeason.Value;
         s.PlayoffStartDate     = _dtpPlayoffStart.Checked ? DateOnly.FromDateTime(_dtpPlayoffStart.Value) : null;
         s.MaxTeamsInDivision   = (int)_numMaxTeamsDiv.Value;
         s.IsCurrent        = _chkIsCurrent.Checked;
         s.IsLocked         = _chkIsLocked.Checked;
         s.Status           = StrVal(_cmbStatus) ?? "Setup";
         s.GameInterval     = StrVal(_cmbGameInterval)  ?? "weekly";
-        s.TimeslotDriven   = _chkTimeslotDriven.Checked;
         s.PlayersPerTeamMinimum = _numPlayersMin.Value > 0 ? (int)_numPlayersMin.Value : (int?)null;
         s.PlayersPerTeamMaximum = _numPlayersMax.Value > 0 ? (int)_numPlayersMax.Value : (int?)null;
         s.PointsForWin     = (int)_numPtsWin.Value;
@@ -1293,14 +1249,14 @@ public class SeasonPanel : UserControl
         s.PointsForLoss    = (int)_numPtsLoss.Value;
         s.PointsForNoShow  = (int)_numPtsNoShow.Value;
         s.PointsToWinGame  = (int)_numPtsToWin.Value;
-        s.GamesPerMatch    = (int)_numGamesPerMatch.Value;
+        s.GamesPerMatch    = 2;
         s.ScoringMode      = StrVal(_cmbScoringMode)   ?? "games_mode";
         s.TeamsInPlayoffs  = (int)_numTeamsPlayoffs.Value;
         s.FirstPlaceGuaranteed  = _chkFirstPlace.Checked;
         s.PlayoffType      = StrVal(_cmbPlayoffType)   ?? "ladder";
-        s.PlayoffGamesPerMatch  = (int)_numPlayoffGames.Value;
-        s.PlayoffScoringMode    = StrVal(_cmbPlayoffScoring) ?? "match_play";
-        s.PlayoffTiebreakerEnd  = _chkPlayoffTiebreaker.Checked;
+        s.PlayoffGamesPerMatch  = 2;
+        s.PlayoffScoringMode    = "match_play";
+        s.PlayoffTiebreakerFormat  = StrVal(_cmbPlayoffTiebreaker) ?? "none";
     }
 
     // ── Division helpers ──────────────────────────────────────────────────────
@@ -1335,7 +1291,7 @@ public class SeasonPanel : UserControl
                     TimeSlotId            = src.TimeSlotId,
                     PlayersPerTeamMinimum = src.PlayersPerTeamMinimum,
                     PlayersPerTeamMaximum = src.PlayersPerTeamMaximum,
-                    TeamsInDivision       = 0,
+                    TeamCount             = 0,
                     IsActive              = true
                 };
                 db.Divisions.Add(newDiv);
@@ -1430,7 +1386,7 @@ public class SeasonPanel : UserControl
                         SortName      = $"{day.DayNbr}-{time.Timeslot24h}",
                         DaySlotId     = day.Id,
                         TimeSlotId    = time.Id,
-                        TeamsInDivision = 0,
+                        TeamCount     = 0,
                         IsActive      = true
                     });
                     count++;

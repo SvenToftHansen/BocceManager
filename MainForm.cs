@@ -395,6 +395,7 @@ public partial class MainForm : Form
         NavSection.Documents  => new DocumentsPanel(),
         NavSection.Parameters => new ParametersPanel(),
         NavSection.Courts     => new CourtPanel(),
+        NavSection.ScoreEntry            => new ScoreEntryPanel(),
         NavSection.Schedule              => new SchedulePanel(),
         NavSection.ReportTeamListing     => new ReportTeamListingPanel(),
         NavSection.ReportScheduleGeneric => new ReportSchedulePanel(),

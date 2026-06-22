@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace BocceManager.Data.Entities;
 
 public class Division
@@ -9,8 +11,9 @@ public class Division
     public string SortName { get; set; } = "";
     public int? PlayersPerTeamMinimum { get; set; }
     public int? PlayersPerTeamMaximum { get; set; }
-    // Even numbers preferred (2-16); odd numbers supported (scheduler assigns one bye per round)
-    public int TeamsInDivision { get; set; }
+    // Actual count of teams in this division; auto-updated from Teams tab; drives scheduling
+    [Column("TeamsInDivision")]
+    public int TeamCount { get; set; }
     // NULL when season.game_interval = 'schedule_determined'
     public int? DaySlotId { get; set; }
     public int? TimeSlotId { get; set; }

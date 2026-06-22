@@ -11,7 +11,6 @@ public class Season
     public int GamesPerSeason { get; set; }
     // weekly | schedule_determined
     public string GameInterval { get; set; } = "weekly";
-    public bool TimeslotDriven { get; set; } = true;
 
     public int? PlayersPerTeamMinimum { get; set; }
     public int? PlayersPerTeamMaximum { get; set; }
@@ -32,9 +31,10 @@ public class Season
     // ladder | round_robin
     public string PlayoffType { get; set; } = "ladder";
     public int PlayoffGamesPerMatch { get; set; } = 2;
-    // games_mode | match_score_mode | match_play
+    // match_play (always)
     public string PlayoffScoringMode { get; set; } = "match_play";
-    public bool PlayoffTiebreakerEnd { get; set; } = true;
+    // none | 1b1p | 1b4p | 2b1p | 2b4p
+    public string PlayoffTiebreakerFormat { get; set; } = "none";
 
     public bool IsCurrent { get; set; } = false;
     public int WeeksInSeason { get; set; } = 0;

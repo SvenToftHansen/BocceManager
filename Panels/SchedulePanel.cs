@@ -543,35 +543,30 @@ public class SchedulePanel : UserControl
         {
             using var db = new BocceDbContext();
 
-            // Collect team counts from divisions (round odd counts down to even)
+            // Collect actual team counts from divisions (round odd counts down to even)
             var divCounts = db.Divisions
-                .Where(d => d.SeasonId == _selectedSeasonId.Value && d.TeamsInDivision > 0)
-                .Select(d => d.TeamsInDivision % 2 == 1 ? d.TeamsInDivision - 1 : d.TeamsInDivision)
-                .Where(d => d > 0)
+                .Where(d => d.SeasonId == _selectedSeasonId.Value)
+                .Select(d => new { ActualCount = d.Teams.Count() })
+                .Where(x => x.ActualCount >= 4)
+                .Select(x => x.ActualCount % 2 == 1 ? x.ActualCount - 1 : x.ActualCount)
                 .Distinct()
                 .ToList();
 
             var season = db.Seasons.Find(_selectedSeasonId.Value);
-            if (season?.MaxTeamsInDivision > 0)
-            {
-                int maxEven = season.MaxTeamsInDivision % 2 == 1 ? season.MaxTeamsInDivision - 1 : season.MaxTeamsInDivision;
-                if (maxEven > 0 && !divCounts.Contains(maxEven))
-                    divCounts.Add(maxEven);
-            }
 
             if (divCounts.Count == 0)
             {
                 MessageBox.Show(
-                    "No divisions with valid team counts found for this season.\n\n" +
-                    "Set Teams in Division on each division (or the season default) before generating.",
+                    "No divisions have 4 or more teams.\n\n" +
+                    "Add teams to each division before generating templates.",
                     "Generate Templates", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            int weekCount = (season?.WeeksInSeason > 0 ? season.WeeksInSeason : season?.GamesPerSeason) ?? 0;
+            int weekCount = season?.WeeksInSeason ?? 0;
             if (weekCount <= 0)
             {
-                MessageBox.Show("Season must have Weeks in Season or Games Per Season set before generating.",
+                MessageBox.Show("Season must have Weeks in Season set before generating.",
                     "Generate Templates", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
@@ -1349,12 +1344,8 @@ public class SchedulePanel : UserControl
                             var team1Name = match.Team1?.DisplayName ?? "Unknown";
                             var team2Name = match.Team2?.DisplayName ?? "Unknown";
 
-                            // Strip first 2 characters (e.g., "A-" from "A-Hansen")
-                            var team1 = team1Name.Length > 2 ? team1Name.Substring(2) : team1Name;
-                            var team2 = team2Name.Length > 2 ? team2Name.Substring(2) : team2Name;
-
                             if (matchText != "") matchText += "\n";
-                            matchText += $"{team1} vs {team2}";
+                            matchText += $"{team1Name} vs {team2Name}";
                         }
                     }
                     else
@@ -1420,15 +1411,11 @@ public class SchedulePanel : UserControl
             if (existingCount > 0)
             {
                 var msg = generateAll
-                    ? $"This will overwrite {existingCount} existing division schedule(s). Continue?"
-                    : $"This division already has {existingCount} schedule record(s). Overwrite them?";
+                    ? $"Divisional schedules already exist. Delete them first before generating new ones."
+                    : $"This division already has a schedule. Delete it first before generating a new one.";
 
-                if (MessageBox.Show(
-                    msg,
-                    "Overwrite Existing Schedules",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning) != DialogResult.Yes)
-                    return;
+                MessageBox.Show(msg, "Schedules Already Built", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
             }
 
             int generatedCount = 0;
@@ -1474,6 +1461,7 @@ public class SchedulePanel : UserControl
         if (daySlot == null) return false;
 
         var teamCount = division.Teams.Count;
+        if (teamCount < 4) return false;
         var template = db.ScheduleTemplates
             .Include(t => t.Weeks).ThenInclude(w => w.Matches)
             .FirstOrDefault(t => t.SeasonId == season.Id && t.TeamCount == teamCount);

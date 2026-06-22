@@ -19,7 +19,7 @@ public static class TeamsPrintService
 
     private const float ColTeamW    = 100f;  // Wider for team names
     private const float ColCaptainW = 120f;
-    private const float ColPhoneW   = 110f;
+    private const float ColPhoneW   = 138f;
     private const float DayGapH     = 12f;   // 1/8 inch gap between days
 
 
@@ -203,6 +203,10 @@ public static class TeamsPrintService
         {
             if (pe.Graphics == null) return;
             pageNum++;
+            var ps       = doc.PrinterSettings;
+            int fromPage = ps.PrintRange == PrintRange.SomePages ? ps.FromPage : 1;
+            int toPage   = ps.PrintRange == PrintRange.SomePages ? ps.ToPage   : int.MaxValue;
+            bool draw    = pageNum >= fromPage && pageNum <= toPage;
             var g      = pe.Graphics;
             var b      = pe.MarginBounds;
             float y    = b.Top;
@@ -230,12 +234,14 @@ public static class TeamsPrintService
             // ── Draw helpers ──────────────────────────────────────────────────
             void DrawTimeSlotLabel(string text)
             {
+                if (!draw) return;
                 g.FillRectangle(headerBrush, b.Left, y, b.Width, TimeSlotH);
                 var timeSlotRect = new RectangleF(b.Left, y, b.Width, TimeSlotH);
                 g.DrawString(text, timeSlotFont, new SolidBrush(Color.White), timeSlotRect, centerAlign);
             }
             void DrawColHeader()
             {
+                if (!draw) return;
                 g.FillRectangle(hdrFill, lx, y, tableWidth, ColHdrH);
                 float cx = lx;
                 DrawColText("Team",       cx, ColTeamW);    cx += ColTeamW;
@@ -252,6 +258,7 @@ public static class TeamsPrintService
             }
             void DrawDayLabel(string dayText, string timeSlot)
             {
+                if (!draw) return;
                 g.FillRectangle(lightBrush, b.Left, y, b.Width, DayHdrH);
                 var dayRect = new RectangleF(b.Left, y, b.Width, DayHdrH);
                 string fullLabel = $"{dayText} - {timeSlot}";
@@ -285,6 +292,7 @@ public static class TeamsPrintService
             }
             void DrawDataRow(TeamRow r, bool alt, float rowH, string wrappedPlayers)
             {
+                if (!draw) return;
                 // All white background, no alternating colors
                 float cx = lx;
                 DrawCell(r.TeamIdentifier, cx, ColTeamW);  cx += ColTeamW;
@@ -305,9 +313,12 @@ public static class TeamsPrintService
             // Document header — every page
             if (sections.Count > 0)
             {
-                g.FillRectangle(headerBrush, b.Left, y, b.Width, DocHdrH);
-                var hdrRect = new RectangleF(b.Left, y, b.Width, DocHdrH);
-                g.DrawString(sections[0].DocHeader, docHdrFont, new SolidBrush(Color.White), hdrRect, centerAlign);
+                if (draw)
+                {
+                    g.FillRectangle(headerBrush, b.Left, y, b.Width, DocHdrH);
+                    var hdrRect = new RectangleF(b.Left, y, b.Width, DocHdrH);
+                    g.DrawString(sections[0].DocHeader, docHdrFont, new SolidBrush(Color.White), hdrRect, centerAlign);
+                }
                 y += DocHdrH;
             }
 
@@ -372,10 +383,15 @@ public static class TeamsPrintService
             }
 
             PageDone:
-            string footer   = $"Page {pageNum}";
-            var    footerSz = g.MeasureString(footer, footerFont);
-            g.DrawString(footer, footerFont, Brushes.Gray,
-                b.Right - footerSz.Width, b.Bottom - footerSz.Height);
+            if (ps.PrintRange == PrintRange.SomePages && pageNum >= toPage)
+                pe.HasMorePages = false;
+            if (draw)
+            {
+                string footer   = $"Page {pageNum}";
+                var    footerSz = g.MeasureString(footer, footerFont);
+                g.DrawString(footer, footerFont, Brushes.Gray,
+                    b.Right - footerSz.Width, b.Bottom - footerSz.Height);
+            }
         };
 
         return doc;
@@ -493,7 +509,11 @@ public static class TeamsPrintService
 
     public static void SendToPrinter(Control parent, PrintDocument doc)
     {
-        using var dlg = new PrintDialog { Document = doc, UseEXDialog = true };
+        doc.PrinterSettings.MinimumPage = 1;
+        doc.PrinterSettings.MaximumPage = 999;
+        doc.PrinterSettings.FromPage    = 1;
+        doc.PrinterSettings.ToPage      = 999;
+        using var dlg = new PrintDialog { Document = doc, UseEXDialog = true, AllowSomePages = true, AllowCurrentPage = true };
         if (dlg.ShowDialog(parent) == DialogResult.OK)
         {
             doc.PrintController = new StandardPrintController();

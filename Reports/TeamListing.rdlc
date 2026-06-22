@@ -4,11 +4,11 @@
   <Author>Bocce Manager</Author>
   <PageHeight>11in</PageHeight>
   <PageWidth>8.5in</PageWidth>
-  <Width>7.5in</Width>
-  <TopMargin>0.5in</TopMargin>
-  <LeftMargin>0.5in</LeftMargin>
-  <RightMargin>0.5in</RightMargin>
-  <BottomMargin>0.5in</BottomMargin>
+  <Width>7in</Width>
+  <TopMargin>0.75in</TopMargin>
+  <LeftMargin>0.75in</LeftMargin>
+  <RightMargin>0.75in</RightMargin>
+  <BottomMargin>0.75in</BottomMargin>
   <rd:ReportID>b1fc5e73-1f70-4f0d-8329-71b46a5e8de5</rd:ReportID>
   <ReportParameters>
     <ReportParameter Name="SeasonId">

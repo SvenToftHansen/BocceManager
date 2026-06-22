@@ -7,8 +7,20 @@ namespace BocceManager.Services;
 
 public static class BackupService
 {
-    private static string BackupFolder =>
-        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Backups");
+    private static string BackupFolder
+    {
+        get
+        {
+            try
+            {
+                using var db = new BocceManager.Data.BocceDbContext();
+                var path = AppParameterService.GetAppParameter(db, "BackupFolder");
+                if (!string.IsNullOrWhiteSpace(path)) return path;
+            }
+            catch { }
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Backups");
+        }
+    }
 
     private static string FindPostgresqlBin()
     {

@@ -98,6 +98,9 @@ public class BocceDbContext : DbContext
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<ReportParameter> ReportParameters => Set<ReportParameter>();
 
+    // Views
+    public DbSet<Stats> Stats => Set<Stats>();
+
     protected override void OnConfiguring(DbContextOptionsBuilder options)
     {
         if (!string.IsNullOrEmpty(DbPath))
@@ -230,5 +233,8 @@ public class BocceDbContext : DbContext
         model.Entity<PlayoffMatch>()
             .HasOne(e => e.Winner).WithMany()
             .HasForeignKey(e => e.WinnerId).OnDelete(DeleteBehavior.Restrict);
+
+        // Stats view
+        model.Entity<Stats>().ToView("Stats").HasNoKey();
     }
 }

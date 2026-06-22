@@ -7,264 +7,390 @@ namespace BocceManager.Panels;
 
 public class ParametersPanel : UserControl
 {
-    private TextBox _txtDocPath = null!;
+    // Folder params (auto-save on browse)
+    private TextBox _txtBackupFolder    = null!;
+    private TextBox _txtDocsFolder      = null!;
+    private TextBox _txtReportPdfFolder = null!;
+
+    // File param (auto-save on browse)
+    private TextBox _txtClubRulesDoc = null!;
+
+    // Text params (saved via Save button)
+    private TextBox _txtClubName      = null!;
+    private TextBox _txtCaptainName   = null!;
+    private TextBox _txtCaptainEmail  = null!;
+    private TextBox _txtWebsiteApiUrl = null!;
+    private TextBox _txtWebsiteApiKey = null!;
 
     public ParametersPanel()
     {
         BackColor = AppTheme.ContentBackground;
-        Dock = DockStyle.Fill;
+        Dock      = DockStyle.Fill;
         BuildUI();
     }
 
     private void BuildUI()
     {
-        var docSection = MakeDocumentSection();
-        var grid = MakeGrid();
-        LoadAppParams(grid);
-
-        var toolbar = MakeToolbar(() => SaveAppParams(grid));
-
-        var layout = new TableLayoutPanel
+        var scroll = new Panel
         {
-            Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3,
-            Padding = Padding.Empty, Margin = Padding.Empty,
+            Dock        = DockStyle.Fill,
+            AutoScroll  = true,
+            BackColor   = AppTheme.ContentBackground,
+            Padding     = new Padding(0)
+        };
+
+        var toolbar = MakeToolbar();
+
+        var outer = new TableLayoutPanel
+        {
+            Dock            = DockStyle.Fill,
+            ColumnCount     = 1,
+            RowCount        = 2,
+            Padding         = Padding.Empty,
+            Margin          = Padding.Empty,
             CellBorderStyle = TableLayoutPanelCellBorderStyle.None
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
-        docSection.Dock = DockStyle.Fill;
-        grid.Dock       = DockStyle.Fill;
-        toolbar.Dock    = DockStyle.Fill;
-        layout.Controls.Add(docSection, 0, 0);
-        layout.Controls.Add(grid,       0, 1);
-        layout.Controls.Add(toolbar,    0, 2);
+        outer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+        scroll.Dock  = DockStyle.Fill;
+        toolbar.Dock = DockStyle.Fill;
+        outer.Controls.Add(scroll,   0, 0);
+        outer.Controls.Add(toolbar,  0, 1);
+        Controls.Add(outer);
 
-        Controls.Add(layout);
+        // Populate scroll area rows
+        int y = 16;
+
+        y = AddSectionHeader(scroll, "FOLDER LOCATIONS", y);
+        y = AddFolderRow(scroll, "Backup Folder",      "BackupFolder",      ref _txtBackupFolder,    y);
+        y = AddFolderRow(scroll, "Documents Folder",   "DocumentsFolder",   ref _txtDocsFolder,      y);
+        y = AddFolderRow(scroll, "Report PDF Folder",  "ReportPdfLocation", ref _txtReportPdfFolder, y);
+
+        y += 12;
+
+        y = AddSectionHeader(scroll, "CLUB DOCUMENT", y);
+        y = AddFileRow(scroll, "Club Rules Document", "ClubRulesDocument", ref _txtClubRulesDoc, y);
+
+        y += 12;
+
+        y = AddSectionHeader(scroll, "CLUB SETTINGS", y);
+        y = AddTextRow(scroll, "Club Name",            "ClubName",           ref _txtClubName,     y);
+        y = AddTextRow(scroll, "League Captain Name",  "LeagueCaptainName",  ref _txtCaptainName,  y);
+        y = AddTextRow(scroll, "League Captain Email", "LeagueCaptainEmail", ref _txtCaptainEmail, y);
+
+        y += 12;
+
+        y = AddSectionHeader(scroll, "WEBSITE INTEGRATION", y);
+        y = AddTextRow(scroll, "Website API URL", "WebsiteApiUrl", ref _txtWebsiteApiUrl, y);
+        y = AddTextRow(scroll, "Website API Key", "WebsiteApiKey", ref _txtWebsiteApiKey, y);
+
+        // Load text param values
+        LoadTextParams();
     }
 
-    // â”€â”€ Club Rules Document â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // -- Section header --
 
-    private static readonly string DocPathFile =
-        Path.Combine(AppContext.BaseDirectory, "bocce-rules-doc.txt");
-
-    private static string LoadDocPath()
+    private static int AddSectionHeader(Panel parent, string title, int y)
     {
-        try { return File.Exists(DocPathFile) ? File.ReadAllText(DocPathFile).Trim() : ""; }
-        catch { return ""; }
+        var lbl = new Label
+        {
+            Text      = title,
+            Font      = AppTheme.FontSmall,
+            ForeColor = AppTheme.TextMuted,
+            AutoSize  = true,
+            Location  = new Point(16, y)
+        };
+        var sep = new Panel
+        {
+            BackColor = AppTheme.Separator,
+            Location  = new Point(16, y + 18),
+            Height    = 1,
+            Anchor    = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
+        };
+        sep.Width = parent.ClientSize.Width - 32;
+        parent.SizeChanged += (_, _) => sep.Width = parent.ClientSize.Width - 32;
+        parent.Controls.Add(lbl);
+        parent.Controls.Add(sep);
+        return y + 26;
     }
 
-    private static void SaveDocPath(string path)
+    // -- Folder row (FolderBrowserDialog, auto-saves) --
+
+    private int AddFolderRow(Panel parent, string label, string paramKey, ref TextBox field, int y)
     {
-        try { File.WriteAllText(DocPathFile, path); }
+        AddLabel(parent, label, y);
+        var txt = MakePathBox(parent, y);
+        field = txt;
+
+        try
+        {
+            using var db = new BocceDbContext();
+            var v = AppParameterService.GetAppParameter(db, paramKey);
+            txt.Text = v ?? string.Empty;
+        }
         catch { }
+
+        var btn = MakeBrowseButton(parent, y);
+        btn.Click += (_, _) =>
+        {
+            using var dlg = new FolderBrowserDialog
+            {
+                Description            = "Select " + label,
+                UseDescriptionForTitle = true,
+                ShowNewFolderButton    = true
+            };
+            var cur = txt.Text.Trim();
+            if (Directory.Exists(cur)) dlg.SelectedPath = cur;
+            if (dlg.ShowDialog() != DialogResult.OK) return;
+            txt.Text = dlg.SelectedPath;
+            try
+            {
+                using var db = new BocceDbContext();
+                AppParameterService.SetAppParameter(db, paramKey, dlg.SelectedPath);
+            }
+            catch { }
+        };
+
+        return y + 40;
     }
 
-    private Panel MakeDocumentSection()
+    // -- File row (OpenFileDialog, auto-saves, has Open button) --
+
+    private int AddFileRow(Panel parent, string label, string paramKey, ref TextBox field, int y)
     {
-        var section = new Panel { BackColor = AppTheme.Surface };
+        AddLabel(parent, label, y);
+        var txt = MakePathBox(parent, y, extraButtons: 2);
+        field = txt;
 
-        section.Controls.Add(new Label
+        try
         {
-            Text = "Club Rules Document",
-            Font = AppTheme.FontDefaultBold, ForeColor = AppTheme.TextPrimary,
-            AutoSize = true, Location = new Point(14, 10)
-        });
+            using var db = new BocceDbContext();
+            // Migrate from legacy bocce-rules-doc.txt on first run
+            var stored = AppParameterService.GetAppParameter(db, paramKey);
+            if (string.IsNullOrEmpty(stored))
+            {
+                var legacyFile = Path.Combine(AppContext.BaseDirectory, "bocce-rules-doc.txt");
+                if (File.Exists(legacyFile))
+                {
+                    stored = File.ReadAllText(legacyFile).Trim();
+                    if (!string.IsNullOrEmpty(stored))
+                        AppParameterService.SetAppParameter(db, paramKey, stored);
+                }
+            }
+            txt.Text = stored ?? string.Empty;
+        }
+        catch { }
 
-        _txtDocPath = new TextBox
+        var btnBrowse = MakeBrowseButton(parent, y, rightOffset: 216);
+        var btnOpen   = new Button
         {
-            ReadOnly = true,
-            Font = AppTheme.FontDefault,
-            BackColor = AppTheme.ContentBackground, ForeColor = AppTheme.TextPrimary,
-            Location = new Point(14, 34), Size = new Size(420, 26),
-            Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right,
-            Text = LoadDocPath()
+            Text      = "Open",
+            Size      = new Size(96, 28),
+            Location  = new Point(9999, y + 4),   // x will be set below
+            Anchor    = AnchorStyles.Top | AnchorStyles.Right,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = AppTheme.Surface,
+            ForeColor = AppTheme.TextPrimary,
+            Font      = AppTheme.FontButton,
+            Cursor    = Cursors.Hand,
+            FlatAppearance = { BorderSize = 1, BorderColor = AppTheme.Separator }
         };
-
-        Button Btn(string text, Color back, int rightOffset, int w, Color? fore = null) => new Button
-        {
-            Text = text, Size = new Size(w, 28),
-            Location = new Point(rightOffset, 33),
-            Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            FlatStyle = FlatStyle.Flat, BackColor = back,
-            ForeColor = fore ?? Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 0 }
-        };
-
-        var btnBrowse = Btn("Browse...", AppTheme.Accent,  544, 96);
-        var btnOpen   = Btn("Open",      AppTheme.Surface,  648, 66, AppTheme.TextPrimary);
-        btnOpen.FlatAppearance.BorderSize  = 1;
-        btnOpen.FlatAppearance.BorderColor = AppTheme.Separator;
-
-        section.Controls.Add(new Label
-        {
-            Text = "PDF or Word document (.pdf, .doc, .docx) - the club's official rulebook, referenced by all leagues.",
-            Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted,
-            AutoSize = true, Location = new Point(14, 68)
-        });
+        btnOpen.Location = new Point(parent.ClientSize.Width - 108, y + 4);
+        parent.SizeChanged += (_, _) => btnOpen.Location = new Point(parent.ClientSize.Width - 108, y + 4);
+        parent.Controls.Add(btnOpen);
 
         btnBrowse.Click += (_, _) =>
         {
             using var dlg = new OpenFileDialog
             {
-                Title = "Select Club Rules Document",
-                Filter = "Documents|*.pdf;*.doc;*.docx|PDF Files|*.pdf|Word Documents|*.doc;*.docx|All Files|*.*",
+                Title           = "Select Club Rules Document",
+                Filter          = "Documents|*.pdf;*.doc;*.docx|All Files|*.*",
                 CheckFileExists = true
             };
-            var current = _txtDocPath.Text.Trim();
-            if (current.Length > 0)
-                try { dlg.InitialDirectory = Path.GetDirectoryName(current)!; } catch { }
-
-            if (dlg.ShowDialog() == DialogResult.OK)
+            var cur = txt.Text.Trim();
+            if (cur.Length > 0)
+                try { dlg.InitialDirectory = Path.GetDirectoryName(cur)!; } catch { }
+            if (dlg.ShowDialog() != DialogResult.OK) return;
+            txt.Text = dlg.FileName;
+            try
             {
-                _txtDocPath.Text = dlg.FileName;
-                SaveDocPath(dlg.FileName);
+                using var db = new BocceDbContext();
+                AppParameterService.SetAppParameter(db, paramKey, dlg.FileName);
             }
+            catch { }
         };
 
         btnOpen.Click += (_, _) =>
         {
-            var path = _txtDocPath.Text.Trim();
+            var path = txt.Text.Trim();
             if (string.IsNullOrEmpty(path))
             {
                 MessageBox.Show("No rules document has been selected yet.",
-                    "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    "Parameters", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             if (!File.Exists(path))
             {
-                MessageBox.Show("The document file could not be found. It may have been moved or deleted.",
-                    "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("The document file could not be found.",
+                    "Parameters", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
             catch (Exception ex)
             {
-                MessageBox.Show($"Could not open the document:\n\n{ex.Message}",
-                    "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Could not open document: " + ex.Message,
+                    "Parameters", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         };
 
-        section.Controls.AddRange([_txtDocPath, btnBrowse, btnOpen]);
-        return section;
+        return y + 40;
     }
 
-    // â”€â”€ Load / Save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // -- Text row (editable, saved by Save button) --
 
-    private static void LoadAppParams(DataGridView grid)
+    private int AddTextRow(Panel parent, string label, string paramKey, ref TextBox field, int y)
     {
-        grid.Rows.Clear();
+        AddLabel(parent, label, y);
+        var txt = new TextBox
+        {
+            Font      = AppTheme.FontDefault,
+            BackColor = AppTheme.ContentBackground,
+            ForeColor = AppTheme.TextPrimary,
+            Location  = new Point(200, y + 4),
+            Height    = 26,
+            Anchor    = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top,
+            Tag       = paramKey
+        };
+        txt.Width = parent.ClientSize.Width - 216;
+        parent.SizeChanged += (_, _) => txt.Width = parent.ClientSize.Width - 216;
+        parent.Controls.Add(txt);
+        field = txt;
+        return y + 40;
+    }
+
+    // -- Shared helpers --
+
+    private static void AddLabel(Panel parent, string text, int y)
+    {
+        parent.Controls.Add(new Label
+        {
+            Text      = text,
+            Font      = AppTheme.FontDefault,
+            ForeColor = AppTheme.TextSecondary,
+            AutoSize  = false,
+            Size      = new Size(180, 28),
+            Location  = new Point(16, y + 6),
+            TextAlign = ContentAlignment.MiddleLeft
+        });
+    }
+
+    private static TextBox MakePathBox(Panel parent, int y, int extraButtons = 1)
+    {
+        var txt = new TextBox
+        {
+            ReadOnly  = true,
+            Font      = AppTheme.FontDefault,
+            BackColor = AppTheme.ContentBackground,
+            ForeColor = AppTheme.TextPrimary,
+            Location  = new Point(200, y + 4),
+            Height    = 26,
+            Anchor    = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
+        };
+        // Right edge is reserved for Browse buttons (each ~108px)
+        txt.Width = parent.ClientSize.Width - 200 - (extraButtons * 108) - 8;
+        parent.SizeChanged += (_, _) =>
+            txt.Width = parent.ClientSize.Width - 200 - (extraButtons * 108) - 8;
+        parent.Controls.Add(txt);
+        return txt;
+    }
+
+    private static Button MakeBrowseButton(Panel parent, int y, int rightOffset = 108)
+    {
+        var btn = new Button
+        {
+            Text      = "Browse...",
+            Size      = new Size(100, 28),
+            Location  = new Point(parent.ClientSize.Width - rightOffset, y + 4),
+            Anchor    = AnchorStyles.Top | AnchorStyles.Right,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = AppTheme.Accent,
+            ForeColor = Color.White,
+            Font      = AppTheme.FontButton,
+            Cursor    = Cursors.Hand,
+            FlatAppearance = { BorderSize = 0 }
+        };
+        parent.SizeChanged += (_, _) =>
+            btn.Location = new Point(parent.ClientSize.Width - rightOffset, y + 4);
+        parent.Controls.Add(btn);
+        return btn;
+    }
+
+    // -- Load / Save text params --
+
+    private void LoadTextParams()
+    {
         try
         {
             using var db = new BocceDbContext();
-            foreach (var p in AppParameterService.Load(db))
-                grid.Rows.Add(p.Id, p.Key, p.Value, p.Description ?? "");
-            grid.ClearSelection();
+            SetText(_txtClubName,      AppParameterService.GetAppParameter(db, "ClubName"));
+            SetText(_txtCaptainName,   AppParameterService.GetAppParameter(db, "LeagueCaptainName"));
+            SetText(_txtCaptainEmail,  AppParameterService.GetAppParameter(db, "LeagueCaptainEmail"));
+            SetText(_txtWebsiteApiUrl, AppParameterService.GetAppParameter(db, "WebsiteApiUrl"));
+            SetText(_txtWebsiteApiKey, AppParameterService.GetAppParameter(db, "WebsiteApiKey"));
         }
         catch { }
+
+        static void SetText(TextBox box, string? value) =>
+            box.Text = value ?? string.Empty;
     }
 
-    private static void SaveAppParams(DataGridView grid)
+    private void SaveTextParams()
     {
         try
         {
             using var db = new BocceDbContext();
-            foreach (DataGridViewRow row in grid.Rows)
-            {
-                var idCell = row.Cells["Id"].Value;
-                if (idCell == null) continue;
-                int id = Convert.ToInt32(idCell);
-                var param = db.AppParameters.Find(id);
-                if (param == null) continue;
-                param.Value = row.Cells["Value"].Value?.ToString() ?? "";
-            }
-            db.SaveChanges();
+            AppParameterService.SetAppParameter(db, "ClubName",           _txtClubName.Text.Trim());
+            AppParameterService.SetAppParameter(db, "LeagueCaptainName",  _txtCaptainName.Text.Trim());
+            AppParameterService.SetAppParameter(db, "LeagueCaptainEmail", _txtCaptainEmail.Text.Trim());
+            AppParameterService.SetAppParameter(db, "WebsiteApiUrl",      _txtWebsiteApiUrl.Text.Trim());
+            AppParameterService.SetAppParameter(db, "WebsiteApiKey",      _txtWebsiteApiKey.Text.Trim());
         }
-        catch (Exception ex) { ShowError(ex); return; }
-        LoadAppParams(grid);
-        ShowSaved();
+        catch (Exception ex)
+        {
+            MessageBox.Show("Save failed: " + ex.Message,
+                "Parameters", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+        MessageBox.Show("Settings saved.",
+            "Parameters", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
-    // â”€â”€ Grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // -- Toolbar --
 
-    private static DataGridView MakeGrid()
-    {
-        var grid = new DataGridView
-        {
-            Dock = DockStyle.Fill,
-            SelectionMode = DataGridViewSelectionMode.CellSelect,
-            MultiSelect = false,
-            AllowUserToAddRows = false,
-            AllowUserToDeleteRows = false,
-            AllowUserToResizeRows = false,
-            RowHeadersVisible = false,
-            BorderStyle = BorderStyle.None,
-            BackgroundColor = AppTheme.ContentBackground,
-            GridColor = AppTheme.GridLines,
-            Font = AppTheme.FontDefault,
-            ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
-            {
-                BackColor           = AppTheme.GridHeaderBackground,
-                ForeColor           = AppTheme.GridHeaderText,
-                SelectionBackColor  = AppTheme.GridHeaderBackground,
-                SelectionForeColor  = AppTheme.GridHeaderText,
-                Font                = AppTheme.FontGridHeader,
-                Padding             = new Padding(4, 0, 0, 0)
-            },
-            EnableHeadersVisualStyles = false,
-            RowTemplate = { Height = 30 },
-            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-        };
-        var lockedStyle = new DataGridViewCellStyle
-        {
-            BackColor          = AppTheme.Surface,
-            ForeColor          = AppTheme.TextSecondary,
-            SelectionBackColor = AppTheme.Surface,
-            SelectionForeColor = AppTheme.TextSecondary
-        };
-
-        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Id",          Visible = false,                                              FillWeight = 1,  MinimumWidth = 2   });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Key",         HeaderText = "Parameter", ReadOnly = true, DefaultCellStyle = lockedStyle, FillWeight = 25, MinimumWidth = 140 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Value",       HeaderText = "Value",                                         FillWeight = 25, MinimumWidth = 120 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Description", HeaderText = "Description", ReadOnly = true, DefaultCellStyle = lockedStyle, FillWeight = 50, MinimumWidth = 100 });
-        grid.AlternatingRowsDefaultCellStyle =
-            new DataGridViewCellStyle { BackColor = AppTheme.GridAlternateRow };
-
-        grid.CellEnter += (_, e) =>
-        {
-            if (e.RowIndex < 0) return;
-            var valueCol = grid.Columns["Value"];
-            if (valueCol == null || e.ColumnIndex == valueCol.Index) return;
-            grid.BeginInvoke(() => grid.CurrentCell = grid.Rows[e.RowIndex].Cells["Value"]);
-        };
-
-        return grid;
-    }
-
-    private static Panel MakeToolbar(Action onSave)
+    private Panel MakeToolbar()
     {
         var panel = new Panel
         {
-            Height = 46, BackColor = AppTheme.Surface, Padding = new Padding(12, 8, 12, 8)
+            Height    = 46,
+            BackColor = AppTheme.Surface,
+            Padding   = new Padding(12, 8, 12, 8)
         };
 
         var btnSave = new Button
         {
-            Text = "Save Changes", Location = new Point(0, 8), Size = new Size(140, 30),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }
+            Text      = "Save Settings",
+            Location  = new Point(12, 8),
+            Size      = new Size(130, 30),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = AppTheme.Accent,
+            ForeColor = Color.White,
+            Font      = AppTheme.FontButton,
+            Cursor    = Cursors.Hand,
+            FlatAppearance = { BorderSize = 0 }
         };
-        btnSave.Click += (_, _) => onSave();
+        btnSave.Click += (_, _) => SaveTextParams();
         panel.Controls.Add(btnSave);
         return panel;
     }
-
-private static void ShowSaved()
-        => MessageBox.Show("Parameters saved.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
-
-    private static void ShowError(Exception ex)
-        => MessageBox.Show($"Save failed:\n\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
 }
-
