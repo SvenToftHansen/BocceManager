@@ -399,6 +399,7 @@ public partial class MainForm : Form
         NavSection.Schedule              => new SchedulePanel(),
         NavSection.ReportTeamListing     => new ReportTeamListingPanel(),
         NavSection.ReportScheduleGeneric => new ReportSchedulePanel(),
+        NavSection.SpareLists => new SpareListPanel(),
         NavSection.Utilities  => new UtilitiesPanel(),
         NavSection.Theme      => new ThemePanel(),
         _ => new PlaceholderPanel(SectionTitle(section))
