@@ -134,7 +134,7 @@ public class SpareListPanel : UserControl
 
         _btnRemoveFromSpare = new Button
         {
-            Text = "Remove ➜",
+            Text = "◀ Remove",
             Location = new Point(colWidth + 10, 150),
             Size = new Size(80, buttonHeight),
             FlatStyle = FlatStyle.Flat,
