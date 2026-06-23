@@ -400,7 +400,7 @@ public partial class MainForm : Form
         NavSection.Schedule              => new SchedulePanel(),
         NavSection.ReportTeamListing     => new ReportTeamListingPanel(),
         NavSection.ReportScheduleGeneric => new ReportSchedulePanel(),
-        NavSection.ReportSpareLists      => new PlaceholderPanel(SectionTitle(NavSection.ReportSpareLists)),
+        NavSection.ReportSpareLists      => new ReportSpareListPanel(),
         NavSection.SpareLists => new SpareListPanel(),
         NavSection.Utilities  => new UtilitiesPanel(),
         NavSection.Theme      => new ThemePanel(),
