@@ -23,6 +23,7 @@ public class SpareList
     public int LeagueId { get; set; }
     public int PlayerId { get; set; }
     public bool IsActive { get; set; } = true;
+    public string? Notes { get; set; }
 
     public League League { get; set; } = null!;
     public Player Player { get; set; } = null!;

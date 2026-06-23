@@ -45,6 +45,10 @@ public class SpareListPanel : UserControl
     private Button _btnRemoveFromSpare = null!;
     private Label _lblAvailableCount = null!;
     private Label _lblSpareCount = null!;
+    private Panel _notesPanel = null!;
+    private Label _lblSelectedPlayer = null!;
+    private TextBox _txtNotes = null!;
+    private int? _selectedSparePlayerId;
 
     public SpareListPanel()
     {
@@ -197,6 +201,49 @@ public class SpareListPanel : UserControl
 
         mainPanel.Controls.AddRange([lblSpare, searchHintSpare, _txtSearchSpare, _lstSparePlayers, _lblSpareCount]);
 
+        // Notes Panel (Bottom)
+        _notesPanel = new Panel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 150,
+            BackColor = AppTheme.Surface,
+            Padding = new Padding(12)
+        };
+
+        var lblNotesTitle = new Label
+        {
+            Text = "Notes",
+            Dock = DockStyle.Top,
+            Height = 24,
+            Font = AppTheme.FontDefaultBold,
+            ForeColor = AppTheme.TextPrimary
+        };
+
+        _lblSelectedPlayer = new Label
+        {
+            Text = "(Select a spare player to add notes)",
+            Dock = DockStyle.Top,
+            Height = 18,
+            Font = AppTheme.FontSmall,
+            ForeColor = AppTheme.TextMuted,
+            Padding = new Padding(0, 2, 0, 4)
+        };
+
+        _txtNotes = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            Font = AppTheme.FontDefault,
+            Multiline = true,
+            WordWrap = true,
+            Enabled = false,
+            BackColor = AppTheme.ContentBackground,
+            ForeColor = AppTheme.TextPrimary
+        };
+        _txtNotes.TextChanged += (_, _) => SaveSelectedPlayerNotes();
+
+        _notesPanel.Controls.AddRange([_txtNotes, _lblSelectedPlayer, lblNotesTitle]);
+        Controls.Add(_notesPanel);
+
         Controls.Add(mainPanel);
     }
 
@@ -285,7 +332,10 @@ public class SpareListPanel : UserControl
         try
         {
             if (_lstAvailablePlayers.SelectedItems.Count > 0)
+            {
                 _lstSparePlayers.ClearSelected();
+                ClearNotes();
+            }
         }
         finally
         {
@@ -300,12 +350,80 @@ public class SpareListPanel : UserControl
         try
         {
             if (_lstSparePlayers.SelectedItems.Count > 0)
+            {
                 _lstAvailablePlayers.ClearSelected();
+                LoadSelectedSparePlayerNotes();
+            }
+            else
+            {
+                ClearNotes();
+            }
         }
         finally
         {
             _isSwitchingSelection = false;
         }
+    }
+
+    private void LoadSelectedSparePlayerNotes()
+    {
+        if (_lstSparePlayers.SelectedItem is not PlayerItem item) return;
+
+        try
+        {
+            using var db = new BocceDbContext();
+            var leagueId = AppParameterService.GetDefaultLeagueId(db);
+            if (!leagueId.HasValue) return;
+
+            var sparePlayer = db.SpareLists
+                .Where(s => s.LeagueId == leagueId.Value && s.PlayerId == item.Id && s.IsActive)
+                .Include(s => s.Player)
+                .FirstOrDefault();
+
+            if (sparePlayer != null)
+            {
+                _selectedSparePlayerId = sparePlayer.Id;
+                _lblSelectedPlayer.Text = $"Notes for {item.DisplayName}:";
+                _txtNotes.Text = sparePlayer.Notes ?? "";
+                _txtNotes.Enabled = true;
+            }
+            else
+            {
+                ClearNotes();
+            }
+        }
+        catch
+        {
+            ClearNotes();
+        }
+    }
+
+    private void SaveSelectedPlayerNotes()
+    {
+        if (!_selectedSparePlayerId.HasValue) return;
+
+        try
+        {
+            using var db = new BocceDbContext();
+            var sparePlayer = db.SpareLists.FirstOrDefault(s => s.Id == _selectedSparePlayerId.Value);
+            if (sparePlayer != null)
+            {
+                sparePlayer.Notes = string.IsNullOrWhiteSpace(_txtNotes.Text) ? null : _txtNotes.Text;
+                db.SaveChanges();
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error saving notes: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void ClearNotes()
+    {
+        _selectedSparePlayerId = null;
+        _lblSelectedPlayer.Text = "(Select a spare player to add notes)";
+        _txtNotes.Text = "";
+        _txtNotes.Enabled = false;
     }
 
     private void MoveToSpare()
@@ -350,6 +468,7 @@ public class SpareListPanel : UserControl
             foreach (var playerId in selected)
                 _currentSparePlayerIds.Add(playerId);
 
+            ClearNotes();
             ApplyAvailableFilter();
             ApplySpareFilter();
         }
@@ -392,6 +511,7 @@ public class SpareListPanel : UserControl
             foreach (var playerId in selected)
                 _currentSparePlayerIds.Remove(playerId);
 
+            ClearNotes();
             ApplyAvailableFilter();
             ApplySpareFilter();
         }
