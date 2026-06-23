@@ -33,11 +33,10 @@ public class SpareListPanel : UserControl
     }
 
     private bool _isLoadingData = false;
+    private bool _isSwitchingSelection = false;
     private List<PlayerLookup> _allPlayers = [];
     private HashSet<int> _currentSparePlayerIds = [];
-    private int? _selectedLeagueId;
 
-    private ComboBox _cmbLeague = null!;
     private SearchBoxControl _txtSearchAvailable = null!;
     private ListBox _lstAvailablePlayers = null!;
     private SearchBoxControl _txtSearchSpare = null!;
@@ -52,51 +51,11 @@ public class SpareListPanel : UserControl
         BackColor = AppTheme.ContentBackground;
         Dock = DockStyle.Fill;
         BuildUi();
-        LoadLeagues();
         LoadData();
     }
 
     private void BuildUi()
     {
-        var headerPanel = new Panel
-        {
-            Dock = DockStyle.Top,
-            Height = 80,
-            BackColor = AppTheme.Surface,
-            Padding = new Padding(12, 8, 12, 8)
-        };
-
-        var title = new Label
-        {
-            Text = "Spare List Management",
-            Location = new Point(0, 0),
-            Size = new Size(400, 28),
-            Font = AppTheme.FontSectionHeading,
-            ForeColor = AppTheme.TextPrimary
-        };
-
-        var lblLeague = new Label
-        {
-            Text = "League:",
-            Location = new Point(0, 32),
-            Size = new Size(80, 24),
-            Font = AppTheme.FontDefault,
-            ForeColor = AppTheme.TextPrimary,
-            TextAlign = ContentAlignment.MiddleLeft
-        };
-
-        _cmbLeague = new ComboBox
-        {
-            Location = new Point(90, 32),
-            Size = new Size(300, 24),
-            DropDownStyle = ComboBoxStyle.DropDownList,
-            Font = AppTheme.FontDefault
-        };
-        _cmbLeague.SelectedIndexChanged += (_, _) => OnLeagueSelected();
-
-        headerPanel.Controls.AddRange([title, lblLeague, _cmbLeague]);
-        Controls.Add(headerPanel);
-
         var mainPanel = new Panel
         {
             Dock = DockStyle.Fill,
@@ -144,6 +103,7 @@ public class SpareListPanel : UserControl
             IntegralHeight = false,
             SelectionMode = SelectionMode.MultiExtended
         };
+        _lstAvailablePlayers.SelectedIndexChanged += (_, _) => OnAvailableListSelection();
         _lstAvailablePlayers.DoubleClick += (_, _) => MoveToSpare();
 
         _lblAvailableCount = new Label
@@ -174,7 +134,7 @@ public class SpareListPanel : UserControl
 
         _btnRemoveFromSpare = new Button
         {
-            Text = "➜ Remove",
+            Text = "Remove ➜",
             Location = new Point(colWidth + 10, 150),
             Size = new Size(80, buttonHeight),
             FlatStyle = FlatStyle.Flat,
@@ -223,6 +183,7 @@ public class SpareListPanel : UserControl
             IntegralHeight = false,
             SelectionMode = SelectionMode.MultiExtended
         };
+        _lstSparePlayers.SelectedIndexChanged += (_, _) => OnSpareListSelection();
         _lstSparePlayers.DoubleClick += (_, _) => RemoveFromSpare();
 
         _lblSpareCount = new Label
@@ -239,45 +200,17 @@ public class SpareListPanel : UserControl
         Controls.Add(mainPanel);
     }
 
-    private void LoadLeagues()
-    {
-        try
-        {
-            using var db = new BocceDbContext();
-            var leagues = db.Leagues
-                .Where(l => l.IsActive)
-                .OrderBy(l => l.Name)
-                .Select(l => new { l.Id, l.Name })
-                .ToList();
-
-            _cmbLeague.DataSource = leagues;
-            _cmbLeague.DisplayMember = "Name";
-            _cmbLeague.ValueMember = "Id";
-
-            if (_cmbLeague.Items.Count > 0)
-                _cmbLeague.SelectedIndex = 0;
-        }
-        catch { }
-    }
-
-    private void OnLeagueSelected()
-    {
-        if (_cmbLeague.SelectedValue is int leagueId)
-        {
-            _selectedLeagueId = leagueId;
-            LoadData();
-        }
-    }
-
     private void LoadData()
     {
         if (_isLoadingData) return;
-        if (!_selectedLeagueId.HasValue) return;
 
         _isLoadingData = true;
         try
         {
             using var db = new BocceDbContext();
+            var leagueId = AppParameterService.GetDefaultLeagueId(db);
+
+            if (!leagueId.HasValue) return;
 
             // Load all active players
             _allPlayers = db.Players
@@ -298,7 +231,7 @@ public class SpareListPanel : UserControl
 
             // Load current spare list for this league
             _currentSparePlayerIds = db.SpareLists
-                .Where(s => s.LeagueId == _selectedLeagueId.Value && s.IsActive)
+                .Where(s => s.LeagueId == leagueId.Value && s.IsActive)
                 .Select(s => s.PlayerId)
                 .ToHashSet();
 
@@ -345,10 +278,38 @@ public class SpareListPanel : UserControl
         _lblSpareCount.Text = $"{spareList.Count} player{(spareList.Count != 1 ? "s" : "")}";
     }
 
+    private void OnAvailableListSelection()
+    {
+        if (_isSwitchingSelection) return;
+        _isSwitchingSelection = true;
+        try
+        {
+            if (_lstAvailablePlayers.SelectedItems.Count > 0)
+                _lstSparePlayers.ClearSelected();
+        }
+        finally
+        {
+            _isSwitchingSelection = false;
+        }
+    }
+
+    private void OnSpareListSelection()
+    {
+        if (_isSwitchingSelection) return;
+        _isSwitchingSelection = true;
+        try
+        {
+            if (_lstSparePlayers.SelectedItems.Count > 0)
+                _lstAvailablePlayers.ClearSelected();
+        }
+        finally
+        {
+            _isSwitchingSelection = false;
+        }
+    }
+
     private void MoveToSpare()
     {
-        if (!_selectedLeagueId.HasValue) return;
-
         var selected = _lstAvailablePlayers.SelectedItems
             .Cast<PlayerItem>()
             .Select(p => p.Id)
@@ -359,19 +320,21 @@ public class SpareListPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
+            var leagueId = AppParameterService.GetDefaultLeagueId(db);
+
+            if (!leagueId.HasValue) return;
 
             foreach (var playerId in selected)
             {
-                // Check if already exists (shouldn't, but be safe)
                 var existing = db.SpareLists.FirstOrDefault(s =>
-                    s.LeagueId == _selectedLeagueId.Value &&
+                    s.LeagueId == leagueId.Value &&
                     s.PlayerId == playerId);
 
                 if (existing == null)
                 {
                     db.SpareLists.Add(new SpareList
                     {
-                        LeagueId = _selectedLeagueId.Value,
+                        LeagueId = leagueId.Value,
                         PlayerId = playerId,
                         IsActive = true
                     });
@@ -398,8 +361,6 @@ public class SpareListPanel : UserControl
 
     private void RemoveFromSpare()
     {
-        if (!_selectedLeagueId.HasValue) return;
-
         var selected = _lstSparePlayers.SelectedItems
             .Cast<PlayerItem>()
             .Select(p => p.Id)
@@ -410,11 +371,14 @@ public class SpareListPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
+            var leagueId = AppParameterService.GetDefaultLeagueId(db);
+
+            if (!leagueId.HasValue) return;
 
             foreach (var playerId in selected)
             {
                 var existing = db.SpareLists.FirstOrDefault(s =>
-                    s.LeagueId == _selectedLeagueId.Value &&
+                    s.LeagueId == leagueId.Value &&
                     s.PlayerId == playerId);
 
                 if (existing != null)
