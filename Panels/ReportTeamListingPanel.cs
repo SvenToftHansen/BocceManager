@@ -48,11 +48,43 @@ public class ReportTeamListingPanel : UserControl
 
             var doc = TeamsPrintService.BuildDocument(sections);
             doc.DocumentName = "Team Listing";
-            TeamsPrintService.ShowPrintPreview(this, doc);
+
+            // Build export data
+            var exportHeaders = new[] { "Division", "Time Slot", "Day", "Team", "Captain", "Players", "Phone" };
+            var exportRows = BuildExportData(sections);
+
+            TeamsPrintService.ShowPrintPreview(this, doc, "TeamListing", exportHeaders, exportRows);
         }
         catch (Exception ex)
         {
             _lblMessage.Text = $"Error: {ex.Message}";
         }
+    }
+
+    private List<string[]> BuildExportData(List<TeamsPrintService.PrintSection> sections)
+    {
+        var rows = new List<string[]>();
+
+        foreach (var section in sections)
+        {
+            foreach (var daySection in section.DaySections)
+            {
+                foreach (var team in daySection.Teams)
+                {
+                    rows.Add(new[]
+                    {
+                        daySection.TimeSlot,
+                        section.TimeSlotLabel,
+                        daySection.DayLabel,
+                        team.TeamIdentifier,
+                        team.CaptainName,
+                        team.AllOtherPlayers,
+                        team.Phone
+                    });
+                }
+            }
+        }
+
+        return rows;
     }
 }
