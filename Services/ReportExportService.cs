@@ -7,8 +7,8 @@ public static class ReportExportService
         using var saveDlg = new SaveFileDialog
         {
             Title = "Export to Excel",
-            Filter = "Excel files (*.xlsx)|*.xlsx",
-            FileName = $"{filename}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx",
+            Filter = "Excel files (*.csv)|*.csv|All Files (*.*)|*.*",
+            FileName = $"{filename}_{DateTime.Now:yyyyMMdd_HHmmss}.csv",
             InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
         };
 
@@ -17,11 +17,11 @@ public static class ReportExportService
         try
         {
             using var writer = new StreamWriter(saveDlg.FileName);
-            writer.WriteLine(string.Join("\t", headers));
+            writer.WriteLine(string.Join(",", headers.Select(h => $"\"{h}\"")));
 
             foreach (var row in rows)
             {
-                writer.WriteLine(string.Join("\t", row));
+                writer.WriteLine(string.Join(",", row.Select(v => $"\"{v}\"")));
             }
 
             MessageBox.Show($"Exported to {saveDlg.FileName}", "Export Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);

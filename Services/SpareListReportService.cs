@@ -284,8 +284,8 @@ public static class SpareListReportService
         using var saveDlg = new SaveFileDialog
         {
             Title = "Export to Excel",
-            Filter = "Excel files (*.xlsx)|*.xlsx",
-            FileName = $"{leagueName}_SpareList_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx",
+            Filter = "Excel files (*.csv)|*.csv|All Files (*.*)|*.*",
+            FileName = $"{leagueName}_SpareList_{DateTime.Now:yyyyMMdd_HHmmss}.csv",
             InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
         };
 
@@ -293,17 +293,12 @@ public static class SpareListReportService
 
         try
         {
-            // Create simple Excel using CSV-like format (basic xlsx simulation)
-            // For now, we'll use a tab-separated format that Excel can open
             using var writer = new StreamWriter(saveDlg.FileName);
-            writer.WriteLine($"{leagueName} - Spare List\t\t\t\t");
-            writer.WriteLine($"Exported: {DateTime.Now:yyyy-MM-dd HH:mm}\t\t\t\t");
-            writer.WriteLine();
-            writer.WriteLine("Name\tPhone\tEmail\tLot Number\tNotes");
+            writer.WriteLine("Name,Phone,Email,Lot Number,Notes");
 
             foreach (var row in data)
             {
-                writer.WriteLine($"{row.Name}\t{row.Phone}\t{row.Email}\t{row.LotNumber}\t{row.Notes}");
+                writer.WriteLine($"\"{row.Name}\",\"{row.Phone}\",\"{row.Email}\",\"{row.LotNumber}\",\"{row.Notes}\"");
             }
 
             MessageBox.Show($"Exported to {saveDlg.FileName}", "Export Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
