@@ -155,6 +155,7 @@ public static class TeamsPrintService
                         string teamName = !string.IsNullOrEmpty(team.Team.DisplayName)
                             ? team.Team.DisplayName
                             : team.Team.SystemName;
+                        if (!team.Team.IsActive) teamName += " *";
 
                         teamRows.Add(new TeamRow(teamName, captain, players, phone));
                     }
@@ -399,7 +400,8 @@ public static class TeamsPrintService
 
     // ── Preview / print UI ────────────────────────────────────────────────────
 
-    public static void ShowPrintPreview(Control parent, PrintDocument doc)
+    // Overload with export support
+    public static void ShowPrintPreview(Control parent, PrintDocument doc, string? exportFilename = null, string[]? exportHeaders = null, List<string[]>? exportRows = null)
     {
         // PrintPreviewControl.ComputePreview() calls PrinterSettings.GetHdevmode() —
         // it needs a valid printer name even for preview. Prefer a virtual PDF printer
@@ -459,6 +461,8 @@ public static class TeamsPrintService
 
         var btnPrinter = Btn("🖨  Print to Printer", Color.FromArgb(0, 120, 215));
         var btnPdf     = Btn("📄  Save as PDF...",    Color.FromArgb(180, 50, 50));
+        var btnExcel   = Btn("📊  Export to Excel",   Color.FromArgb(80, 150, 50));
+        var btnCsv     = Btn("📋  Export to CSV",     Color.FromArgb(100, 140, 180));
         var btnWeb     = Btn("🌐  Website",           Color.FromArgb(120, 120, 120));
         var btnPrev    = Btn("◀  Prev",               Color.FromArgb(70, 70, 80));
         var btnNext    = Btn("Next  ▶",               Color.FromArgb(70, 70, 80));
@@ -478,6 +482,8 @@ public static class TeamsPrintService
         }
 
         btnPrinter.Enabled = hasPrinter;
+        btnExcel.Enabled   = exportFilename != null && exportHeaders != null && exportRows != null;
+        btnCsv.Enabled     = exportFilename != null && exportHeaders != null && exportRows != null;
         btnWeb.Enabled     = false;
         btnPrev.Enabled    = false;
         btnNext.Enabled    = totalPages > 1;
@@ -487,6 +493,9 @@ public static class TeamsPrintService
             btnPrinter,
             new ToolStripSeparator(),
             btnPdf,
+            new ToolStripSeparator(),
+            btnExcel,
+            btnCsv,
             new ToolStripSeparator(),
             btnWeb,
             new ToolStripSeparator(),
@@ -500,6 +509,20 @@ public static class TeamsPrintService
 
         btnPrinter.Click += (_, _) => SendToPrinter(parent, doc);
         btnPdf.Click     += (_, _) => SendToPdf(parent, doc, doc.DocumentName);
+        btnExcel.Click   += (_, _) =>
+        {
+            if (exportFilename != null && exportHeaders != null && exportRows != null)
+            {
+                ReportExportService.ExportToExcel(parent, exportFilename, exportHeaders, exportRows);
+            }
+        };
+        btnCsv.Click     += (_, _) =>
+        {
+            if (exportFilename != null && exportHeaders != null && exportRows != null)
+            {
+                ReportExportService.ExportToCsv(parent, exportFilename, exportHeaders, exportRows);
+            }
+        };
         btnClose.Click   += (_, _) => form.Close();
         btnPrev.Click    += (_, _) => { preview.StartPage = Math.Max(0, preview.StartPage - 1); UpdateNav(); };
         btnNext.Click    += (_, _) => { preview.StartPage = Math.Min(totalPages - 1, preview.StartPage + 1); UpdateNav(); };
