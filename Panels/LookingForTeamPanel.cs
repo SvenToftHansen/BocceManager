@@ -90,23 +90,6 @@ public class LookingForTeamPanel : UserControl
     // ── UI Construction ────────────────────────────────────────────────────────
     private void BuildUi()
     {
-        var bottomBar = new Panel { Dock = DockStyle.Bottom, Height = 46, BackColor = AppTheme.Surface };
-        _btnSave = new Button
-        {
-            Text = "Save", Location = new Point(12, 8), Size = new Size(90, 30),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
-        };
-        _btnSave.Click += (_, _) => SaveEntry();
-
-        _btnCancel = new Button
-        {
-            Text = "Cancel", Location = new Point(114, 8), Size = new Size(80, 30),
-            FlatStyle = FlatStyle.Flat, Font = AppTheme.FontButton, Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 1 }, Visible = false
-        };
-        _btnCancel.Click += (_, _) => CancelEdit();
-        bottomBar.Controls.AddRange([_btnSave, _btnCancel]);
 
         // Create top-level TabControl with two tabs
         var mainTabs = new TabControl
@@ -183,7 +166,6 @@ public class LookingForTeamPanel : UserControl
         mainTabs.TabPages.AddRange([tabLfp, tabPlacement]);
 
         Controls.Add(mainTabs);
-        Controls.Add(bottomBar);
     }
 
     private void SafeApplySplit()
@@ -279,6 +261,8 @@ public class LookingForTeamPanel : UserControl
 
     private void BuildDetailsTab()
     {
+        var outerPnl = new Panel { Dock = DockStyle.Fill };
+
         var pnl = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 10, 12, 0), AutoScroll = true };
 
         int y = 10;
@@ -330,7 +314,27 @@ public class LookingForTeamPanel : UserControl
         _txtNotes.TextChanged += OnFieldChanged;
         pnl.Controls.Add(_txtNotes);
 
-        _tabDetails.Controls.Add(pnl);
+        var btnBar = new Panel { Dock = DockStyle.Bottom, Height = 46, BackColor = AppTheme.Surface };
+        _btnSave = new Button
+        {
+            Text = "Save", Location = new Point(12, 8), Size = new Size(90, 30),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
+        };
+        _btnSave.Click += (_, _) => SaveEntry();
+
+        _btnCancel = new Button
+        {
+            Text = "Cancel", Location = new Point(114, 8), Size = new Size(80, 30),
+            FlatStyle = FlatStyle.Flat, Font = AppTheme.FontButton, Cursor = Cursors.Hand,
+            FlatAppearance = { BorderSize = 1 }, Visible = false
+        };
+        _btnCancel.Click += (_, _) => CancelEdit();
+        btnBar.Controls.AddRange([_btnSave, _btnCancel]);
+
+        outerPnl.Controls.Add(pnl);
+        outerPnl.Controls.Add(btnBar);
+        _tabDetails.Controls.Add(outerPnl);
     }
 
     private void BuildGroupTab()
