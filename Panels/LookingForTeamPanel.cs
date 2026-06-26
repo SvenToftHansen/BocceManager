@@ -569,13 +569,27 @@ public class LookingForTeamPanel : UserControl
             }
             catch { }
 
+            // Always start with no selection — DataGridView auto-selects first row
+            // which causes the Remove button to appear active when it isn't
+            _grid.ClearSelection();
+            _grid.CurrentCell = null;
+
             if (_selectedLftId.HasValue)
             {
+                bool found = false;
                 for (int i = 0; i < _grid.Rows.Count; i++)
                 {
                     if (Convert.ToInt32(_grid.Rows[i].Cells["GId"].Value) == _selectedLftId.Value)
-                    { _grid.Rows[i].Selected = true; break; }
+                    {
+                        _isLoadingData = true; // suppress OnGridSelectionChanged during restore
+                        _grid.Rows[i].Selected = true;
+                        _grid.CurrentCell = _grid.Rows[i].Cells["GName"];
+                        _isLoadingData = false;
+                        found = true;
+                        break;
+                    }
                 }
+                if (!found) ClearDetail();
             }
             else
             {
