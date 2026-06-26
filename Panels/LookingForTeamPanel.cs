@@ -944,18 +944,21 @@ public class LookingForTeamPanel : UserControl
                             if (newLeader != null && group != null)
                             {
                                 group.GroupLeaderId = newLeader.Id;
-                                db.SaveChanges();
+                                db.Entry(group).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
                             }
                         }
                     }
 
                     e.LookingForTeamGroupId = null;
+                    db.LookingForTeams.Remove(e);
                     db.SaveChanges();
                     DissolveGroupIfSingleton(db, groupId.Value);
                 }
-
-                db.LookingForTeams.Remove(e);
-                db.SaveChanges();
+                else
+                {
+                    db.LookingForTeams.Remove(e);
+                    db.SaveChanges();
+                }
             }
 
             _selectedLftId = null; _selectedGroupId = null;
