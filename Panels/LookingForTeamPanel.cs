@@ -705,7 +705,7 @@ public class LookingForTeamPanel : UserControl
                 {
                     using var db = new BocceDbContext();
                     var p1 = db.Players.FirstOrDefault(p => p.Id == picked[0]);
-                    string groupName = p1 != null ? $"{p1.LastName}'s Group" : "Group";
+                    string groupName = p1 != null ? p1.LastName : "Group";
                     var grp = new LookingForTeamGroup
                     {
                         LeagueId = _leagueId.Value,
@@ -1132,7 +1132,7 @@ public class LookingForTeamPanel : UserControl
 
         if (!e1.LookingForTeamGroupId.HasValue && !e2.LookingForTeamGroupId.HasValue)
         {
-            string groupName = $"{e1.Player.LastName}'s Group";
+            string groupName = e1.Player.LastName;
             var grp = new LookingForTeamGroup
             {
                 LeagueId = _leagueId!.Value,
