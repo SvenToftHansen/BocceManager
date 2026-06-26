@@ -84,13 +84,4 @@ public static class ReportService
         return location ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
     }
 
-    public static string GetWebsiteApiUrl(BocceDbContext db)
-    {
-        return GetAppParameter(db, "WebsiteApiUrl") ?? "";
-    }
-
-    public static string GetWebsiteApiKey(BocceDbContext db)
-    {
-        return GetAppParameter(db, "WebsiteApiKey") ?? "";
-    }
 }

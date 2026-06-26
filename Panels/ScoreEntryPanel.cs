@@ -10,8 +10,9 @@ namespace BocceManager.Panels;
 public class ScoreEntryPanel : UserControl
 {
     // ── State ──────────────────────────────────────────────────────────────────
-    private int? _seasonId;
-    private int  _selectedWeek = 1;
+    private int?  _seasonId;
+    private int   _selectedWeek     = 1;
+    private bool  _seasonIsLocked   = false;
 
     // ── Controls ───────────────────────────────────────────────────────────────
     private ComboBox _cmbWeek        = null!;
@@ -78,7 +79,8 @@ public class ScoreEntryPanel : UserControl
     private const int CtG    = 12;
     private const int Hdr0H  = 26;
     private const int Hdr1H  = 22;
-    private const int RowH   = 54;
+    private const int RowH    = 54;
+    private const int SlimRowH = 30;
     private const int LttrH  = 18;
     private const int LttrY  = 3;
     private const int BoxY   = LttrH + 5;         // = 23
@@ -203,19 +205,25 @@ public class ScoreEntryPanel : UserControl
             using var db = new BocceDbContext();
             _seasonId = AppParameterService.GetDefaultSeasonId(db);
 
+            _seasonIsLocked = false;
             if (_seasonId.HasValue)
             {
                 var season = db.Seasons.Find(_seasonId.Value);
                 if (season != null)
                 {
+                    _seasonIsLocked = season.IsLocked;
                     int maxW = Math.Max(1, season.WeeksInSeason);
                     for (int w = 1; w <= maxW; w++) _cmbWeek.Items.Add(w);
+                    if (_seasonIsLocked) SetStatus("Season is locked — scores cannot be edited.");
                 }
                 else SetStatus("Season not found.");
             }
             else SetStatus("No season selected.");
         }
         catch (Exception ex) { SetStatus($"Error: {ex.Message}"); }
+
+        _btnSave.Enabled     = !_seasonIsLocked;
+        _btnClearAll.Enabled = !_seasonIsLocked;
 
         _cmbWeek.SelectedIndexChanged += OnWeekChanged;
         if (_cmbWeek.Items.Count > 0) _cmbWeek.SelectedIndex = 0;
@@ -288,12 +296,27 @@ public class ScoreEntryPanel : UserControl
         // ── Data rows ─────────────────────────────────────────────────────────
         int rowW = CrtX(colKeys.Count - 1) + CourtW + Px;
         int overallY = 4, rowIdx = 0, matchedCells = 0, hatchCells = 0;
-        var dayWrappers = new List<Panel>();
+        var allControls = new List<Control>();
 
-        foreach (var dayGroup in dayGroups)
+        // Show team-letter row only when the matchup pattern changes (mirrors print logic)
+        string? prevMatchKey = null;
+        var showLtrs = new bool[rowKeys.Count];
+        for (int ri = 0; ri < rowKeys.Count; ri++)
         {
-            int dayRowCount = dayGroup.Count;
-            int dayH = dayRowCount * RowH + 4;
+            var (d, _, ts, _) = rowKeys[ri];
+            var key = string.Join("|", colKeys.Select(ck =>
+                lookup.TryGetValue((d, ts, ck.CourtId), out var mm)
+                    ? $"{mm.T1Letter},{mm.T2Letter}" : "X"));
+            showLtrs[ri] = key != prevMatchKey;
+            prevMatchKey = key;
+        }
+
+        for (int dgIdx = 0; dgIdx < dayGroups.Count; dgIdx++)
+        {
+            var dayGroup = dayGroups[dgIdx];
+            int dgRowStart = rowIdx;
+            int dayH = 4 + dayGroup.Select((_, i) =>
+                showLtrs[dgRowStart + i] ? RowH : SlimRowH).Sum();
 
             var dayWrapper = new Panel
             {
@@ -308,24 +331,28 @@ public class ScoreEntryPanel : UserControl
                 e.Graphics.DrawRectangle(pen, 0, 0, p.Width - 1, p.Height - 1);
             };
 
+            int cumulativeRowY = 0;
             for (int i = 0; i < dayGroup.Count; i++, rowIdx++)
             {
                 var (date, dayName, timeStr, _) = dayGroup[i];
                 Color rowBg = rowIdx % 2 == 0 ? RowEven : RowOdd;
+                bool showLtr  = showLtrs[rowIdx];
+                int rowHeight = showLtr ? RowH : SlimRowH;
+                int boxYLocal = showLtr ? BoxY : (SlimRowH - BoxH) / 2;
 
                 var rowPanel = new Panel
                 {
-                    Location  = new Point(1, 2 + i * RowH),
-                    Size      = new Size(rowW - 2, RowH - 2),
+                    Location  = new Point(1, 2 + cumulativeRowY),
+                    Size      = new Size(rowW - 2, rowHeight - 2),
                     BackColor = rowBg
                 };
 
                 if (i == 0)
-                    rowPanel.Controls.Add(Lbl(dayName, Px, (RowH - 20) / 2,
+                    rowPanel.Controls.Add(Lbl(dayName, Px, (rowHeight - 20) / 2,
                         AppTheme.TextPrimary, s_dayFont, DayW, 20));
 
                 rowPanel.Controls.Add(Lbl(timeStr.Length > 0 ? timeStr : "—",
-                    Px + DayW, (RowH - 20) / 2,
+                    Px + DayW, (rowHeight - 20) / 2,
                     AppTheme.TextSecondary, AppTheme.FontDefault, TimeW, 20,
                     ContentAlignment.MiddleCenter));
 
@@ -337,7 +364,7 @@ public class ScoreEntryPanel : UserControl
                     if (!lookup.TryGetValue((date, timeStr, courtId), out var m))
                     {
                         hatchCells++;
-                        var hatch = new Panel { Location = new Point(cx, 0), Size = new Size(CourtW, RowH - 2) };
+                        var hatch = new Panel { Location = new Point(cx, 0), Size = new Size(CourtW, rowHeight - 2) };
                         hatch.Paint += (s, e) =>
                         {
                             using var br = new System.Drawing.Drawing2D.HatchBrush(
@@ -355,16 +382,19 @@ public class ScoreEntryPanel : UserControl
                     var cell = new Panel
                     {
                         Location  = new Point(cx, 0),
-                        Size      = new Size(CourtW, RowH - 2),
+                        Size      = new Size(CourtW, rowHeight - 2),
                         BackColor = rowBg
                     };
 
-                    for (int g = 1; g <= 2; g++)
+                    if (showLtr)
                     {
-                        int lx1 = BxX(ci, g, 1) - cx;
-                        int lx2 = BxX(ci, g, 2) - cx;
-                        cell.Controls.Add(TLetter(m.T1Letter, lx1, LttrY, BoxW));
-                        cell.Controls.Add(TLetter(m.T2Letter, lx2, LttrY, BoxW));
+                        for (int g = 1; g <= 2; g++)
+                        {
+                            int lx1 = BxX(ci, g, 1) - cx;
+                            int lx2 = BxX(ci, g, 2) - cx;
+                            cell.Controls.Add(TLetter(m.T1Letter, lx1, LttrY, BoxW));
+                            cell.Controls.Add(TLetter(m.T2Letter, lx2, LttrY, BoxW));
+                        }
                     }
 
                     for (int g = 1; g <= 2; g++)
@@ -374,8 +404,8 @@ public class ScoreEntryPanel : UserControl
                         int bx1 = BxX(ci, g, 1) - cx;
                         int bx2 = BxX(ci, g, 2) - cx;
 
-                        var b1 = SBox(v1, bx1, BoxY, BoxW, BoxH);
-                        var b2 = SBox(v2, bx2, BoxY, BoxW, BoxH);
+                        var b1 = SBox(v1, bx1, boxYLocal, BoxW, BoxH);
+                        var b2 = SBox(v2, bx2, boxYLocal, BoxW, BoxH);
 
                         _boxes[(sd.Id, g, 1)] = b1;
                         _boxes[(sd.Id, g, 2)] = b2;
@@ -393,13 +423,28 @@ public class ScoreEntryPanel : UserControl
                 }
 
                 dayWrapper.Controls.Add(rowPanel);
+                cumulativeRowY += rowHeight;
             }
 
-            overallY += dayH + 6;
-            dayWrappers.Add(dayWrapper);
+            allControls.Add(dayWrapper);
+            overallY += dayH;
+
+            if (dgIdx < dayGroups.Count - 1)
+            {
+                var divider = new Panel
+                {
+                    Location = new Point(0, overallY),
+                    Size = new Size(rowW, 1),
+                    BackColor = Color.Black
+                };
+                allControls.Add(divider);
+                overallY += 1;
+            }
+
+            overallY += 6;
         }
 
-        _scroll.Controls.AddRange([.. dayWrappers]);
+        _scroll.Controls.AddRange([.. allControls]);
         SetStatus($"Week {_selectedWeek}: {data.Matches.Count} records | {rowKeys.Count} rows | {colKeys.Count} courts | {matchedCells} cells | {hatchCells} hatched");
     }
 
@@ -469,33 +514,35 @@ public class ScoreEntryPanel : UserControl
 
     private void WirePair(TextBox b1, TextBox b2)
     {
-        // Immediate colour feedback on every keystroke
-        b1.TextChanged += (_, _) => ColorPair(b1, b2);
-        b2.TextChanged += (_, _) => ColorPair(b1, b2);
+        b1.TextChanged += (_, _) => { ColorPair(b1, b2); AutoAdvance(b1); };
+        b2.TextChanged += (_, _) => { ColorPair(b1, b2); AutoAdvance(b2); };
 
-        // Select-all on focus — makes replacing the current value easy
         b1.GotFocus += (_, _) => b1.SelectAll();
         b2.GotFocus += (_, _) => b2.SelectAll();
 
-        // Numeric-only input; range enforced at the character level
-        b1.KeyPress += FilterNumeric;
-        b2.KeyPress += FilterNumeric;
+        b1.KeyPress += (_, e) => ScoreKeyPress(b1, b2, e);
+        b2.KeyPress += (_, e) => ScoreKeyPress(b2, b1, e);
 
-        // Arrow / Enter navigation
         b1.KeyDown += (_, e) => NavigateBox(b1, e);
         b2.KeyDown += (_, e) => NavigateBox(b2, e);
 
-        // Auto-fill rules on leaving b1 (first box of the pair)
+        // Auto-fill b2 when focus leaves b1
         b1.Leave += (_, _) =>
         {
             if (!int.TryParse(b1.Text.Trim(), out int v)) return;
-            if (v is >= 0 and <= 11)
-                b2.Text = "12";  // normal: auto-set partner to 12
-            else if (v == -1 && int.TryParse(b2.Text.Trim(), out int bv) && bv > 0)
-                b2.Text = "0";   // forfeit: partner must be 0 or -1
+            if (v == -1)
+            {
+                // Forfeit: set b2=0 unless b2 is already -1 (double forfeit via X)
+                if (!int.TryParse(b2.Text.Trim(), out int bv) || bv != -1)
+                    b2.Text = "0";
+                SkipToNext(b1);
+            }
+            else if (v is >= 1 and <= 11 && string.IsNullOrWhiteSpace(b2.Text))
+            {
+                b2.Text = "12";  // b2.TextChanged → AutoAdvance(b2) if b2 now has focus
+            }
         };
 
-        // Forfeit correction on leaving b2 (second box)
         b2.Leave += (_, _) =>
         {
             if (int.TryParse(b2.Text.Trim(), out int v) && v == -1
@@ -504,18 +551,46 @@ public class ScoreEntryPanel : UserControl
         };
     }
 
-    // Only allow characters that could form a valid integer in [-1 .. 12]
-    private static void FilterNumeric(object? sender, KeyPressEventArgs e)
+    // Auto-advance to the next box when this box reaches 2 characters.
+    // The Focused guard prevents the partner box from triggering advance when
+    // its text is set programmatically (W/X/F shortcuts).
+    private void AutoAdvance(TextBox tb)
+    {
+        if (tb.Text.Length != 2 || !tb.Focused) return;
+        int idx = _boxOrder.IndexOf(tb);
+        if (idx >= 0 && idx + 1 < _boxOrder.Count)
+            BeginInvoke(() => _boxOrder[idx + 1].Focus());
+    }
+
+    // Move focus two slots forward (past the partner box to the next pair).
+    private void SkipToNext(TextBox from)
+    {
+        int idx = _boxOrder.IndexOf(from);
+        if (idx >= 0 && idx + 2 < _boxOrder.Count)
+            BeginInvoke(() => _boxOrder[idx + 2].Focus());
+    }
+
+    // Keyboard shortcuts: W=12, X=forfeit both, F=forfeit current/0 partner.
+    // Letters are never displayed; filtered out via e.Handled.
+    private static void ScoreKeyPress(TextBox current, TextBox partner, KeyPressEventArgs e)
     {
         if (char.IsControl(e.KeyChar)) return;
+        char c = char.ToUpper(e.KeyChar);
+
+        if (c == 'W') { e.Handled = true; current.Text = "12"; return; }
+
+        if (c == 'X') { e.Handled = true; current.Text = "-1"; partner.Text = "-1"; return; }
+
+        if (c == 'F') { e.Handled = true; current.Text = "-1"; partner.Text = "0"; return; }
+
+        // Numeric-only: allow digits and '-'; enforce range [-1..12]
         if (!char.IsDigit(e.KeyChar) && e.KeyChar != '-') { e.Handled = true; return; }
 
-        var tb = (TextBox)sender!;
-        var proposed = tb.Text
-            .Remove(tb.SelectionStart, tb.SelectionLength)
-            .Insert(tb.SelectionStart, e.KeyChar.ToString());
+        var proposed = current.Text
+            .Remove(current.SelectionStart, current.SelectionLength)
+            .Insert(current.SelectionStart, e.KeyChar.ToString());
 
-        if (proposed == "-") return;  // leading minus is fine (partial -1)
+        if (proposed == "-") return;
 
         if (!int.TryParse(proposed, out int v) || v < -1 || v > 12)
             e.Handled = true;
@@ -570,6 +645,7 @@ public class ScoreEntryPanel : UserControl
     private void OnSave(object? sender, EventArgs e)
     {
         if (!_seasonId.HasValue) return;
+        if (_seasonIsLocked) { SetStatus("Season is locked."); return; }
         try
         {
             using var db = new BocceDbContext();
@@ -600,6 +676,7 @@ public class ScoreEntryPanel : UserControl
 
     private void OnClearAll(object? sender, EventArgs e)
     {
+        if (_seasonIsLocked) { SetStatus("Season is locked."); return; }
         if (_boxes.Count == 0) { SetStatus("No scores to clear."); return; }
         if (MessageBox.Show(
                 "Clear all entered scores for this week?",
@@ -663,25 +740,29 @@ public class ScoreEntryPanel : UserControl
 
         if (pages.Count == 0) { SetStatus("No schedule data found."); return; }
 
-        int pageIdx = 0;
+        var pageState = new PageIndexState { Index = 0 };
         var pd = new PrintDocument();
+        pd.DocumentName = "Season - Score Entry";
         pd.DefaultPageSettings.Landscape = true;
         pd.DefaultPageSettings.Margins = new Margins(150, 50, 50, 50);  // 1.5" left (clipboard), 0.5" others
+
+        pd.BeginPrint += (_, _) => pageState.Index = 0;
+
         pd.PrintPage += (_, pe) =>
         {
-            var (wk, dat) = pages[pageIdx++];
+            var (wk, dat) = pages[pageState.Index++];
             DrawWeekGrid(pe.Graphics!, pe.MarginBounds, wk, dat, (_, _, _) => "");
-            pe.HasMorePages = pageIdx < pages.Count;
+            pe.HasMorePages = pageState.Index < pages.Count;
         };
 
-        using var preview = new PrintPreviewDialog { Document = pd, WindowState = FormWindowState.Maximized };
-        preview.ShowDialog(this);
+        PrintPreviewService.ShowPrintPreview(this, pd);
         SetStatus($"Season preview: {pages.Count} weeks.");
     }
 
     private void ShowPrintPreview(string _, WeekGridData data, Func<int, int, int, string> getScore)
     {
         var pd = new PrintDocument();
+        pd.DocumentName = $"Week {_selectedWeek} - Score Sheet";
         pd.DefaultPageSettings.Landscape = true;
         pd.DefaultPageSettings.Margins = new Margins(150, 50, 50, 50);  // 1.5" left (clipboard), 0.5" others
         pd.PrintPage += (__, pe) =>
@@ -690,8 +771,7 @@ public class ScoreEntryPanel : UserControl
             pe.HasMorePages = false;
         };
 
-        using var preview = new PrintPreviewDialog { Document = pd, WindowState = FormWindowState.Maximized };
-        preview.ShowDialog(this);
+        PrintPreviewService.ShowPrintPreview(this, pd);
     }
 
     // ── Print Drawing ─────────────────────────────────────────────────────────
@@ -716,7 +796,9 @@ public class ScoreEntryPanel : UserControl
 
         // ── Determine which rows show team letters ─────────────────────────────
         // Only the first row of each consecutive group with the same matchup pattern shows letters.
-        const float SlimRowH = 34f;
+        const float LttrRowH = 14f;  // Team letters on separate row (fixed, not scaled)
+        const float ScoreRowH = 28f; // Score boxes row
+        const float SlimRowH = 28f;
         var showLtrs = new bool[data.RowKeys.Count];
         string? prevKey = null;
         for (int ri = 0; ri < data.RowKeys.Count; ri++)
@@ -734,46 +816,49 @@ public class ScoreEntryPanel : UserControl
         const float TitleH = 26f;    // title + subtitle share one line
         float hdrH    = Hdr0H + Hdr1H + 2f;
         float fixedH  = TitleH + hdrH + 4f;
-        float dataH   = showLtrs.Sum(sl => sl ? (float)RowH : SlimRowH);
+        float dataH   = showLtrs.Sum(sl => sl ? LttrRowH + ScoreRowH : SlimRowH);
         float scW     = bounds.Width / pGridW;
         float availDataH = bounds.Height / scW - fixedH;
 
-        float rh_letter, rh_slim;
+        float rh_lttr, rh_score, rh_slim;
+        rh_lttr = LttrRowH;  // Keep letter row fixed, always use base height
+
         if (availDataH > dataH && dataH > 0)
         {
-            // Distribute all remaining height proportionally, keeping slim:letter ratio constant
-            float ratio = SlimRowH / RowH;
+            // Distribute remaining height to score and slim rows
             int   nLtr  = showLtrs.Count(b => b);
             int   nSlim = showLtrs.Length - nLtr;
-            rh_letter = availDataH / (nLtr + nSlim * ratio);
-            rh_slim   = rh_letter * ratio;
+            float availForScore = availDataH - (nLtr * rh_lttr);
+            float unitH = availForScore / (nLtr + nSlim);
+            rh_score  = unitH;
+            rh_slim   = unitH;
         }
         else
         {
-            rh_letter = RowH;
+            rh_score  = ScoreRowH;
             rh_slim   = SlimRowH;
         }
 
-        // Internal row measurements scaled to new row height
-        float rh_mult   = rh_letter / RowH;
-        float act_LttrH = LttrH * rh_mult;
-        float act_LttrY = LttrY * rh_mult;
-        float act_BoxY  = BoxY  * rh_mult;
-        float act_BoxH  = BoxH  * rh_mult;
+        // Internal row measurements scaled to new row heights
+        float rh_mult_score = rh_score / ScoreRowH;
+        float act_LttrH = 10f;  // 10px height gives 2px margins top/bottom in 14px row
+        float act_LttrY = (rh_lttr - act_LttrH) / 2f;  // Center: 2px top margin, 2px bottom margin
+        float act_BoxY  = (rh_score - BoxH * rh_mult_score) / 2f;
+        float act_BoxH  = BoxH * rh_mult_score;
 
-        float actualGridH = fixedH + showLtrs.Sum(sl => sl ? rh_letter : rh_slim);
+        float actualGridH = fixedH + showLtrs.Sum(sl => sl ? rh_lttr + rh_score : rh_slim);
         float sc = Math.Min(bounds.Width / pGridW, bounds.Height / actualGridH);
 
         var state = g.Save();
         g.TranslateTransform(bounds.Left, bounds.Top);
         g.ScaleTransform(sc, sc);
 
-        using var titleFont = new Font("Segoe UI", 12f,   FontStyle.Bold);
+        using var titleFont = new Font("Segoe UI",  9f,   FontStyle.Bold);
         using var hdrFont   = new Font("Segoe UI",  7.5f, FontStyle.Bold);
-        using var subFnt    = new Font("Segoe UI",  7.5f, FontStyle.Regular);
+        using var subFnt    = new Font("Segoe UI",  9f,   FontStyle.Regular);
         using var dayFnt    = new Font("Segoe UI", 10.5f, FontStyle.Bold);
         using var timeFnt   = new Font("Segoe UI", 10.5f, FontStyle.Bold);
-        using var lttrFnt   = new Font("Segoe UI",  7f,   FontStyle.Bold);
+        using var lttrFnt   = new Font("Segoe UI",  8f,   FontStyle.Bold);
         using var scoreFnt  = new Font("Segoe UI", 10f,   FontStyle.Bold);
 
         using var blackBr  = new SolidBrush(Color.Black);
@@ -794,15 +879,21 @@ public class ScoreEntryPanel : UserControl
 
         float y = 0f;
 
-        // Title + subtitle on the same line: title left, Club | League | Season right
-        g.DrawString($"Week {week}  —  Score Sheet", titleFont, blackBr,
-            new RectangleF(Px, y, pGridW / 2f, TitleH), sfLft);
+        // Full-width unified header matching other reports
+        float headerHeight = 26f;
+        using var headerBgBrush = new SolidBrush(AppTheme.NavHeader);
+        g.FillRectangle(headerBgBrush, Px, y, pGridW - 2 * Px, headerHeight);
+
         var subParts = new[] { data.Header.ClubName, data.Header.LeagueName, data.Header.SeasonName }
             .Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
-        if (subParts.Length > 0)
-            g.DrawString(string.Join("  |  ", subParts), subFnt, dimBr,
-                new RectangleF(0, y, pGridW - Px, TitleH), sfRgt);
-        y += TitleH;
+        var headerText = (subParts.Length > 0 ? string.Join(" – ", subParts) + " - " : "") + $"Week {week} - Score Entry";
+        var sfCtrHeader = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+        g.DrawString(headerText, titleFont, whiteBr,
+            new RectangleF(Px, y, pGridW - 2 * Px, headerHeight), sfCtrHeader);
+        sfCtrHeader.Dispose();
+        y += headerHeight;
+
+        float headerY = y;  // Save header start position for border
 
         // Court / game column headers
         g.FillRectangle(hdrBgBr, Px, y, pDayW + pTimeW - 4, hdrH);
@@ -819,15 +910,37 @@ public class ScoreEntryPanel : UserControl
             g.DrawString(data.ColKeys[ci].CourtLabel, hdrFont, whiteBr,
                 new RectangleF(cx, y, CourtW, Hdr0H), sfCtr);
 
-            g.FillRectangle(hdrBgBr, g1x, y + Hdr0H, BoxW * 2, Hdr1H);
-            g.DrawString("Game 1", hdrFont, whiteBr,
-                new RectangleF(g1x, y + Hdr0H, BoxW * 2, Hdr1H), sfCtr);
+            int g1w = BoxW * 2 + GameG / 2;
+            int g2w = BoxW * 2 + GameG - GameG / 2;
+            int g2x_adj = g2x - GameG / 2;
 
-            g.FillRectangle(hdrBgBr, g2x, y + Hdr0H, BoxW * 2, Hdr1H);
+            g.FillRectangle(hdrBgBr, g1x, y + Hdr0H, g1w, Hdr1H);
+            g.DrawString("Game 1", hdrFont, whiteBr,
+                new RectangleF(g1x, y + Hdr0H, g1w, Hdr1H), sfCtr);
+
+            g.FillRectangle(hdrBgBr, g2x_adj, y + Hdr0H, g2w, Hdr1H);
             g.DrawString("Game 2", hdrFont, whiteBr,
-                new RectangleF(g2x, y + Hdr0H, BoxW * 2, Hdr1H), sfCtr);
+                new RectangleF(g2x_adj, y + Hdr0H, g2w, Hdr1H), sfCtr);
         }
         y += hdrH;
+
+        // Pre-compute day group bounding boxes so borders can be drawn on top of content
+        var dayGroupRects = new List<RectangleF>();
+        {
+            float cy = y; string? pd = null; float gs = cy, gh = 0;
+            for (int ri = 0; ri < data.RowKeys.Count; ri++)
+            {
+                var (_, dn, _, _) = data.RowKeys[ri];
+                float rh = showLtrs[ri] ? rh_lttr + rh_score : rh_slim;
+                if (dn != pd)
+                {
+                    if (pd != null) dayGroupRects.Add(new RectangleF(0, gs, pGridW - 1, gh - 2));
+                    gs = cy; gh = 0; pd = dn;
+                }
+                gh += rh; cy += rh;
+            }
+            if (pd != null) dayGroupRects.Add(new RectangleF(0, gs, pGridW - 1, gh - 2));
+        }
 
         // Data rows — variable height, expanded to fill page
         string? lastDay = null;
@@ -837,21 +950,30 @@ public class ScoreEntryPanel : UserControl
         {
             var (date, dayName, timeStr, _) = data.RowKeys[ri];
             bool showLtr = showLtrs[ri];
-            float rh     = showLtr ? rh_letter : rh_slim;
-            float ry     = cumY;
-            cumY += rh;
+            float ry_lttr = cumY;
+            float ry_score = cumY + (showLtr ? rh_lttr : 0);
+            float rowHeight = showLtr ? rh_lttr + rh_score : rh_slim;
+            cumY += rowHeight;
 
             bool newDay = dayName != lastDay;
             lastDay = dayName;
 
-            g.FillRectangle(ri % 2 == 0 ? evenBr : oddBr, 0, ry, pGridW, rh - 2);
+            // Draw team letters row if present
+            if (showLtr)
+            {
+                // Fill entire letter row with white first
+                g.FillRectangle(whiteBr, 0, ry_lttr, pGridW, rh_lttr);
+            }
+
+            // Draw score boxes row (always white)
+            g.FillRectangle(whiteBr, 0, ry_score, pGridW, rh_score);
 
             if (newDay)
                 g.DrawString(dayName, dayFnt, blackBr,
-                    new RectangleF(Px + 2, ry, pDayW - 2, rh - 2), sfLft);
+                    new RectangleF(Px + 2, ry_score, pDayW - 2, rh_score), sfLft);
 
             g.DrawString(timeStr.Length > 0 ? timeStr : "—", timeFnt, dimBr,
-                new RectangleF(Px + pDayW, ry, pTimeW, rh - 2), sfCtr);
+                new RectangleF(Px + pDayW, ry_score, pTimeW, rh_score), sfCtr);
 
             for (int ci = 0; ci < colCount; ci++)
             {
@@ -860,32 +982,42 @@ public class ScoreEntryPanel : UserControl
 
                 if (!data.Lookup.TryGetValue((date, timeStr, courtId), out var m))
                 {
-                    using var hatchBr = new System.Drawing.Drawing2D.HatchBrush(
+                    if (showLtr)
+                    {
+                        using var hatchBr = new System.Drawing.Drawing2D.HatchBrush(
+                            System.Drawing.Drawing2D.HatchStyle.ForwardDiagonal, HatchFg, HatchBg);
+                        g.FillRectangle(hatchBr, cx, ry_lttr, CourtW, rh_lttr);
+                    }
+                    using var hatchBr2 = new System.Drawing.Drawing2D.HatchBrush(
                         System.Drawing.Drawing2D.HatchStyle.ForwardDiagonal, HatchFg, HatchBg);
-                    g.FillRectangle(hatchBr, cx, ry, CourtW, rh - 2);
+                    g.FillRectangle(hatchBr2, cx, ry_score, CourtW, rh_score);
                     continue;
                 }
 
                 var sd  = m.SD;
-                // Score box y: below letters when shown, else centred in slim row
-                float bry = ry + (showLtr ? act_BoxY : (rh_slim - act_BoxH) / 2f);
+
+                // Fill court area with blue background for team letters row if present
+                if (showLtr)
+                {
+                    g.FillRectangle(lttrBgBr, cx, ry_lttr, CourtW, rh_lttr);
+                }
 
                 for (int gm = 1; gm <= 2; gm++)
                 {
                     int lx1 = PrtBxX(ci, gm, 1);
                     int lx2 = PrtBxX(ci, gm, 2);
 
+                    // Draw team letters on their own row if present
                     if (showLtr)
                     {
-                        float lry = ry + act_LttrY;
-                        g.FillRectangle(lttrBgBr, lx1, lry, BoxW, act_LttrH);
                         g.DrawString(m.T1Letter, lttrFnt, lttrFgBr,
-                            new RectangleF(lx1, lry, BoxW, act_LttrH), sfCtr);
-                        g.FillRectangle(lttrBgBr, lx2, lry, BoxW, act_LttrH);
+                            new RectangleF(lx1, ry_lttr + act_LttrY, BoxW, act_LttrH), sfCtr);
                         g.DrawString(m.T2Letter, lttrFnt, lttrFgBr,
-                            new RectangleF(lx2, lry, BoxW, act_LttrH), sfCtr);
+                            new RectangleF(lx2, ry_lttr + act_LttrY, BoxW, act_LttrH), sfCtr);
                     }
 
+                    // Draw score boxes on score row
+                    float bry = ry_score + act_BoxY;
                     string txt1 = getScore(sd.Id, gm, 1);
                     string txt2 = getScore(sd.Id, gm, 2);
 
@@ -900,6 +1032,15 @@ public class ScoreEntryPanel : UserControl
                             new RectangleF(lx2, bry, BoxW, act_BoxH), sfCtr);
                 }
             }
+        }
+
+        // Draw lines between day groups (dividers)
+        using var dayDividerPen = new Pen(Color.Black, 1.5f);
+        for (int i = 0; i < dayGroupRects.Count - 1; i++)
+        {
+            var rect = dayGroupRects[i];
+            float lineY = rect.Y + rect.Height;
+            g.DrawLine(dayDividerPen, 0, lineY, pGridW, lineY);
         }
 
         g.Restore(state);
@@ -946,4 +1087,9 @@ public class ScoreEntryPanel : UserControl
     };
 
     private void SetStatus(string msg) => _lblStatus.Text = msg;
+
+    private class PageIndexState
+    {
+        public int Index { get; set; }
+    }
 }

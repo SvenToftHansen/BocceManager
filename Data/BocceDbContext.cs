@@ -17,30 +17,25 @@ public class BocceDbContext : DbContext
     public DbSet<DaySlot> DaySlots => Set<DaySlot>();
 
     // Parameters
-    public DbSet<AppParameter> AppParameters => Set<AppParameter>();
+    public DbSet<AppParameter>    AppParameters    => Set<AppParameter>();
     public DbSet<LeagueParameter> LeagueParameters => Set<LeagueParameter>();
     public DbSet<SeasonParameter> SeasonParameters => Set<SeasonParameter>();
-    public DbSet<DivisionParameter> DivisionParameters => Set<DivisionParameter>();
-    public DbSet<TeamParameter> TeamParameters => Set<TeamParameter>();
-    public DbSet<PlayerParameter> PlayerParameters => Set<PlayerParameter>();
 
     // Players
-    public DbSet<Player> Players => Set<Player>();
-    public DbSet<PendingPlayer> PendingPlayers => Set<PendingPlayer>();
+    public DbSet<Player>        Players        => Set<Player>();
     public DbSet<InitiationFee> InitiationFees => Set<InitiationFee>();
-    public DbSet<SeasonFee> SeasonFees => Set<SeasonFee>();
+    public DbSet<SeasonFee>     SeasonFees     => Set<SeasonFee>();
 
     // Leagues
-    public DbSet<League> Leagues => Set<League>();
-    public DbSet<SpareList>      SpareLists      => Set<SpareList>();
-    public DbSet<LookingForTeam> LookingForTeams => Set<LookingForTeam>();
-    public DbSet<LeagueOfficial> LeagueOfficials => Set<LeagueOfficial>();
+    public DbSet<League>                Leagues                => Set<League>();
+    public DbSet<SpareList>             SpareLists             => Set<SpareList>();
+    public DbSet<LookingForTeam>        LookingForTeams        => Set<LookingForTeam>();
+    public DbSet<LookingForTeamGroup>   LookingForTeamGroups   => Set<LookingForTeamGroup>();
+    public DbSet<LookingForTeamDivision> LookingForTeamDivisions => Set<LookingForTeamDivision>();
 
-    // Team Applications (teams seeking placement in a division)
-    public DbSet<TeamApplicant>         TeamApplicants         => Set<TeamApplicant>();
-    public DbSet<TeamApplicantPlayer>   TeamApplicantPlayers   => Set<TeamApplicantPlayer>();
-    public DbSet<TeamApplicantDaySlot>  TeamApplicantDaySlots  => Set<TeamApplicantDaySlot>();
-    public DbSet<TeamApplicantTimeSlot> TeamApplicantTimeSlots => Set<TeamApplicantTimeSlot>();
+    // Team Applicants
+    public DbSet<TeamApplicant>       TeamApplicants       => Set<TeamApplicant>();
+    public DbSet<TeamApplicantMember> TeamApplicantMembers => Set<TeamApplicantMember>();
 
     // Seasons
     public DbSet<Season> Seasons => Set<Season>();
@@ -72,7 +67,6 @@ public class BocceDbContext : DbContext
 
     // Other
     public DbSet<Announcement> Announcements => Set<Announcement>();
-    public DbSet<SpareRequest> SpareRequests => Set<SpareRequest>();
 
     // Email
     public DbSet<EmailList> EmailLists => Set<EmailList>();
@@ -86,10 +80,6 @@ public class BocceDbContext : DbContext
 
     // Documents
     public DbSet<ClubDocument> ClubDocuments => Set<ClubDocument>();
-
-    // Finance
-    public DbSet<GlAccount>    GlAccounts    => Set<GlAccount>();
-    public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
 
     // Ideas
     public DbSet<NewIdea> NewIdeas => Set<NewIdea>();
@@ -121,10 +111,7 @@ public class BocceDbContext : DbContext
         model.Entity<AppParameter>().HasIndex(e => e.Key).IsUnique();
         model.Entity<LeagueParameter>().HasIndex(e => new { e.LeagueId, e.Key }).IsUnique();
         model.Entity<SeasonParameter>().HasIndex(e => new { e.SeasonId, e.Key }).IsUnique();
-        model.Entity<DivisionParameter>().HasIndex(e => new { e.DivisionId, e.Key }).IsUnique();
-        model.Entity<TeamParameter>().HasIndex(e => new { e.TeamId, e.Key }).IsUnique();
-        model.Entity<PlayerParameter>().HasIndex(e => new { e.PlayerId, e.Key }).IsUnique();
-        model.Entity<SeasonCourt>().HasIndex(e => new { e.SeasonId, e.CourtId }).IsUnique();
+model.Entity<SeasonCourt>().HasIndex(e => new { e.SeasonId, e.CourtId }).IsUnique();
         model.Entity<SeasonDaySlot>().HasIndex(e => new { e.SeasonId, e.DaySlotId }).IsUnique();
         model.Entity<SeasonTimeSlot>().HasIndex(e => new { e.SeasonId, e.TimeSlotId }).IsUnique();
         model.Entity<SpareList>().HasIndex(e => new { e.LeagueId, e.PlayerId }).IsUnique();
@@ -135,7 +122,6 @@ public class BocceDbContext : DbContext
         model.Entity<TeamStanding>().HasIndex(e => new { e.TeamId, e.DivisionId }).IsUnique();
         model.Entity<ScheduleTemplate>().HasIndex(e => new { e.SeasonId, e.TeamCount }).IsUnique();
         model.Entity<EmailListMember>().HasIndex(e => new { e.EmailListId, e.PlayerId }).IsUnique();
-        model.Entity<LeagueOfficial>().HasIndex(e => new { e.LeagueId, e.PlayerId }).IsUnique();
 
         // Optional spouse/partner link between players (self-reference)
         model.Entity<Player>()
@@ -144,21 +130,10 @@ public class BocceDbContext : DbContext
             .HasForeignKey(e => e.PartnerPlayerId)
             .OnDelete(DeleteBehavior.SetNull);
 
-        // GlAccount unique code
-        model.Entity<GlAccount>().HasIndex(e => e.Code).IsUnique();
-
         // Report: unique key on Name
         model.Entity<Report>().HasIndex(e => e.Name).IsUnique();
         // ReportParameter: unique on ReportId + ParameterName
         model.Entity<ReportParameter>().HasIndex(e => new { e.ReportId, e.ParameterName }).IsUnique();
-
-        // JournalEntry: two FKs to GlAccount
-        model.Entity<JournalEntry>()
-            .HasOne(e => e.DebitAccount).WithMany(a => a.DebitEntries)
-            .HasForeignKey(e => e.DebitAccountId).OnDelete(DeleteBehavior.Restrict);
-        model.Entity<JournalEntry>()
-            .HasOne(e => e.CreditAccount).WithMany(a => a.CreditEntries)
-            .HasForeignKey(e => e.CreditAccountId).OnDelete(DeleteBehavior.Restrict);
 
         // BocceMatch: multiple FKs to Team
         model.Entity<BocceMatch>()
@@ -180,48 +155,61 @@ public class BocceDbContext : DbContext
         model.Entity<LookingForTeam>()
             .HasOne(e => e.Player).WithMany()
             .HasForeignKey(e => e.PlayerId).OnDelete(DeleteBehavior.Restrict);
-        // LookingForTeam.Season: cascade delete when season is deleted
         model.Entity<LookingForTeam>()
             .HasOne(e => e.Season).WithMany()
             .HasForeignKey(e => e.SeasonId).OnDelete(DeleteBehavior.Cascade);
-        // LookingForTeam.TeamId: cleared (not deleted) when the team is deleted
         model.Entity<LookingForTeam>()
             .HasOne(e => e.Team).WithMany()
             .HasForeignKey(e => e.TeamId).OnDelete(DeleteBehavior.SetNull);
+        model.Entity<LookingForTeam>()
+            .HasOne(e => e.PreferredTeam).WithMany()
+            .HasForeignKey(e => e.PreferredTeamId).OnDelete(DeleteBehavior.SetNull);
+        model.Entity<LookingForTeam>()
+            .HasOne(e => e.Group).WithMany(e => e.Members)
+            .HasForeignKey(e => e.LookingForTeamGroupId).OnDelete(DeleteBehavior.SetNull);
 
-        // TeamApplicant unique indexes
-        model.Entity<TeamApplicantPlayer>()
-            .HasIndex(e => new { e.TeamApplicantId, e.PlayerId }).IsUnique();
-        model.Entity<TeamApplicantDaySlot>()
-            .HasIndex(e => new { e.TeamApplicantId, e.DaySlotId }).IsUnique();
-        model.Entity<TeamApplicantTimeSlot>()
-            .HasIndex(e => new { e.TeamApplicantId, e.TimeSlotId }).IsUnique();
+        // LookingForTeamGroup FKs
+        model.Entity<LookingForTeamGroup>()
+            .HasOne(e => e.League).WithMany()
+            .HasForeignKey(e => e.LeagueId).OnDelete(DeleteBehavior.Restrict);
+        model.Entity<LookingForTeamGroup>()
+            .HasOne(e => e.Season).WithMany()
+            .HasForeignKey(e => e.SeasonId).OnDelete(DeleteBehavior.Cascade);
+
+        // LookingForTeamDivision FKs
+        model.Entity<LookingForTeamDivision>()
+            .HasIndex(e => new { e.LookingForTeamId, e.DivisionId }).IsUnique();
+        model.Entity<LookingForTeamDivision>()
+            .HasOne(e => e.LookingForTeam).WithMany(e => e.PreferredDivisions)
+            .HasForeignKey(e => e.LookingForTeamId).OnDelete(DeleteBehavior.Cascade);
+        model.Entity<LookingForTeamDivision>()
+            .HasOne(e => e.Division).WithMany()
+            .HasForeignKey(e => e.DivisionId).OnDelete(DeleteBehavior.Cascade);
 
         // TeamApplicant FKs
-        model.Entity<TeamApplicantPlayer>()
+        model.Entity<TeamApplicant>()
+            .HasOne(e => e.League).WithMany()
+            .HasForeignKey(e => e.LeagueId).OnDelete(DeleteBehavior.Restrict);
+        model.Entity<TeamApplicant>()
+            .HasOne(e => e.Season).WithMany()
+            .HasForeignKey(e => e.SeasonId).OnDelete(DeleteBehavior.Cascade);
+        model.Entity<TeamApplicant>()
+            .HasOne(e => e.PreferredDivision).WithMany()
+            .HasForeignKey(e => e.PreferredDivisionId).OnDelete(DeleteBehavior.SetNull);
+        model.Entity<TeamApplicant>()
+            .HasOne(e => e.PlacedTeam).WithMany()
+            .HasForeignKey(e => e.PlacedTeamId).OnDelete(DeleteBehavior.SetNull);
+
+        // TeamApplicantMember FKs
+        model.Entity<TeamApplicantMember>()
+            .HasOne(e => e.TeamApplicant).WithMany(e => e.Members)
+            .HasForeignKey(e => e.TeamApplicantId).OnDelete(DeleteBehavior.Cascade);
+        model.Entity<TeamApplicantMember>()
             .HasOne(e => e.Player).WithMany()
             .HasForeignKey(e => e.PlayerId).OnDelete(DeleteBehavior.Restrict);
-        model.Entity<TeamApplicantDaySlot>()
-            .HasOne(e => e.DaySlot).WithMany()
-            .HasForeignKey(e => e.DaySlotId).OnDelete(DeleteBehavior.Restrict);
-        model.Entity<TeamApplicantTimeSlot>()
-            .HasOne(e => e.TimeSlot).WithMany()
-            .HasForeignKey(e => e.TimeSlotId).OnDelete(DeleteBehavior.Restrict);
-        // AssignedDivisionId: cleared when the division is deleted
-        model.Entity<TeamApplicant>()
-            .HasOne(e => e.AssignedDivision).WithMany()
-            .HasForeignKey(e => e.AssignedDivisionId).OnDelete(DeleteBehavior.SetNull);
-
-        // SpareRequest: three FKs (two to Player, one to SpareList)
-        model.Entity<SpareRequest>()
-            .HasOne(e => e.SpareList).WithMany()
-            .HasForeignKey(e => e.SpareListId).OnDelete(DeleteBehavior.Restrict);
-        model.Entity<SpareRequest>()
-            .HasOne(e => e.RequestingPlayer).WithMany()
-            .HasForeignKey(e => e.RequestingPlayerId).OnDelete(DeleteBehavior.Restrict);
-        model.Entity<SpareRequest>()
-            .HasOne(e => e.SparePlayer).WithMany()
-            .HasForeignKey(e => e.SparePlayerId).OnDelete(DeleteBehavior.Restrict);
+        model.Entity<TeamApplicantMember>()
+            .HasOne(e => e.CreatedPlayer).WithMany()
+            .HasForeignKey(e => e.CreatedPlayerId).OnDelete(DeleteBehavior.SetNull);
 
         // PlayoffMatch: three FKs to Team
         model.Entity<PlayoffMatch>()

@@ -19,8 +19,7 @@ public class ParametersPanel : UserControl
     private TextBox _txtClubName      = null!;
     private TextBox _txtCaptainName   = null!;
     private TextBox _txtCaptainEmail  = null!;
-    private TextBox _txtWebsiteApiUrl = null!;
-    private TextBox _txtWebsiteApiKey = null!;
+    private TextBox _txtInitiationFeeAmount = null!;
 
     public ParametersPanel()
     {
@@ -81,9 +80,8 @@ public class ParametersPanel : UserControl
 
         y += 12;
 
-        y = AddSectionHeader(scroll, "WEBSITE INTEGRATION", y);
-        y = AddTextRow(scroll, "Website API URL", "WebsiteApiUrl", ref _txtWebsiteApiUrl, y);
-        y = AddTextRow(scroll, "Website API Key", "WebsiteApiKey", ref _txtWebsiteApiKey, y);
+        y = AddSectionHeader(scroll, "FEES", y);
+        y = AddTextRow(scroll, "Initiation Fee Amount", "InitiationFeeAmount", ref _txtInitiationFeeAmount, y);
 
         // Load text param values
         LoadTextParams();
@@ -333,11 +331,10 @@ public class ParametersPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
-            SetText(_txtClubName,      AppParameterService.GetAppParameter(db, "ClubName"));
-            SetText(_txtCaptainName,   AppParameterService.GetAppParameter(db, "LeagueCaptainName"));
-            SetText(_txtCaptainEmail,  AppParameterService.GetAppParameter(db, "LeagueCaptainEmail"));
-            SetText(_txtWebsiteApiUrl, AppParameterService.GetAppParameter(db, "WebsiteApiUrl"));
-            SetText(_txtWebsiteApiKey, AppParameterService.GetAppParameter(db, "WebsiteApiKey"));
+            SetText(_txtClubName,             AppParameterService.GetAppParameter(db, "ClubName"));
+            SetText(_txtCaptainName,          AppParameterService.GetAppParameter(db, "LeagueCaptainName"));
+            SetText(_txtCaptainEmail,         AppParameterService.GetAppParameter(db, "LeagueCaptainEmail"));
+            SetText(_txtInitiationFeeAmount,  AppParameterService.GetAppParameter(db, "InitiationFeeAmount"));
         }
         catch { }
 
@@ -350,11 +347,10 @@ public class ParametersPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
-            AppParameterService.SetAppParameter(db, "ClubName",           _txtClubName.Text.Trim());
+            AppParameterService.SetAppParameter(db, "ClubName",             _txtClubName.Text.Trim());
             AppParameterService.SetAppParameter(db, "LeagueCaptainName",  _txtCaptainName.Text.Trim());
             AppParameterService.SetAppParameter(db, "LeagueCaptainEmail", _txtCaptainEmail.Text.Trim());
-            AppParameterService.SetAppParameter(db, "WebsiteApiUrl",      _txtWebsiteApiUrl.Text.Trim());
-            AppParameterService.SetAppParameter(db, "WebsiteApiKey",      _txtWebsiteApiKey.Text.Trim());
+            AppParameterService.SetAppParameter(db, "InitiationFeeAmount", _txtInitiationFeeAmount.Text.Trim());
         }
         catch (Exception ex)
         {

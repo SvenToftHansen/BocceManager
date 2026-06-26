@@ -15,6 +15,7 @@ public class SchedulePanel : UserControl
     private DateOnly? _seasonStartDate;
     private string    _courtDisplay = "number";
     private bool      _locked;
+    private bool      _seasonIsLocked;
     private bool      _loading;
 
     // ── Left panel ─────────────────────────────────────────────────────────────
@@ -310,10 +311,12 @@ public class SchedulePanel : UserControl
             _seasonStartDate  = null;
             _courtDisplay     = "number";
 
+            _seasonIsLocked = false;
             if (_selectedSeasonId.HasValue)
             {
                 var season = db.Seasons.Find(_selectedSeasonId.Value);
                 _seasonStartDate = season?.StartDate;
+                _seasonIsLocked  = season?.IsLocked ?? false;
                 _courtDisplay = AppParameterService.GetAppParameter(db, "CourtDisplay") ?? "number";
 
                 _seasonCourts = db.Courts
@@ -332,6 +335,7 @@ public class SchedulePanel : UserControl
 
         LoadTemplateList();
         LoadDivisionsList();
+        ApplySeasonLockState();
     }
 
     private static string CourtLabel(Court court, string display) =>
@@ -517,6 +521,12 @@ public class SchedulePanel : UserControl
 
     private void OnGenerate(object? sender, EventArgs e)
     {
+        if (_seasonIsLocked)
+        {
+            MessageBox.Show("Season is locked. Schedules cannot be generated or modified.",
+                "Season Locked", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
         if (_locked)
         {
             MessageBox.Show("Schedule is locked. Click 🔒 Locked to unlock before regenerating.",
@@ -543,10 +553,10 @@ public class SchedulePanel : UserControl
         {
             using var db = new BocceDbContext();
 
-            // Collect actual team counts from divisions (round odd counts down to even)
+            // Collect active team counts from divisions (round odd counts down to even)
             var divCounts = db.Divisions
                 .Where(d => d.SeasonId == _selectedSeasonId.Value)
-                .Select(d => new { ActualCount = d.Teams.Count() })
+                .Select(d => new { ActualCount = d.Teams.Count(t => t.IsActive) })
                 .Where(x => x.ActualCount >= 4)
                 .Select(x => x.ActualCount % 2 == 1 ? x.ActualCount - 1 : x.ActualCount)
                 .Distinct()
@@ -692,6 +702,7 @@ public class SchedulePanel : UserControl
 
     private void OnLockToggle(object? sender, EventArgs e)
     {
+        if (_seasonIsLocked) return;
         if (_selectedTemplateId == null) return;
         _locked = !_locked;
 
@@ -737,11 +748,17 @@ public class SchedulePanel : UserControl
         }
     }
 
+    private void ApplySeasonLockState()
+    {
+        _btnGenerate.Enabled = !_seasonIsLocked;
+        _btnLock.Enabled     = !_seasonIsLocked;
+    }
+
     // ── Cell click → team swap popup ──────────────────────────────────────────
 
     private void OnCellClick(object? sender, DataGridViewCellEventArgs e)
     {
-        if (_locked || _loading || e.RowIndex < 0 || e.ColumnIndex <= 0) return;
+        if (_locked || _seasonIsLocked || _loading || e.RowIndex < 0 || e.ColumnIndex <= 0) return;
         if (_grid.Rows[e.RowIndex].Tag is not WeekDisplayRow weekRow) return;
         if (_grid.Columns[e.ColumnIndex].Tag is not int courtId) return;
         if (!weekRow.Matches.TryGetValue(courtId, out var match)) return;
@@ -1453,14 +1470,14 @@ public class SchedulePanel : UserControl
             .Include(d => d.TimeSlot)
             .FirstOrDefault(d => d.Id == divisionId);
 
-        if (division == null || !division.Teams.Any()) return false;
+        if (division == null || !division.Teams.Any(t => t.IsActive)) return false;
 
         if (!division.DaySlotId.HasValue || !division.TimeSlotId.HasValue) return false;
 
         var daySlot = division.DaySlot;
         if (daySlot == null) return false;
 
-        var teamCount = division.Teams.Count;
+        var teamCount = division.Teams.Count(t => t.IsActive);
         if (teamCount < 4) return false;
         var template = db.ScheduleTemplates
             .Include(t => t.Weeks).ThenInclude(w => w.Matches)
@@ -1481,7 +1498,7 @@ public class SchedulePanel : UserControl
         var daysUntilTarget = ((int)targetDayOfWeek - (int)startDate.DayOfWeek + 7) % 7;
         var firstMatchDate = startDate.AddDays(daysUntilTarget);
 
-        var teams = division.Teams.OrderBy(t => t.DisplayName).ToList();
+        var teams = division.Teams.Where(t => t.IsActive).OrderBy(t => t.DisplayName).ToList();
         var teamMap = new Dictionary<string, int>();
 
         for (int i = 0; i < teams.Count; i++)

@@ -3,6 +3,7 @@ using System;
 using BocceManager.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BocceManager.Data.Migrations
 {
     [DbContext(typeof(BocceDbContext))]
-    partial class BocceDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260624195526_RemoveUnusedTables")]
+    partial class RemoveUnusedTables
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -531,20 +534,8 @@ namespace BocceManager.Data.Migrations
                     b.Property<int>("LeagueId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("LookingForTeamGroupId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text");
-
                     b.Property<int>("PlayerId")
                         .HasColumnType("integer");
-
-                    b.Property<int?>("PreferredTeamId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateOnly?>("RegisteredDate")
-                        .HasColumnType("date");
 
                     b.Property<int?>("SeasonId")
                         .HasColumnType("integer");
@@ -554,11 +545,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LookingForTeamGroupId");
-
                     b.HasIndex("PlayerId");
-
-                    b.HasIndex("PreferredTeamId");
 
                     b.HasIndex("SeasonId");
 
@@ -568,59 +555,6 @@ namespace BocceManager.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("LookingForTeams");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.LookingForTeamDivision", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("DivisionId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("LookingForTeamId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DivisionId");
-
-                    b.HasIndex("LookingForTeamId", "DivisionId")
-                        .IsUnique();
-
-                    b.ToTable("LookingForTeamDivisions");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.LookingForTeamGroup", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("LeagueId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Name")
-                        .HasColumnType("text");
-
-                    b.Property<int>("SeasonId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("LeagueId");
-
-                    b.HasIndex("SeasonId");
-
-                    b.ToTable("LookingForTeamGroups");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.MatchTeamResult", b =>
@@ -1473,104 +1407,6 @@ namespace BocceManager.Data.Migrations
                     b.ToTable("Teams");
                 });
 
-            modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicant", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("ContactEmail")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ContactPhone")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("GroupName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("LeagueId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text");
-
-                    b.Property<int?>("PlacedTeamId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("PreferredDivisionId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("SeasonId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("LeagueId");
-
-                    b.HasIndex("PlacedTeamId");
-
-                    b.HasIndex("PreferredDivisionId");
-
-                    b.HasIndex("SeasonId");
-
-                    b.ToTable("TeamApplicants");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicantMember", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int?>("CreatedPlayerId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Email")
-                        .HasColumnType("text");
-
-                    b.Property<string>("FirstName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("LastName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Phone")
-                        .HasColumnType("text");
-
-                    b.Property<int?>("PlayerId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("TeamApplicantId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedPlayerId");
-
-                    b.HasIndex("PlayerId");
-
-                    b.HasIndex("TeamApplicantId");
-
-                    b.ToTable("TeamApplicantMembers");
-                });
-
             modelBuilder.Entity("BocceManager.Data.Entities.TeamPlayer", b =>
                 {
                     b.Property<int>("Id")
@@ -1831,21 +1667,11 @@ namespace BocceManager.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("BocceManager.Data.Entities.LookingForTeamGroup", "Group")
-                        .WithMany("Members")
-                        .HasForeignKey("LookingForTeamGroupId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("BocceManager.Data.Entities.Player", "Player")
                         .WithMany()
                         .HasForeignKey("PlayerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("BocceManager.Data.Entities.Team", "PreferredTeam")
-                        .WithMany()
-                        .HasForeignKey("PreferredTeamId")
-                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("BocceManager.Data.Entities.Season", "Season")
                         .WithMany()
@@ -1857,55 +1683,13 @@ namespace BocceManager.Data.Migrations
                         .HasForeignKey("TeamId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.Navigation("Group");
-
                     b.Navigation("League");
 
                     b.Navigation("Player");
 
-                    b.Navigation("PreferredTeam");
-
                     b.Navigation("Season");
 
                     b.Navigation("Team");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.LookingForTeamDivision", b =>
-                {
-                    b.HasOne("BocceManager.Data.Entities.Division", "Division")
-                        .WithMany()
-                        .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("BocceManager.Data.Entities.LookingForTeam", "LookingForTeam")
-                        .WithMany("PreferredDivisions")
-                        .HasForeignKey("LookingForTeamId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Division");
-
-                    b.Navigation("LookingForTeam");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.LookingForTeamGroup", b =>
-                {
-                    b.HasOne("BocceManager.Data.Entities.League", "League")
-                        .WithMany()
-                        .HasForeignKey("LeagueId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("BocceManager.Data.Entities.Season", "Season")
-                        .WithMany()
-                        .HasForeignKey("SeasonId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("League");
-
-                    b.Navigation("Season");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.MatchTeamResult", b =>
@@ -2240,64 +2024,6 @@ namespace BocceManager.Data.Migrations
                     b.Navigation("Division");
                 });
 
-            modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicant", b =>
-                {
-                    b.HasOne("BocceManager.Data.Entities.League", "League")
-                        .WithMany()
-                        .HasForeignKey("LeagueId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("BocceManager.Data.Entities.Team", "PlacedTeam")
-                        .WithMany()
-                        .HasForeignKey("PlacedTeamId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("BocceManager.Data.Entities.Division", "PreferredDivision")
-                        .WithMany()
-                        .HasForeignKey("PreferredDivisionId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("BocceManager.Data.Entities.Season", "Season")
-                        .WithMany()
-                        .HasForeignKey("SeasonId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("League");
-
-                    b.Navigation("PlacedTeam");
-
-                    b.Navigation("PreferredDivision");
-
-                    b.Navigation("Season");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicantMember", b =>
-                {
-                    b.HasOne("BocceManager.Data.Entities.Player", "CreatedPlayer")
-                        .WithMany()
-                        .HasForeignKey("CreatedPlayerId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("BocceManager.Data.Entities.Player", "Player")
-                        .WithMany()
-                        .HasForeignKey("PlayerId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("BocceManager.Data.Entities.TeamApplicant", "TeamApplicant")
-                        .WithMany("Members")
-                        .HasForeignKey("TeamApplicantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("CreatedPlayer");
-
-                    b.Navigation("Player");
-
-                    b.Navigation("TeamApplicant");
-                });
-
             modelBuilder.Entity("BocceManager.Data.Entities.TeamPlayer", b =>
                 {
                     b.HasOne("BocceManager.Data.Entities.Player", "Player")
@@ -2358,16 +2084,6 @@ namespace BocceManager.Data.Migrations
                     b.Navigation("Seasons");
                 });
 
-            modelBuilder.Entity("BocceManager.Data.Entities.LookingForTeam", b =>
-                {
-                    b.Navigation("PreferredDivisions");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.LookingForTeamGroup", b =>
-                {
-                    b.Navigation("Members");
-                });
-
             modelBuilder.Entity("BocceManager.Data.Entities.PlayoffMatch", b =>
                 {
                     b.Navigation("Games");
@@ -2401,11 +2117,6 @@ namespace BocceManager.Data.Migrations
             modelBuilder.Entity("BocceManager.Data.Entities.Team", b =>
                 {
                     b.Navigation("TeamPlayers");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicant", b =>
-                {
-                    b.Navigation("Members");
                 });
 #pragma warning restore 612, 618
         }

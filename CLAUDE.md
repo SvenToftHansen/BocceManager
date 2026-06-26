@@ -32,6 +32,114 @@
 
 ---
 
+### Print Preview System (Updated 2026-06-23)
+
+**Decision**: Use **PrintPreviewService** for all print preview dialogs, replacing duplicate implementations.
+
+**Rationale**:
+- Eliminates duplicate toolbar and printer logic across multiple services
+- Provides consistent UI/UX for all reports and printouts
+- Unified export support (PDF, Excel, CSV) available to all reports
+- Easier to maintain and extend print functionality
+
+**Implementation**:
+- `Services/PrintPreviewService.cs` - Single entry point for all print previews
+- Provides toolbar with Print, PDF, Excel, CSV, Web (placeholder), and Prev/Next navigation
+- Supports optional export via `string[]` headers and `List<string[]>` rows
+- All services delegate their `ShowPrintPreview()` calls to this unified service
+
+**Using Print Preview**:
+```csharp
+// Create PrintDocument with content
+var doc = new PrintDocument { DocumentName = "My Report" };
+doc.PrintPage += (_, e) => {
+    // Draw content to e.Graphics
+};
+
+// Show preview with optional export support
+var headers = new[] { "Col1", "Col2", "Col3" };
+var rows = new List<string[]> { /* data */ };
+PrintPreviewService.ShowPrintPreview(this, doc, headers, rows);
+
+// Without export:
+PrintPreviewService.ShowPrintPreview(this, doc);
+```
+
+**Related Files**:
+- `Services/PrintPreviewService.cs` - Unified print preview implementation
+- `Services/TeamsPrintService.cs` - Delegates to PrintPreviewService
+- `Services/SchedulePrintService.cs` - Delegates to PrintPreviewService
+- `Services/SpareListReportService.cs` - Delegates to PrintPreviewService
+- `Services/ReportExportService.cs` - Handles Excel/CSV export
+
+---
+
+### Logging (Added 2026-06-24)
+
+**Decision**: Use **Serilog** with a rolling file sink for all application logging.
+
+**Implementation**:
+- Configured in `Program.cs` at startup — no other setup needed
+- Log files written to `%AppData%\BocceManager\logs\bocce-YYYYMMDD.log`
+- 30-day retention, rolls over daily
+- `Services/AppLogger.cs` — thin static wrapper; use this everywhere instead of calling Serilog directly
+
+**Usage**:
+```csharp
+AppLogger.Info("Season {SeasonId} loaded", season.Id);
+AppLogger.Warn("No divisions found for season {SeasonId}", id);
+AppLogger.Error(ex, "Failed to save score for game {GameId}", gameId);
+```
+
+**Related Files**:
+- `Services/AppLogger.cs` - Static wrapper (Info, Warn, Error, Debug)
+- `Program.cs` - Logger configuration and initialization
+
+---
+
+### Excel Export (Updated 2026-06-24)
+
+**Decision**: Use **ClosedXML** for all Excel exports — produces real `.xlsx` files.
+
+**Rationale**: The previous implementation wrote CSV content with a `.csv` extension (not a real spreadsheet). ClosedXML produces properly formatted `.xlsx` files with styled headers, auto-fitted columns, and frozen header rows.
+
+**Implementation**:
+- `ReportExportService.ExportToExcel()` now writes real XLSX via ClosedXML
+- Headers get bold white text on a blue background
+- Columns auto-fit to content; header row is frozen
+
+**Usage** (no change to callers — same signature):
+```csharp
+ReportExportService.ExportToExcel(this, "filename", headers, rows);
+```
+
+**Related Files**:
+- `Services/ReportExportService.cs` - ExportToExcel (ClosedXML) and ExportToCsv (StreamWriter)
+
+---
+
+### HTTP Resilience (Added 2026-06-24)
+
+**Decision**: Use **Polly** for retry logic on all external HTTP calls (Brevo email API, website API).
+
+**Implementation**:
+- `Services/PollyPolicies.cs` — shared pipeline definitions; add new policies here as needed
+- `PollyPolicies.HttpRetry` — 3 retries, exponential back-off (2s → 4s → 8s), logs each retry via AppLogger
+
+**Usage**:
+```csharp
+await PollyPolicies.HttpRetry.ExecuteAsync(async ct =>
+{
+    var response = await httpClient.PostAsync(url, content, ct);
+    response.EnsureSuccessStatusCode();
+}, cancellationToken);
+```
+
+**Related Files**:
+- `Services/PollyPolicies.cs` - Shared Polly resilience pipelines
+
+---
+
 ## Database
 
 ### AppParameters Table
@@ -113,4 +221,4 @@ Navigation is rebuilt when app starts; visibility depends on whether a default s
 - **Master backlog**: `TODOLIST.md` in project root — all pending features, bugs, and tasks. At session start, pick 3–5 items and load into TodoWrite. Update TODOLIST.md when items are completed.
 - Memory system: `/memory/` directory (auto-memory, persists across sessions)
 - Database migrations: `/Data/Migrations/`
-- Print services (legacy): `Services/TeamsPrintService.cs`, `Services/SchedulePrintService.cs`
+- Print preview: Use `PrintPreviewService.ShowPrintPreview()` for all new and existing printouts

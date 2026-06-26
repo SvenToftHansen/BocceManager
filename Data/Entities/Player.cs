@@ -15,23 +15,6 @@ public class Player
     public string FullName => $"{FirstName} {LastName}";
 }
 
-public class PendingPlayer
-{
-    public int Id { get; set; }
-    public string FirstName { get; set; } = "";
-    public string LastName { get; set; } = "";
-    public string Email { get; set; } = "";
-    public string? Phone { get; set; }
-    public string? LotNumber { get; set; }
-    // looking_for_team | spare_list | both | neither
-    public string Preference { get; set; } = "neither";
-    public DateTime SubmittedAt { get; set; } = DateTime.UtcNow;
-    // pending | approved | rejected
-    public string Status { get; set; } = "pending";
-    public string? ReviewedBy { get; set; }
-    public DateTime? ReviewedAt { get; set; }
-    public string? Notes { get; set; }
-}
 
 public class InitiationFee
 {

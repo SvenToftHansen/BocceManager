@@ -865,10 +865,10 @@ public class PlayerPanel : UserControl
 
             foreach (var league in leagues)
             {
-                var seasons = db.Seasons.Where(s => s.LeagueId == league.Id)
+                var seasons = db.Seasons.Where(s => s.LeagueId == league.Id && !s.IsLocked)
                     .OrderByDescending(s => s.IsCurrent)
                     .ThenByDescending(s => s.StartDate)
-                    .Take(2)  // Current + next
+                    .Take(2)  // Current + next (locked seasons excluded)
                     .ToList();
 
                 foreach (var season in seasons)
@@ -966,6 +966,8 @@ public class PlayerPanel : UserControl
                 db.Players.Add(player);
                 db.SaveChanges();
 
+                FeeService.EnsureInitiationFee(db, player.Id);
+
                 UpdatePartnerLink(db, player, selectedPartnerId);
                 ApplyLeagueListStatus(db, player, GetCheckedLookingForTeamEntries(), GetCheckedSpareLeagues());
 
@@ -1024,38 +1026,37 @@ public class PlayerPanel : UserControl
 
     private void ApplyLeagueListStatus(BocceDbContext db, Player player, List<(int LeagueId, int SeasonId)> lookingForTeamEntries, List<int> spareLeagueIds)
     {
-        // Check if any selected seasons are locked
-        if (lookingForTeamEntries.Count > 0)
-        {
-            var seasonIds = lookingForTeamEntries.Select(l => l.SeasonId).Distinct().ToList();
-            var lockedSeasons = db.Seasons.Where(s => seasonIds.Contains(s.Id) && s.IsLocked).ToList();
-            if (lockedSeasons.Count > 0)
-            {
-                var lockedSeasonNames = string.Join(", ", lockedSeasons.Select(s => s.Name));
-                throw new InvalidOperationException($"Cannot assign to team in locked season(s): {lockedSeasonNames}");
-            }
-        }
+        // Build a map of existing LFT entries; split locked vs unlocked seasons
+        var existingLft = db.LookingForTeams
+            .Include(l => l.Season)
+            .Where(l => l.PlayerId == player.Id)
+            .ToList();
 
-        // Build a map of existing LFT entries to preserve TeamIds
-        var existingLft = db.LookingForTeams.Where(l => l.PlayerId == player.Id).ToList();
         var preserveTeamIds = existingLft.ToDictionary(l => (l.LeagueId, l.SeasonId), l => l.TeamId);
 
-        // Remove all existing looking for teams for this player
-        foreach (var lft in existingLft)
+        // Only delete LFTs for unlocked seasons — locked-season entries are preserved as-is
+        var toDelete = existingLft.Where(l => l.Season == null || !l.Season.IsLocked).ToList();
+        foreach (var lft in toDelete)
             db.LookingForTeams.Remove(lft);
 
         db.SaveChanges(); // Commit deletions before adding new entries
 
-        // Add new looking for team entries with season binding, preserving TeamIds
+        // Add new LFT entries, skipping any locked-season entries that were preserved
+        var preservedLockedKeys = existingLft
+            .Where(l => l.Season?.IsLocked == true)
+            .Select(l => (l.LeagueId, l.SeasonId))
+            .ToHashSet();
+
         foreach (var (leagueId, seasonId) in lookingForTeamEntries)
         {
+            if (preservedLockedKeys.Contains((leagueId, seasonId))) continue;
             int? preservedTeamId = preserveTeamIds.TryGetValue((leagueId, seasonId), out var teamId) ? teamId : null;
             db.LookingForTeams.Add(new LookingForTeam
             {
                 LeagueId = leagueId,
                 PlayerId = player.Id,
                 SeasonId = seasonId,
-                TeamId = preservedTeamId
+                TeamId   = preservedTeamId
             });
         }
 

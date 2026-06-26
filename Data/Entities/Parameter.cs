@@ -33,38 +33,3 @@ public class SeasonParameter
     public Season Season { get; set; } = null!;
 }
 
-public class DivisionParameter
-{
-    public int Id { get; set; }
-    public int DivisionId { get; set; }
-    public string Key { get; set; } = "";
-    public string Value { get; set; } = "";
-    public string? Description { get; set; }
-    public bool IsActive { get; set; } = true;
-
-    public Division Division { get; set; } = null!;
-}
-
-public class TeamParameter
-{
-    public int Id { get; set; }
-    public int TeamId { get; set; }
-    public string Key { get; set; } = "";
-    public string Value { get; set; } = "";
-    public string? Description { get; set; }
-    public bool IsActive { get; set; } = true;
-
-    public Team Team { get; set; } = null!;
-}
-
-public class PlayerParameter
-{
-    public int Id { get; set; }
-    public int PlayerId { get; set; }
-    public string Key { get; set; } = "";
-    public string Value { get; set; } = "";
-    public string? Description { get; set; }
-    public bool IsActive { get; set; } = true;
-
-    public Player Player { get; set; } = null!;
-}

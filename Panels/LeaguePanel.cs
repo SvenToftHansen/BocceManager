@@ -905,7 +905,6 @@ public class LeaguePanel : UserControl
         sb.AppendLine($"  Total divisions ............... {impact.TotalDivisions}");
         sb.AppendLine($"  Total teams ................... {impact.TotalTeams}");
         sb.AppendLine($"  Spare lists ................... {impact.SpareListCount}");
-        sb.AppendLine($"  Officials ..................... {impact.OfficialCount}");
         sb.AppendLine($"  Announcements ................. {impact.AnnouncementCount}");
         sb.AppendLine($"  Email lists ................... {impact.EmailListCount}");
         sb.AppendLine($"  League parameters ............. {impact.ParameterCount}");

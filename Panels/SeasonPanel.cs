@@ -22,6 +22,8 @@ public class SeasonPanel : UserControl
     private int? _previousSeasonId;
     private bool _isCopied;
     private int? _copySourceId;
+    private bool _copyDivisions;
+    private bool _copyTeams;
 
     // ── Left panel ────────────────────────────────────────────────────────────
     private SearchBoxControl _txtSearch   = null!;
@@ -50,6 +52,9 @@ public class SeasonPanel : UserControl
     private ThemedNumericUpDown _numPtsNoShow      = null!;
     private ThemedNumericUpDown _numPtsToWin       = null!;
     private ComboBox      _cmbScoringMode    = null!;
+
+    // ── Editor – fees ─────────────────────────────────────────────────────────
+    private TextBox _txtSeasonFeeAmount = null!;
 
     // ── Editor – playoff settings ─────────────────────────────────────────────
     private ThemedNumericUpDown _numTeamsPlayoffs     = null!;
@@ -274,8 +279,8 @@ public class SeasonPanel : UserControl
 
         Add(Lbl("Is Locked", lx, y));
         _chkIsLocked = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary };
-        _chkIsLocked.CheckedChanged += (_, _) => MarkDirty();
-        Add(_chkIsLocked, Hint("When locked: teams cannot be added/edited, divisions are read-only, score entry blocked", ix + 26, y + 4)); y += 38;
+        _chkIsLocked.CheckedChanged += (_, _) => { MarkDirty(); ApplyEditorLockState(_chkIsLocked.Checked); };
+        Add(_chkIsLocked, Hint("When locked: all editing is disabled; uncheck to unlock", ix + 26, y + 4)); y += 38;
 
         Add(Lbl("Status", lx, y));
         _cmbStatus = new ComboBox { Location = new Point(ix, y), Width = 200, DropDownStyle = ComboBoxStyle.DropDownList, Font = AppTheme.FontDefault };
@@ -303,6 +308,23 @@ public class SeasonPanel : UserControl
         int y = 20;
         var cc = new List<Control>();
         void Add(params Control[] items) => cc.AddRange(items);
+
+        // ── Fees ──────────────────────────────────────────────────────────
+        Add(SecHdr("Fees", lx, y)); y += 34;
+
+        Add(Lbl("Seasonal Fee Amount", lx, y));
+        _txtSeasonFeeAmount = new TextBox
+        {
+            Location  = new Point(ix, y),
+            Width     = 120,
+            Font      = AppTheme.FontDefault,
+            BackColor = AppTheme.ContentBackground,
+            ForeColor = AppTheme.TextPrimary
+        };
+        _txtSeasonFeeAmount.TextChanged += (_, _) => MarkDirty();
+        Add(_txtSeasonFeeAmount, Hint("Seasonal play fee charged to team players and spare list players", ix + 130, y + 4)); y += 44;
+
+        Add(Sep(lx, y, iw + ix - lx)); y += 10;
 
         // ── Division Defaults ─────────────────────────────────────────────
         Add(SecHdr("Division Defaults", lx, y)); y += 34;
@@ -751,7 +773,7 @@ public class SeasonPanel : UserControl
         try
         {
             _selectedSeasonId = seasonId;
-            _isCopied = false; _copySourceId = null;
+            _isCopied = false; _copySourceId = null; _copyDivisions = false; _copyTeams = false;
             _isNewSeasonDraft = false;
             _seasonNameCustomized = false;
 
@@ -772,6 +794,10 @@ public class SeasonPanel : UserControl
             _chkIsLocked.Checked     = s.IsLocked;
             SelStr(_cmbStatus, s.Status ?? "Setup");
             _lblCreatedAt.Text       = s.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+
+            var feeParam = db.SeasonParameters
+                .FirstOrDefault(p => p.SeasonId == seasonId && p.Key == "SeasonFeeAmount");
+            _txtSeasonFeeAmount.Text = feeParam?.Value ?? "0.00";
 
             _numMaxTeamsDiv.Value = s.MaxTeamsInDivision;
             SelStr(_cmbGameInterval, s.GameInterval);
@@ -802,12 +828,43 @@ public class SeasonPanel : UserControl
         _isCreatingNew = false;
         _btnCancel.Visible = false;
         _btnDelete.Visible = true;
+        ApplyEditorLockState(_chkIsLocked.Checked);
+    }
+
+    private void ApplyEditorLockState(bool isLocked)
+    {
+        _txtName.Enabled             = !isLocked;
+        _dtpStartDate.Enabled        = !isLocked;
+        _numWeeks.Enabled            = !isLocked;
+        _dtpPlayoffStart.Enabled     = !isLocked;
+        _chkIsCurrent.Enabled        = !isLocked;
+        _cmbStatus.Enabled           = !isLocked;
+        _txtSeasonFeeAmount.Enabled  = !isLocked;
+        _numMaxTeamsDiv.Enabled      = !isLocked;
+        _numPlayersMin.Enabled       = !isLocked;
+        _numPlayersMax.Enabled       = !isLocked;
+        _cmbGameInterval.Enabled     = !isLocked;
+        _numPtsWin.Enabled           = !isLocked;
+        _numPtsTie.Enabled           = !isLocked;
+        _numPtsLoss.Enabled          = !isLocked;
+        _numPtsNoShow.Enabled        = !isLocked;
+        _numPtsToWin.Enabled         = !isLocked;
+        _cmbScoringMode.Enabled      = !isLocked;
+        _numTeamsPlayoffs.Enabled    = !isLocked;
+        _chkFirstPlace.Enabled       = !isLocked;
+        _cmbPlayoffType.Enabled      = !isLocked;
+        _cmbPlayoffTiebreaker.Enabled = !isLocked;
+        _daysList.Enabled            = !isLocked;
+        _timesList.Enabled           = !isLocked;
+        _btnBuild.Enabled            = !isLocked;
+        // _chkIsLocked is always enabled — it's the only way to unlock
+        // _btnSave enable/disable is handled by MarkDirty/ClearDirty exclusively
     }
 
     private void ClearEditor()
     {
         _selectedSeasonId = null;
-        _isCopied = false; _copySourceId = null;
+        _isCopied = false; _copySourceId = null; _copyDivisions = false; _copyTeams = false;
         _isNewSeasonDraft = false;
         _seasonNameCustomized = false;
         _isCreatingNew = false;
@@ -817,6 +874,8 @@ public class SeasonPanel : UserControl
         _numWeeks.Value = 0;
         _dtpPlayoffStart.Checked = false;
         _chkIsCurrent.Checked = false; _chkIsLocked.Checked = false; _cmbStatus.SelectedIndex = 0; _lblCreatedAt.Text = "";
+
+        _txtSeasonFeeAmount.Text = "0.00";
 
         _numMaxTeamsDiv.Value = 0;
         if (_cmbGameInterval.Items.Count > 0) _cmbGameInterval.SelectedIndex = 0;
@@ -834,6 +893,7 @@ public class SeasonPanel : UserControl
         _divisionsGrid.Rows.Clear();
         LoadSeasonSlots(null);
         ClearDirty();
+        ApplyEditorLockState(false);
     }
 
     private void LoadDivisions(int seasonId)
@@ -855,7 +915,7 @@ public class SeasonPanel : UserControl
                 }).ToList();
 
             foreach (var r in rows)
-                _divisionsGrid.Rows.Add(r.Id, r.Name, r.ShortName, r.SortName, r.Day, r.Time, r.Teams, r.IsActive);
+                _divisionsGrid.Rows.Add(r.Id, $"{r.Name} ({r.Teams})", r.ShortName, r.SortName, r.Day, r.Time, r.Teams, r.IsActive);
             _divisionsGrid.ClearSelection();
         }
         catch { }
@@ -927,13 +987,31 @@ public class SeasonPanel : UserControl
 
             if (current != null)
             {
-                var res = MessageBox.Show(
-                    $"Copy settings and divisions from \"{current.Name}\"?\n\n" +
-                    "All season parameters and divisions will be copied.\nTeams and scores will not be carried over.",
-                    "Copy Previous Season?", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                var resCopy = MessageBox.Show(
+                    $"Copy settings from \"{current.Name}\"?",
+                    "New Season", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
-                if (res == DialogResult.Yes)
+                if (resCopy == DialogResult.Yes)
+                {
+                    var resDivs = MessageBox.Show(
+                        "Copy Divisions to the new season?",
+                        "Copy Divisions?", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    _copyDivisions = resDivs == DialogResult.Yes;
+
+                    if (_copyDivisions)
+                    {
+                        var resTeams = MessageBox.Show(
+                            "Copy Teams to the new divisions?",
+                            "Copy Teams?", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                        _copyTeams = resTeams == DialogResult.Yes;
+                    }
+                    else
+                    {
+                        _copyTeams = false;
+                    }
+
                     OfferCopyDate(current);
+                }
             }
         }
         catch { }
@@ -986,7 +1064,7 @@ public class SeasonPanel : UserControl
 
     private static string BuildDefaultSeasonName(int leagueId, DateTime startDate)
     {
-        var yearName = startDate.Year.ToString();
+        var yearName = "Season " + startDate.Year;
         try
         {
             using var db = new BocceDbContext();
@@ -998,7 +1076,7 @@ public class SeasonPanel : UserControl
             var yearExists = existingNames.Any(n =>
                 string.Equals((n ?? string.Empty).Trim(), yearName, StringComparison.OrdinalIgnoreCase));
 
-            return yearExists ? startDate.ToString("MMMM yyyy") : yearName;
+            return yearExists ? "Season " + startDate.ToString("MMMM yyyy") : yearName;
         }
         catch
         {
@@ -1040,6 +1118,13 @@ public class SeasonPanel : UserControl
         _chkFirstPlace.Checked       = source.FirstPlaceGuaranteed;
         SelStr(_cmbPlayoffType, source.PlayoffType);
         SelStr(_cmbPlayoffTiebreaker, source.PlayoffTiebreakerFormat ?? "none");
+
+        using (var db = new BocceDbContext())
+        {
+            var sourceFeeParm = db.SeasonParameters
+                .FirstOrDefault(p => p.SeasonId == source.Id && p.Key == "SeasonFeeAmount");
+            _txtSeasonFeeAmount.Text = sourceFeeParm?.Value ?? "0.00";
+        }
 
         using (var db = new BocceDbContext())
         {
@@ -1171,6 +1256,21 @@ public class SeasonPanel : UserControl
                 db.SeasonTimeSlots.Add(new SeasonTimeSlot { SeasonId = savedId, TimeSlotId = id });
             db.SaveChanges();
 
+            var feeParam = db.SeasonParameters
+                .FirstOrDefault(p => p.SeasonId == savedId && p.Key == "SeasonFeeAmount");
+            if (feeParam == null)
+                db.SeasonParameters.Add(new SeasonParameter
+                {
+                    SeasonId    = savedId,
+                    Key         = "SeasonFeeAmount",
+                    Value       = _txtSeasonFeeAmount.Text.Trim(),
+                    Description = "Seasonal play fee for this season",
+                    IsActive    = true
+                });
+            else
+                feeParam.Value = _txtSeasonFeeAmount.Text.Trim();
+            db.SaveChanges();
+
             if (season.IsCurrent)
             {
                 var others = db.Seasons
@@ -1202,11 +1302,16 @@ public class SeasonPanel : UserControl
         {
             if (_isCopied && _copySourceId.HasValue)
             {
-                var (divs, teams, players, lft) = CopySeasonData(_copySourceId.Value, savedId);
-                if (divs > 0)
-                    divMsg = $"\n\n{divs} division(s), {teams} team(s), {players} player assignment(s) copied from previous season."
-                           + (lft > 0 ? $"\n{lft} Looking For Team entry(s) updated to new teams." : "");
-                _isCopied = false; _copySourceId = null;
+                var (divs, teams, players, lft) = CopySeasonData(_copySourceId.Value, savedId, _copyDivisions, _copyTeams);
+                var parts = new System.Collections.Generic.List<string>();
+                if (divs > 0)    parts.Add($"{divs} division(s)");
+                if (teams > 0)   parts.Add($"{teams} team(s)");
+                if (players > 0) parts.Add($"{players} player assignment(s)");
+                divMsg = parts.Count > 0
+                    ? $"\n\n{string.Join(", ", parts)} copied from previous season."
+                      + (lft > 0 ? $"\n{lft} Looking For Team entry(s) updated." : "")
+                    : "\n\nSettings copied from previous season.";
+                _isCopied = false; _copySourceId = null; _copyDivisions = false; _copyTeams = false;
             }
             else
             {
@@ -1261,20 +1366,25 @@ public class SeasonPanel : UserControl
 
     // ── Division helpers ──────────────────────────────────────────────────────
 
-    private (int divs, int teams, int players, int lft) CopySeasonData(int sourceSeasonId, int newSeasonId)
+    private (int divs, int teams, int players, int lft) CopySeasonData(
+        int sourceSeasonId, int newSeasonId, bool copyDivisions, bool copyTeams)
     {
         try
         {
             using var db = new BocceDbContext();
 
+            if (!copyDivisions) return (0, 0, 0, 0);
+
             var sourceDivs = db.Divisions
                 .Where(d => d.SeasonId == sourceSeasonId)
                 .ToList();
 
-            var sourceTeams = db.Teams
-                .Include(t => t.TeamPlayers)
-                .Where(t => sourceDivs.Select(d => d.Id).Contains(t.DivisionId))
-                .ToList();
+            var sourceTeams = copyTeams
+                ? db.Teams
+                    .Include(t => t.TeamPlayers)
+                    .Where(t => sourceDivs.Select(d => d.Id).Contains(t.DivisionId))
+                    .ToList()
+                : [];
 
             var divMap  = new Dictionary<int, int>();
             var teamMap = new Dictionary<int, int>();
@@ -1332,21 +1442,30 @@ public class SeasonPanel : UserControl
                 if (srcTeam.CaptainPlayerId.HasValue)
                     newTeam.CaptainPlayerId = srcTeam.CaptainPlayerId;
             }
-            db.SaveChanges();
+            if (sourceTeams.Count > 0) db.SaveChanges();
 
             int lftUpdated = 0;
-            var lftEntries = db.LookingForTeams
-                .Where(l => l.TeamId.HasValue && teamMap.Keys.Contains(l.TeamId.Value))
-                .ToList();
-            foreach (var lft in lftEntries)
+            if (teamMap.Count > 0)
             {
-                if (teamMap.TryGetValue(lft.TeamId!.Value, out int newTeamId))
+                var lftEntries = db.LookingForTeams
+                    .Where(l => l.TeamId.HasValue && teamMap.Keys.Contains(l.TeamId.Value))
+                    .ToList();
+                foreach (var lft in lftEntries)
                 {
-                    lft.TeamId = newTeamId;
-                    lftUpdated++;
+                    if (teamMap.TryGetValue(lft.TeamId!.Value, out int newTeamId))
+                    {
+                        lft.TeamId = newTeamId;
+                        lftUpdated++;
+                    }
                 }
+                if (lftUpdated > 0) db.SaveChanges();
             }
-            if (lftUpdated > 0) db.SaveChanges();
+
+            // Copy SeasonFeeAmount parameter and assign fees to spare list and team players
+            var league = db.Seasons.Where(s => s.Id == newSeasonId).Select(s => s.LeagueId).FirstOrDefault();
+            FeeService.CopySeasonFeeParameter(db, sourceSeasonId, newSeasonId);
+            FeeService.AssignSeasonFeesForSpareList(db, newSeasonId, league);
+            FeeService.AssignSeasonFeesForTeamPlayers(db, newSeasonId);
 
             return (sourceDivs.Count, sourceTeams.Count, playerCount, lftUpdated);
         }
@@ -1637,12 +1756,10 @@ public class SeasonPanel : UserControl
 
             foreach (var div in season.Divisions)
             {
-                db.DivisionParameters.RemoveRange(db.DivisionParameters.Where(x => x.DivisionId == div.Id));
                 db.TeamStandings.RemoveRange(db.TeamStandings.Where(x => x.DivisionId == div.Id));
                 foreach (var team in div.Teams)
                 {
                     db.TeamPlayers.RemoveRange(team.TeamPlayers);
-                    db.TeamParameters.RemoveRange(db.TeamParameters.Where(x => x.TeamId == team.Id));
                 }
                 db.Teams.RemoveRange(div.Teams);
             }
@@ -1652,19 +1769,6 @@ public class SeasonPanel : UserControl
             db.SeasonDaySlots.RemoveRange(db.SeasonDaySlots.Where(x => x.SeasonId == seasonId));
             db.SeasonTimeSlots.RemoveRange(db.SeasonTimeSlots.Where(x => x.SeasonId == seasonId));
             db.SeasonFees.RemoveRange(db.SeasonFees.Where(x => x.SeasonId == seasonId));
-
-            var applicantIds = db.TeamApplicants.Where(ta => ta.SeasonId == seasonId)
-                                                .Select(ta => ta.Id).ToList();
-            if (applicantIds.Count > 0)
-            {
-                db.TeamApplicantPlayers.RemoveRange(
-                    db.TeamApplicantPlayers.Where(p => applicantIds.Contains(p.TeamApplicantId)));
-                db.TeamApplicantDaySlots.RemoveRange(
-                    db.TeamApplicantDaySlots.Where(d => applicantIds.Contains(d.TeamApplicantId)));
-                db.TeamApplicantTimeSlots.RemoveRange(
-                    db.TeamApplicantTimeSlots.Where(t => applicantIds.Contains(t.TeamApplicantId)));
-                db.TeamApplicants.RemoveRange(db.TeamApplicants.Where(ta => ta.SeasonId == seasonId));
-            }
 
             db.Seasons.Remove(season);
             db.SaveChanges();

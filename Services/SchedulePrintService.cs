@@ -54,7 +54,8 @@ public static class SchedulePrintService
             .Include(s => s.League)
             .First(s => s.Id == seasonId);
 
-        string docHeader    = $"Golden Vista Bocce Ball  –  {season.League.Name}  –  {season.Name}";
+        var clubName = AppParameterService.GetAppParameter(db, "ClubName") ?? "Bocce League";
+        string docHeader    = $"{clubName}  –  {season.League.Name}  –  {season.Name} - Generic Schedules";
         string courtDisplay = AppParameterService.GetCourtDisplay(db, season.LeagueId);
 
         var seasonCourts = db.Courts
@@ -266,152 +267,8 @@ public static class SchedulePrintService
 
     // ── Preview / print UI ────────────────────────────────────────────────────
 
-    public static void ShowPrintPreview(Control parent, PrintDocument doc)
+    public static void ShowPrintPreview(Control parent, PrintDocument doc, string[]? exportHeaders = null, List<string[]>? exportRows = null)
     {
-        // PrintPreviewControl.ComputePreview() calls PrinterSettings.GetHdevmode() —
-        // it needs a valid printer name even for preview. Prefer a virtual PDF printer
-        // so no physical printer is required to open the preview.
-        var printerList = PrinterSettings.InstalledPrinters.Cast<string>().ToList();
-        if (printerList.Count > 0 &&
-            !printerList.Any(p => p.Equals(doc.PrinterSettings.PrinterName, StringComparison.OrdinalIgnoreCase)))
-        {
-            doc.PrinterSettings.PrinterName =
-                printerList.FirstOrDefault(p => p.Contains("PDF", StringComparison.OrdinalIgnoreCase))
-                ?? printerList[0];
-        }
-        bool hasPrinter = printerList.Count > 0;
-
-        // Pre-render to get page count before showing the form
-        var countCtrl = new PreviewPrintController();
-        doc.PrintController = countCtrl;
-        doc.Print();
-        int totalPages = Math.Max(1, countCtrl.GetPreviewPageInfo().Length);
-
-        using var form = new Form
-        {
-            Text          = $"Print Preview  —  {doc.DocumentName}",
-            WindowState   = FormWindowState.Maximized,
-            StartPosition = FormStartPosition.CenterParent,
-            MinimumSize   = new Size(700, 500),
-            BackColor     = Color.FromArgb(240, 240, 240)
-        };
-
-        // Declare preview early so Prev/Next handlers can close over it
-        var preview = new PrintPreviewControl
-        {
-            Dock      = DockStyle.Fill,
-            Document  = doc,
-            AutoZoom  = true,
-            BackColor = Color.FromArgb(240, 240, 240)
-        };
-
-        var toolbar = new ToolStrip
-        {
-            Dock      = DockStyle.Top,
-            BackColor = Color.FromArgb(50, 50, 50),
-            GripStyle = ToolStripGripStyle.Hidden,
-            Padding   = new Padding(6, 3, 6, 3)
-        };
-
-        ToolStripButton Btn(string text, Color back) => new ToolStripButton(text)
-        {
-            DisplayStyle = ToolStripItemDisplayStyle.Text,
-            BackColor    = back,
-            ForeColor    = Color.White,
-            Font         = new Font("Segoe UI", 9f, FontStyle.Bold),
-            Margin       = new Padding(4, 0, 4, 0),
-            AutoSize     = true,
-            AutoToolTip  = false
-        };
-
-        var btnPrinter = Btn("🖨  Print to Printer", Color.FromArgb(0, 120, 215));
-        var btnPdf     = Btn("📄  Save as PDF...",    Color.FromArgb(180, 50, 50));
-        var btnWeb     = Btn("🌐  Website",           Color.FromArgb(120, 120, 120));
-        var btnPrev    = Btn("◀  Prev",               Color.FromArgb(70, 70, 80));
-        var btnNext    = Btn("Next  ▶",               Color.FromArgb(70, 70, 80));
-        var btnClose   = Btn("✕  Close",              Color.FromArgb(80, 80, 80));
-        var lblPage    = new ToolStripLabel($"Page 1 of {totalPages}")
-        {
-            ForeColor = Color.LightGray,
-            Margin    = new Padding(6, 0, 6, 0)
-        };
-
-        void UpdateNav()
-        {
-            int p           = preview.StartPage;
-            lblPage.Text    = $"Page {p + 1} of {totalPages}";
-            btnPrev.Enabled = p > 0;
-            btnNext.Enabled = p < totalPages - 1;
-        }
-
-        btnPrinter.Enabled = hasPrinter;
-        btnWeb.Enabled  = false;
-        btnPrev.Enabled = false;
-        btnNext.Enabled = totalPages > 1;
-        btnClose.Alignment = ToolStripItemAlignment.Right;
-
-        toolbar.Items.AddRange([
-            btnPrinter,
-            new ToolStripSeparator(),
-            btnPdf,
-            new ToolStripSeparator(),
-            btnWeb,
-            new ToolStripSeparator(),
-            btnPrev,
-            lblPage,
-            btnNext,
-            btnClose
-        ]);
-        form.Controls.Add(preview);
-        form.Controls.Add(toolbar);
-
-        btnPrinter.Click += (_, _) => SendToPrinter(parent, doc);
-        btnPdf.Click     += (_, _) => SendToPdf(parent, doc, doc.DocumentName);
-        btnClose.Click   += (_, _) => form.Close();
-        btnPrev.Click    += (_, _) => { preview.StartPage = Math.Max(0, preview.StartPage - 1); UpdateNav(); };
-        btnNext.Click    += (_, _) => { preview.StartPage = Math.Min(totalPages - 1, preview.StartPage + 1); UpdateNav(); };
-
-        form.ShowDialog(parent);
-    }
-
-    public static void SendToPrinter(Control parent, PrintDocument doc)
-    {
-        using var dlg = new PrintDialog { Document = doc, UseEXDialog = true };
-        if (dlg.ShowDialog(parent) == DialogResult.OK)
-        {
-            doc.PrintController = new StandardPrintController();
-            doc.Print();
-        }
-    }
-
-    public static void SendToPdf(Control parent, PrintDocument doc, string suggestedName)
-    {
-        using var saveDlg = new SaveFileDialog
-        {
-            Title      = "Save as PDF",
-            Filter     = "PDF files (*.pdf)|*.pdf",
-            FileName   = suggestedName + ".pdf",
-            DefaultExt = "pdf"
-        };
-        if (saveDlg.ShowDialog(parent) != DialogResult.OK) return;
-
-        doc.PrinterSettings.PrinterName   = "Microsoft Print to PDF";
-        doc.PrinterSettings.PrintToFile   = true;
-        doc.PrinterSettings.PrintFileName = saveDlg.FileName;
-
-        try
-        {
-            doc.PrintController = new StandardPrintController();
-            doc.Print();
-            MessageBox.Show("PDF saved successfully.", "Save as PDF",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(
-                $"PDF export failed:\n\n{ex.Message}\n\n" +
-                "Ensure 'Microsoft Print to PDF' is installed on this computer.",
-                "Save as PDF", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
+        PrintPreviewService.ShowPrintPreview(parent, doc, exportHeaders, exportRows);
     }
 }

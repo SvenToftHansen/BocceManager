@@ -34,8 +34,10 @@ public class SpareListPanel : UserControl
 
     private bool _isLoadingData = false;
     private bool _isSwitchingSelection = false;
+    private bool _currentSeasonIsLocked = false;
     private List<PlayerLookup> _allPlayers = [];
     private HashSet<int> _currentSparePlayerIds = [];
+    private HashSet<int> _sparesWithNotes = [];
 
     private SearchBoxControl _txtSearchAvailable = null!;
     private ListBox _lstAvailablePlayers = null!;
@@ -68,7 +70,8 @@ public class SpareListPanel : UserControl
         };
 
         const int colWidth = 380;
-        const int col2Left = colWidth + 120;
+        const int leftPad = 20;
+        const int col2Left = leftPad + colWidth + 120;
         const int searchHeight = 30;
         const int buttonHeight = 36;
 
@@ -76,7 +79,7 @@ public class SpareListPanel : UserControl
         var lblAvailable = new Label
         {
             Text = "Available Players",
-            Location = new Point(0, 0),
+            Location = new Point(leftPad, 0),
             Size = new Size(colWidth, 24),
             Font = AppTheme.FontDefaultBold,
             ForeColor = AppTheme.TextPrimary
@@ -85,7 +88,7 @@ public class SpareListPanel : UserControl
         var searchHintAvailable = new Label
         {
             Text = "Delimiters: |  \\  /  :  ;",
-            Location = new Point(0, 26),
+            Location = new Point(leftPad, 26),
             Size = new Size(colWidth, 18),
             Font = AppTheme.FontSmall,
             ForeColor = AppTheme.TextMuted
@@ -93,14 +96,14 @@ public class SpareListPanel : UserControl
 
         _txtSearchAvailable = new SearchBoxControl("Search available...")
         {
-            Location = new Point(0, 44),
+            Location = new Point(leftPad, 44),
             Size = new Size(colWidth, searchHeight)
         };
         _txtSearchAvailable.SearchTextChanged += (_, _) => ApplyAvailableFilter();
 
         _lstAvailablePlayers = new ListBox
         {
-            Location = new Point(0, 78),
+            Location = new Point(leftPad, 78),
             Size = new Size(colWidth, 380),
             Font = AppTheme.FontDefault,
             BorderStyle = BorderStyle.FixedSingle,
@@ -112,7 +115,7 @@ public class SpareListPanel : UserControl
 
         _lblAvailableCount = new Label
         {
-            Location = new Point(0, 464),
+            Location = new Point(leftPad, 464),
             Size = new Size(colWidth, 20),
             Font = AppTheme.FontSmall,
             ForeColor = AppTheme.TextMuted,
@@ -125,7 +128,7 @@ public class SpareListPanel : UserControl
         _btnMoveToSpare = new Button
         {
             Text = "→ Add",
-            Location = new Point(colWidth + 10, 100),
+            Location = new Point(leftPad + colWidth + 10, 100),
             Size = new Size(80, buttonHeight),
             FlatStyle = FlatStyle.Flat,
             BackColor = AppTheme.ButtonSuccess,
@@ -139,7 +142,7 @@ public class SpareListPanel : UserControl
         _btnRemoveFromSpare = new Button
         {
             Text = "← Remove",
-            Location = new Point(colWidth + 10, 150),
+            Location = new Point(leftPad + colWidth + 10, 150),
             Size = new Size(80, buttonHeight),
             FlatStyle = FlatStyle.Flat,
             BackColor = AppTheme.ButtonDanger,
@@ -240,6 +243,7 @@ public class SpareListPanel : UserControl
             ForeColor = AppTheme.TextPrimary
         };
         _txtNotes.TextChanged += (_, _) => SaveSelectedPlayerNotes();
+        _txtNotes.Leave += (_, _) => OnNotesLeave();
 
         _notesPanel.Controls.AddRange([_txtNotes, _lblSelectedPlayer, lblNotesTitle]);
         Controls.Add(_notesPanel);
@@ -282,8 +286,19 @@ public class SpareListPanel : UserControl
                 .Select(s => s.PlayerId)
                 .ToHashSet();
 
+            _sparesWithNotes = db.SpareLists
+                .Where(s => s.LeagueId == leagueId.Value && s.IsActive && s.Notes != null && s.Notes != "")
+                .Select(s => s.PlayerId)
+                .ToHashSet();
+
+            var currentSeason = FeeService.GetCurrentSeason(db, leagueId.Value);
+            _currentSeasonIsLocked = currentSeason?.IsLocked ?? false;
+
             ApplyAvailableFilter();
             ApplySpareFilter();
+
+            _btnMoveToSpare.Enabled     = !_currentSeasonIsLocked;
+            _btnRemoveFromSpare.Enabled = !_currentSeasonIsLocked;
         }
         finally
         {
@@ -314,7 +329,11 @@ public class SpareListPanel : UserControl
         var spareList = _allPlayers
             .Where(p => _currentSparePlayerIds.Contains(p.Id))
             .Where(p => SearchQueryService.MatchesAnyTerm($"{p.DisplayName} {p.Email} {p.Phone} {p.LotNumber}", query))
-            .Select(p => new PlayerItem { Id = p.Id, DisplayName = p.DisplayName })
+            .Select(p => new PlayerItem
+            {
+                Id = p.Id,
+                DisplayName = _sparesWithNotes.Contains(p.Id) ? p.DisplayName + " *" : p.DisplayName
+            })
             .ToList();
 
         _lstSparePlayers.BeginUpdate();
@@ -418,6 +437,19 @@ public class SpareListPanel : UserControl
         }
     }
 
+    private void OnNotesLeave()
+    {
+        if (_lstSparePlayers.SelectedItem is not PlayerItem item) return;
+
+        bool hasNotes = !string.IsNullOrWhiteSpace(_txtNotes.Text);
+        bool hadNotes = _sparesWithNotes.Contains(item.Id);
+        if (hasNotes == hadNotes) return;
+
+        if (hasNotes) _sparesWithNotes.Add(item.Id);
+        else _sparesWithNotes.Remove(item.Id);
+        ApplySpareFilter();
+    }
+
     private void ClearNotes()
     {
         _selectedSparePlayerId = null;
@@ -435,12 +467,29 @@ public class SpareListPanel : UserControl
 
         if (selected.Count == 0) return;
 
+        if (_currentSeasonIsLocked)
+        {
+            MessageBox.Show("The current season is locked. Players cannot be added to the spare list.",
+                "Season Locked", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
         try
         {
             using var db = new BocceDbContext();
             var leagueId = AppParameterService.GetDefaultLeagueId(db);
 
             if (!leagueId.HasValue) return;
+
+            var currentSeason = FeeService.GetCurrentSeason(db, leagueId.Value);
+            if (currentSeason == null)
+            {
+                MessageBox.Show(
+                    "Cannot add to spare list: no season is marked as current for this league.\n\n" +
+                    "Please set a current season in Season Settings before adding spare list players.",
+                    "No Current Season", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
 
             foreach (var playerId in selected)
             {
@@ -466,6 +515,9 @@ public class SpareListPanel : UserControl
             db.SaveChanges();
 
             foreach (var playerId in selected)
+                FeeService.EnsureSeasonFee(db, playerId, currentSeason.Id);
+
+            foreach (var playerId in selected)
                 _currentSparePlayerIds.Add(playerId);
 
             ClearNotes();
@@ -487,6 +539,13 @@ public class SpareListPanel : UserControl
 
         if (selected.Count == 0) return;
 
+        if (_currentSeasonIsLocked)
+        {
+            MessageBox.Show("The current season is locked. Players cannot be removed from the spare list.",
+                "Season Locked", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
         try
         {
             using var db = new BocceDbContext();
@@ -501,15 +560,19 @@ public class SpareListPanel : UserControl
                     s.PlayerId == playerId);
 
                 if (existing != null)
-                {
                     db.SpareLists.Remove(existing);
-                }
             }
 
             db.SaveChanges();
 
             foreach (var playerId in selected)
+                FeeService.RescindUnpaidSeasonFees(db, playerId, leagueId.Value);
+
+            foreach (var playerId in selected)
+            {
                 _currentSparePlayerIds.Remove(playerId);
+                _sparesWithNotes.Remove(playerId);
+            }
 
             ClearNotes();
             ApplyAvailableFilter();

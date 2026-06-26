@@ -299,31 +299,11 @@ public static class DatabaseInitializer
             ("BackupFolder",      "Folder where database backups are saved"),
             ("DocumentsFolder",   "Folder where imported document files are stored"),
             ("ReportPdfLocation", "Default folder for PDF report exports"),
-            ("WebsiteApiUrl",     "URL for web report upload (placeholder)"),
-            ("WebsiteApiKey",     "API key for website integration (placeholder)"),
             ("ClubRulesDocument", "Path to the club rules PDF or Word document"),
         ];
         foreach (var (key, desc) in ensure)
             if (!existingKeys.Contains(key))
                 db.AppParameters.Add(new AppParameter { Key = key, Value = "", Description = desc });
-
-        // Seed chart of accounts if empty
-        if (!db.GlAccounts.Any())
-        {
-            db.GlAccounts.AddRange(
-                new GlAccount { Code = "1000", Name = "Chequing",              AccountType = "asset" },
-                new GlAccount { Code = "1100", Name = "Deposits Outstanding",  AccountType = "asset" },
-                new GlAccount { Code = "4100", Name = "Initiation Fees",       AccountType = "income" },
-                new GlAccount { Code = "4200", Name = "Season Fees",           AccountType = "income" },
-                new GlAccount { Code = "4300", Name = "Event Revenue",         AccountType = "income" },
-                new GlAccount { Code = "4400", Name = "Donations",             AccountType = "income" },
-                new GlAccount { Code = "4500", Name = "Other Income",          AccountType = "income" },
-                new GlAccount { Code = "5100", Name = "Website Hosting",       AccountType = "expense" },
-                new GlAccount { Code = "5200", Name = "Court Maintenance",     AccountType = "expense" },
-                new GlAccount { Code = "5300", Name = "Event Expenses",        AccountType = "expense" },
-                new GlAccount { Code = "5400", Name = "Other Expenses",        AccountType = "expense" }
-            );
-        }
 
         // Initialize reports if empty
         if (!db.Reports.Any())

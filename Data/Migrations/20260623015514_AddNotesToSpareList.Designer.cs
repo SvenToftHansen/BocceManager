@@ -3,6 +3,7 @@ using System;
 using BocceManager.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BocceManager.Data.Migrations
 {
     [DbContext(typeof(BocceDbContext))]
-    partial class BocceDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260623015514_AddNotesToSpareList")]
+    partial class AddNotesToSpareList
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -291,6 +294,39 @@ namespace BocceManager.Data.Migrations
                     b.ToTable("Divisions");
                 });
 
+            modelBuilder.Entity("BocceManager.Data.Entities.DivisionParameter", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<int>("DivisionId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DivisionId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("DivisionParameters");
+                });
+
             modelBuilder.Entity("BocceManager.Data.Entities.EmailList", b =>
                 {
                     b.Property<int>("Id")
@@ -416,6 +452,43 @@ namespace BocceManager.Data.Migrations
                     b.ToTable("Games");
                 });
 
+            modelBuilder.Entity("BocceManager.Data.Entities.GlAccount", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccountType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("OpeningBalance")
+                        .HasColumnType("numeric");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("GlAccounts");
+                });
+
             modelBuilder.Entity("BocceManager.Data.Entities.InitiationFee", b =>
                 {
                     b.Property<int>("Id")
@@ -447,6 +520,51 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("PlayerId");
 
                     b.ToTable("InitiationFees");
+                });
+
+            modelBuilder.Entity("BocceManager.Data.Entities.JournalEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CreditAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DebitAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("EnteredBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly>("EntryDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Reference")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreditAccountId");
+
+                    b.HasIndex("DebitAccountId");
+
+                    b.ToTable("JournalEntries");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.League", b =>
@@ -485,6 +603,43 @@ namespace BocceManager.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Leagues");
+                });
+
+            modelBuilder.Entity("BocceManager.Data.Entities.LeagueOfficial", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("LeagueId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PlayerId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("ReceivesRegistrations")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ReceivesSpareRequests")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("RoleTitle")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlayerId");
+
+                    b.HasIndex("LeagueId", "PlayerId")
+                        .IsUnique();
+
+                    b.ToTable("LeagueOfficials");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.LeagueParameter", b =>
@@ -531,20 +686,8 @@ namespace BocceManager.Data.Migrations
                     b.Property<int>("LeagueId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("LookingForTeamGroupId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text");
-
                     b.Property<int>("PlayerId")
                         .HasColumnType("integer");
-
-                    b.Property<int?>("PreferredTeamId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateOnly?>("RegisteredDate")
-                        .HasColumnType("date");
 
                     b.Property<int?>("SeasonId")
                         .HasColumnType("integer");
@@ -554,11 +697,7 @@ namespace BocceManager.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LookingForTeamGroupId");
-
                     b.HasIndex("PlayerId");
-
-                    b.HasIndex("PreferredTeamId");
 
                     b.HasIndex("SeasonId");
 
@@ -568,59 +707,6 @@ namespace BocceManager.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("LookingForTeams");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.LookingForTeamDivision", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("DivisionId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("LookingForTeamId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DivisionId");
-
-                    b.HasIndex("LookingForTeamId", "DivisionId")
-                        .IsUnique();
-
-                    b.ToTable("LookingForTeamDivisions");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.LookingForTeamGroup", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("LeagueId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Name")
-                        .HasColumnType("text");
-
-                    b.Property<int>("SeasonId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("LeagueId");
-
-                    b.HasIndex("SeasonId");
-
-                    b.ToTable("LookingForTeamGroups");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.MatchTeamResult", b =>
@@ -693,6 +779,57 @@ namespace BocceManager.Data.Migrations
                     b.ToTable("NewIdeas");
                 });
 
+            modelBuilder.Entity("BocceManager.Data.Entities.PendingPlayer", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("FirstName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("LastName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("LotNumber")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Phone")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Preference")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PendingPlayers");
+                });
+
             modelBuilder.Entity("BocceManager.Data.Entities.Player", b =>
                 {
                     b.Property<int>("Id")
@@ -732,6 +869,39 @@ namespace BocceManager.Data.Migrations
                     b.HasIndex("PartnerPlayerId");
 
                     b.ToTable("Players");
+                });
+
+            modelBuilder.Entity("BocceManager.Data.Entities.PlayerParameter", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("PlayerId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlayerId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("PlayerParameters");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.PlayoffGame", b =>
@@ -1388,6 +1558,60 @@ namespace BocceManager.Data.Migrations
                     b.ToTable("SpareLists");
                 });
 
+            modelBuilder.Entity("BocceManager.Data.Entities.SpareRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateOnly?>("GameDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("LeagueId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MatchId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Message")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RequestingPlayerId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SpareListId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SparePlayerId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LeagueId");
+
+                    b.HasIndex("MatchId");
+
+                    b.HasIndex("RequestingPlayerId");
+
+                    b.HasIndex("SpareListId");
+
+                    b.HasIndex("SparePlayerId");
+
+                    b.ToTable("SpareRequests");
+                });
+
             modelBuilder.Entity("BocceManager.Data.Entities.Stats", b =>
                 {
                     b.Property<int>("DivisionId")
@@ -1481,7 +1705,14 @@ namespace BocceManager.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AssignedDivisionId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ContactEmail")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ContactName")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("ContactPhone")
@@ -1490,21 +1721,8 @@ namespace BocceManager.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("GroupName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("LeagueId")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Notes")
                         .HasColumnType("text");
-
-                    b.Property<int?>("PlacedTeamId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("PreferredDivisionId")
-                        .HasColumnType("integer");
 
                     b.Property<int>("SeasonId")
                         .HasColumnType("integer");
@@ -1515,18 +1733,14 @@ namespace BocceManager.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LeagueId");
-
-                    b.HasIndex("PlacedTeamId");
-
-                    b.HasIndex("PreferredDivisionId");
+                    b.HasIndex("AssignedDivisionId");
 
                     b.HasIndex("SeasonId");
 
                     b.ToTable("TeamApplicants");
                 });
 
-            modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicantMember", b =>
+            modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicantDaySlot", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1534,27 +1748,7 @@ namespace BocceManager.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("CreatedPlayerId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Email")
-                        .HasColumnType("text");
-
-                    b.Property<string>("FirstName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("LastName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Phone")
-                        .HasColumnType("text");
-
-                    b.Property<int?>("PlayerId")
+                    b.Property<int>("DaySlotId")
                         .HasColumnType("integer");
 
                     b.Property<int>("TeamApplicantId")
@@ -1562,13 +1756,97 @@ namespace BocceManager.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CreatedPlayerId");
+                    b.HasIndex("DaySlotId");
+
+                    b.HasIndex("TeamApplicantId", "DaySlotId")
+                        .IsUnique();
+
+                    b.ToTable("TeamApplicantDaySlots");
+                });
+
+            modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicantPlayer", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("PlayerId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("TeamApplicantId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
 
                     b.HasIndex("PlayerId");
 
-                    b.HasIndex("TeamApplicantId");
+                    b.HasIndex("TeamApplicantId", "PlayerId")
+                        .IsUnique();
 
-                    b.ToTable("TeamApplicantMembers");
+                    b.ToTable("TeamApplicantPlayers");
+                });
+
+            modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicantTimeSlot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("TeamApplicantId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TimeSlotId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TimeSlotId");
+
+                    b.HasIndex("TeamApplicantId", "TimeSlotId")
+                        .IsUnique();
+
+                    b.ToTable("TeamApplicantTimeSlots");
+                });
+
+            modelBuilder.Entity("BocceManager.Data.Entities.TeamParameter", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("TeamId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TeamId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("TeamParameters");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.TeamPlayer", b =>
@@ -1751,6 +2029,17 @@ namespace BocceManager.Data.Migrations
                     b.Navigation("TimeSlot");
                 });
 
+            modelBuilder.Entity("BocceManager.Data.Entities.DivisionParameter", b =>
+                {
+                    b.HasOne("BocceManager.Data.Entities.Division", "Division")
+                        .WithMany()
+                        .HasForeignKey("DivisionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Division");
+                });
+
             modelBuilder.Entity("BocceManager.Data.Entities.EmailList", b =>
                 {
                     b.HasOne("BocceManager.Data.Entities.League", "League")
@@ -1812,6 +2101,44 @@ namespace BocceManager.Data.Migrations
                     b.Navigation("Player");
                 });
 
+            modelBuilder.Entity("BocceManager.Data.Entities.JournalEntry", b =>
+                {
+                    b.HasOne("BocceManager.Data.Entities.GlAccount", "CreditAccount")
+                        .WithMany("CreditEntries")
+                        .HasForeignKey("CreditAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BocceManager.Data.Entities.GlAccount", "DebitAccount")
+                        .WithMany("DebitEntries")
+                        .HasForeignKey("DebitAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreditAccount");
+
+                    b.Navigation("DebitAccount");
+                });
+
+            modelBuilder.Entity("BocceManager.Data.Entities.LeagueOfficial", b =>
+                {
+                    b.HasOne("BocceManager.Data.Entities.League", "League")
+                        .WithMany()
+                        .HasForeignKey("LeagueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BocceManager.Data.Entities.Player", "Player")
+                        .WithMany()
+                        .HasForeignKey("PlayerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("League");
+
+                    b.Navigation("Player");
+                });
+
             modelBuilder.Entity("BocceManager.Data.Entities.LeagueParameter", b =>
                 {
                     b.HasOne("BocceManager.Data.Entities.League", "League")
@@ -1831,21 +2158,11 @@ namespace BocceManager.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("BocceManager.Data.Entities.LookingForTeamGroup", "Group")
-                        .WithMany("Members")
-                        .HasForeignKey("LookingForTeamGroupId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("BocceManager.Data.Entities.Player", "Player")
                         .WithMany()
                         .HasForeignKey("PlayerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("BocceManager.Data.Entities.Team", "PreferredTeam")
-                        .WithMany()
-                        .HasForeignKey("PreferredTeamId")
-                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("BocceManager.Data.Entities.Season", "Season")
                         .WithMany()
@@ -1857,55 +2174,13 @@ namespace BocceManager.Data.Migrations
                         .HasForeignKey("TeamId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.Navigation("Group");
-
                     b.Navigation("League");
 
                     b.Navigation("Player");
 
-                    b.Navigation("PreferredTeam");
-
                     b.Navigation("Season");
 
                     b.Navigation("Team");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.LookingForTeamDivision", b =>
-                {
-                    b.HasOne("BocceManager.Data.Entities.Division", "Division")
-                        .WithMany()
-                        .HasForeignKey("DivisionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("BocceManager.Data.Entities.LookingForTeam", "LookingForTeam")
-                        .WithMany("PreferredDivisions")
-                        .HasForeignKey("LookingForTeamId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Division");
-
-                    b.Navigation("LookingForTeam");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.LookingForTeamGroup", b =>
-                {
-                    b.HasOne("BocceManager.Data.Entities.League", "League")
-                        .WithMany()
-                        .HasForeignKey("LeagueId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("BocceManager.Data.Entities.Season", "Season")
-                        .WithMany()
-                        .HasForeignKey("SeasonId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("League");
-
-                    b.Navigation("Season");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.MatchTeamResult", b =>
@@ -1933,6 +2208,17 @@ namespace BocceManager.Data.Migrations
                         .WithMany()
                         .HasForeignKey("PartnerPlayerId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("BocceManager.Data.Entities.PlayerParameter", b =>
+                {
+                    b.HasOne("BocceManager.Data.Entities.Player", "Player")
+                        .WithMany()
+                        .HasForeignKey("PlayerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Player");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.PlayoffGame", b =>
@@ -2222,6 +2508,47 @@ namespace BocceManager.Data.Migrations
                     b.Navigation("Player");
                 });
 
+            modelBuilder.Entity("BocceManager.Data.Entities.SpareRequest", b =>
+                {
+                    b.HasOne("BocceManager.Data.Entities.League", "League")
+                        .WithMany()
+                        .HasForeignKey("LeagueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BocceManager.Data.Entities.BocceMatch", "Match")
+                        .WithMany()
+                        .HasForeignKey("MatchId");
+
+                    b.HasOne("BocceManager.Data.Entities.Player", "RequestingPlayer")
+                        .WithMany()
+                        .HasForeignKey("RequestingPlayerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BocceManager.Data.Entities.SpareList", "SpareList")
+                        .WithMany()
+                        .HasForeignKey("SpareListId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BocceManager.Data.Entities.Player", "SparePlayer")
+                        .WithMany()
+                        .HasForeignKey("SparePlayerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("League");
+
+                    b.Navigation("Match");
+
+                    b.Navigation("RequestingPlayer");
+
+                    b.Navigation("SpareList");
+
+                    b.Navigation("SparePlayer");
+                });
+
             modelBuilder.Entity("BocceManager.Data.Entities.Team", b =>
                 {
                     b.HasOne("BocceManager.Data.Entities.Player", "Captain")
@@ -2242,20 +2569,9 @@ namespace BocceManager.Data.Migrations
 
             modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicant", b =>
                 {
-                    b.HasOne("BocceManager.Data.Entities.League", "League")
+                    b.HasOne("BocceManager.Data.Entities.Division", "AssignedDivision")
                         .WithMany()
-                        .HasForeignKey("LeagueId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("BocceManager.Data.Entities.Team", "PlacedTeam")
-                        .WithMany()
-                        .HasForeignKey("PlacedTeamId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("BocceManager.Data.Entities.Division", "PreferredDivision")
-                        .WithMany()
-                        .HasForeignKey("PreferredDivisionId")
+                        .HasForeignKey("AssignedDivisionId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("BocceManager.Data.Entities.Season", "Season")
@@ -2264,38 +2580,77 @@ namespace BocceManager.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("League");
-
-                    b.Navigation("PlacedTeam");
-
-                    b.Navigation("PreferredDivision");
+                    b.Navigation("AssignedDivision");
 
                     b.Navigation("Season");
                 });
 
-            modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicantMember", b =>
+            modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicantDaySlot", b =>
                 {
-                    b.HasOne("BocceManager.Data.Entities.Player", "CreatedPlayer")
+                    b.HasOne("BocceManager.Data.Entities.DaySlot", "DaySlot")
                         .WithMany()
-                        .HasForeignKey("CreatedPlayerId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("BocceManager.Data.Entities.Player", "Player")
-                        .WithMany()
-                        .HasForeignKey("PlayerId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .HasForeignKey("DaySlotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("BocceManager.Data.Entities.TeamApplicant", "TeamApplicant")
-                        .WithMany("Members")
+                        .WithMany("DayPreferences")
                         .HasForeignKey("TeamApplicantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("CreatedPlayer");
+                    b.Navigation("DaySlot");
+
+                    b.Navigation("TeamApplicant");
+                });
+
+            modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicantPlayer", b =>
+                {
+                    b.HasOne("BocceManager.Data.Entities.Player", "Player")
+                        .WithMany()
+                        .HasForeignKey("PlayerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BocceManager.Data.Entities.TeamApplicant", "TeamApplicant")
+                        .WithMany("Players")
+                        .HasForeignKey("TeamApplicantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Player");
 
                     b.Navigation("TeamApplicant");
+                });
+
+            modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicantTimeSlot", b =>
+                {
+                    b.HasOne("BocceManager.Data.Entities.TeamApplicant", "TeamApplicant")
+                        .WithMany("TimePreferences")
+                        .HasForeignKey("TeamApplicantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BocceManager.Data.Entities.TimeSlot", "TimeSlot")
+                        .WithMany()
+                        .HasForeignKey("TimeSlotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("TeamApplicant");
+
+                    b.Navigation("TimeSlot");
+                });
+
+            modelBuilder.Entity("BocceManager.Data.Entities.TeamParameter", b =>
+                {
+                    b.HasOne("BocceManager.Data.Entities.Team", "Team")
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Team");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.TeamPlayer", b =>
@@ -2353,19 +2708,16 @@ namespace BocceManager.Data.Migrations
                     b.Navigation("Members");
                 });
 
+            modelBuilder.Entity("BocceManager.Data.Entities.GlAccount", b =>
+                {
+                    b.Navigation("CreditEntries");
+
+                    b.Navigation("DebitEntries");
+                });
+
             modelBuilder.Entity("BocceManager.Data.Entities.League", b =>
                 {
                     b.Navigation("Seasons");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.LookingForTeam", b =>
-                {
-                    b.Navigation("PreferredDivisions");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.LookingForTeamGroup", b =>
-                {
-                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.PlayoffMatch", b =>
@@ -2405,7 +2757,11 @@ namespace BocceManager.Data.Migrations
 
             modelBuilder.Entity("BocceManager.Data.Entities.TeamApplicant", b =>
                 {
-                    b.Navigation("Members");
+                    b.Navigation("DayPreferences");
+
+                    b.Navigation("Players");
+
+                    b.Navigation("TimePreferences");
                 });
 #pragma warning restore 612, 618
         }

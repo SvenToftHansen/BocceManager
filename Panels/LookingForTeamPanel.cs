@@ -67,6 +67,7 @@ public class LookingForTeamPanel : UserControl
 
     private void LoadContext()
     {
+        _isLoadingData = true;
         try
         {
             using var db = new BocceDbContext();
@@ -78,9 +79,13 @@ public class LookingForTeamPanel : UserControl
             _leagueId = null;
             _seasonId = null;
         }
-        LoadDivisionData();
-        LoadPreferredTeamCombo();
-        LoadGrid();
+        finally
+        {
+            LoadDivisionData();
+            LoadPreferredTeamCombo();
+            LoadGrid();
+            _isLoadingData = false;
+        }
     }
 
     // ── UI Construction ────────────────────────────────────────────────────────
@@ -445,6 +450,7 @@ public class LookingForTeamPanel : UserControl
         try
         {
             _grid.Rows.Clear();
+            _grid.ClearSelection();
             if (!_leagueId.HasValue || !_seasonId.HasValue) return;
 
             bool unplacedOnly = _cmbShow.SelectedIndex == 0;
@@ -486,6 +492,10 @@ public class LookingForTeamPanel : UserControl
                     if (Convert.ToInt32(_grid.Rows[i].Cells["GId"].Value) == _selectedLftId.Value)
                     { _grid.Rows[i].Selected = true; break; }
                 }
+            }
+            else
+            {
+                ClearDetail();
             }
         }
         finally { _isLoadingData = false; }
@@ -586,13 +596,14 @@ public class LookingForTeamPanel : UserControl
             using var db = new BocceDbContext();
             var members = db.LookingForTeams
                 .Include(l => l.Player)
-                .Where(l => l.LookingForTeamGroupId == groupId.Value && l.Id != currentLftId)
+                .Where(l => l.LookingForTeamGroupId == groupId.Value)
                 .OrderBy(l => l.Player.LastName).ThenBy(l => l.Player.FirstName)
                 .ToList();
             foreach (var m in members)
             {
                 string name = $"{m.Player.LastName}, {m.Player.FirstName}".Trim().TrimStart(',').Trim();
-                _grpGrid.Rows.Add(m.Id, name, m.Player.Phone ?? "", m.Player.Email ?? "");
+                string marker = m.Id == currentLftId ? " ◆" : "";
+                _grpGrid.Rows.Add(m.Id, name + marker, m.Player.Phone ?? "", m.Player.Email ?? "");
             }
         }
         catch { }
@@ -604,8 +615,11 @@ public class LookingForTeamPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
+            var grp = db.LookingForTeamGroups.FirstOrDefault(g => g.Id == groupId.Value);
+            if (grp == null) { _tabGroup.Text = "Group"; return; }
             int count = db.LookingForTeams.Count(l => l.LookingForTeamGroupId == groupId.Value);
-            _tabGroup.Text = $"Group ({count})";
+            string title = grp.Name ?? $"Group {groupId}";
+            _tabGroup.Text = $"{title} ({count})";
         }
         catch { _tabGroup.Text = "Group"; }
     }
@@ -671,13 +685,88 @@ public class LookingForTeamPanel : UserControl
         }
         catch { }
 
-        int? picked = PickPlayerDialog("Add Player to Looking For Team", excludeIds: alreadyInLft, showCreateNew: true);
-        if (!picked.HasValue) return;
+        List<int> picked = PickPlayersDialog("Add Player(s) to Looking For Team", excludeIds: alreadyInLft, showCreateNew: true);
+        if (picked.Count == 0) return;
 
-        if (!CheckAndHandleTeamMembership(picked.Value)) return;
+        if (picked.Count > 1)
+        {
+            var ans = MessageBox.Show($"Add {picked.Count} players as a group or as solos?",
+                "Multiple Players", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+            if (ans == DialogResult.Cancel) return;
+            bool asGroup = ans == DialogResult.Yes;
 
-        var details = PromptLftDetails();
-        if (details == null) return;
+            var details = PromptLftDetails();
+            if (details == null) return;
+
+            int? groupId = null;
+            if (asGroup)
+            {
+                try
+                {
+                    using var db = new BocceDbContext();
+                    var p1 = db.Players.FirstOrDefault(p => p.Id == picked[0]);
+                    string groupName = p1 != null ? $"{p1.LastName}'s Group" : "Group";
+                    var grp = new LookingForTeamGroup
+                    {
+                        LeagueId = _leagueId.Value,
+                        SeasonId = _seasonId.Value,
+                        Name = groupName,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    db.LookingForTeamGroups.Add(grp);
+                    db.SaveChanges();
+                    groupId = grp.Id;
+                }
+                catch { }
+            }
+
+            int firstLftId = 0;
+            foreach (int playerId in picked)
+            {
+                if (!CheckAndHandleTeamMembership(playerId)) continue;
+
+                try
+                {
+                    using var db = new BocceDbContext();
+                    var entry = new LookingForTeam
+                    {
+                        LeagueId        = _leagueId.Value,
+                        SeasonId        = _seasonId.Value,
+                        PlayerId        = playerId,
+                        PreferredTeamId = details.PrefTeamId,
+                        Notes           = details.Notes.NullIfEmpty(),
+                        RegisteredDate  = details.RegDate,
+                        LookingForTeamGroupId = groupId
+                    };
+                    db.LookingForTeams.Add(entry);
+                    db.SaveChanges();
+
+                    foreach (int divId in details.PrefDivisionIds)
+                        db.LookingForTeamDivisions.Add(new LookingForTeamDivision
+                            { LookingForTeamId = entry.Id, DivisionId = divId });
+                    db.SaveChanges();
+
+                    if (firstLftId == 0) firstLftId = entry.Id;
+                    AppLogger.Info("Added player {PlayerId} to LFT for season {SeasonId}", playerId, _seasonId.Value);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Could not add player:\n{ex.Message}", "Error",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+            }
+
+            _selectedLftId = firstLftId > 0 ? firstLftId : null;
+            LoadGrid();
+            return;
+        }
+
+        // Single player - existing flow
+        if (!CheckAndHandleTeamMembership(picked[0])) return;
+
+        var singleDetails = PromptLftDetails();
+        if (singleDetails == null) return;
 
         int newLftId;
         try
@@ -687,20 +776,20 @@ public class LookingForTeamPanel : UserControl
             {
                 LeagueId        = _leagueId.Value,
                 SeasonId        = _seasonId.Value,
-                PlayerId        = picked.Value,
-                PreferredTeamId = details.PrefTeamId,
-                Notes           = details.Notes.NullIfEmpty(),
-                RegisteredDate  = details.RegDate
+                PlayerId        = picked[0],
+                PreferredTeamId = singleDetails.PrefTeamId,
+                Notes           = singleDetails.Notes.NullIfEmpty(),
+                RegisteredDate  = singleDetails.RegDate
             };
             db.LookingForTeams.Add(entry);
             db.SaveChanges();
 
-            foreach (int divId in details.PrefDivisionIds)
+            foreach (int divId in singleDetails.PrefDivisionIds)
                 db.LookingForTeamDivisions.Add(new LookingForTeamDivision
                     { LookingForTeamId = entry.Id, DivisionId = divId });
             db.SaveChanges();
             newLftId = entry.Id;
-            AppLogger.Info("Added player {PlayerId} to LFT for season {SeasonId}", picked.Value, _seasonId.Value);
+            AppLogger.Info("Added player {PlayerId} to LFT for season {SeasonId}", picked[0], _seasonId.Value);
         }
         catch (Exception ex)
         {
@@ -1038,13 +1127,19 @@ public class LookingForTeamPanel : UserControl
 
     private void MergeIntoGroup(BocceDbContext db, int lftId1, int lftId2)
     {
-        var e1 = db.LookingForTeams.Find(lftId1)!;
-        var e2 = db.LookingForTeams.Find(lftId2)!;
+        var e1 = db.LookingForTeams.Include(l => l.Player).First(l => l.Id == lftId1);
+        var e2 = db.LookingForTeams.Include(l => l.Player).First(l => l.Id == lftId2);
 
         if (!e1.LookingForTeamGroupId.HasValue && !e2.LookingForTeamGroupId.HasValue)
         {
+            string groupName = $"{e1.Player.LastName}'s Group";
             var grp = new LookingForTeamGroup
-                { LeagueId = _leagueId!.Value, SeasonId = _seasonId!.Value, CreatedAt = DateTime.UtcNow };
+            {
+                LeagueId = _leagueId!.Value,
+                SeasonId = _seasonId!.Value,
+                Name = groupName,
+                CreatedAt = DateTime.UtcNow
+            };
             db.LookingForTeamGroups.Add(grp);
             db.SaveChanges();
             e1.LookingForTeamGroupId = grp.Id;
@@ -1173,6 +1268,139 @@ public class LookingForTeamPanel : UserControl
     }
 
     // ── Dialogs ────────────────────────────────────────────────────────────────
+    private List<int> PickPlayersDialog(string title, HashSet<int>? excludeIds, bool showCreateNew)
+    {
+        using var form = new Form
+        {
+            Text = title, Width = 560, Height = 560,
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false, MinimizeBox = false,
+            BackColor = AppTheme.ContentBackground
+        };
+
+        var filterBar = new Panel { Dock = DockStyle.Top, Height = 62, BackColor = AppTheme.Surface };
+        var chkExTeam  = new CheckBox { Text = "Exclude players already on a team", Location = new Point(10, 10), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary, Checked = true };
+        var chkExSpare = new CheckBox { Text = "Exclude spare list members",        Location = new Point(10, 36), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary };
+        filterBar.Controls.AddRange([chkExTeam, chkExSpare]);
+
+        var search = new TextBox
+        {
+            Dock = DockStyle.Top, Font = AppTheme.FontDefault, Height = 30,
+            PlaceholderText = "Search by name...", BackColor = AppTheme.Surface,
+            ForeColor = AppTheme.TextPrimary, BorderStyle = BorderStyle.FixedSingle
+        };
+
+        var grid = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            MultiSelect = true, ReadOnly = true,
+            AllowUserToAddRows = false, RowHeadersVisible = false,
+            BorderStyle = BorderStyle.None,
+            BackgroundColor = AppTheme.ContentBackground,
+            Font = AppTheme.FontDefault, RowTemplate = { Height = 28 },
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            EnableHeadersVisualStyles = false,
+            ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
+            {
+                BackColor = AppTheme.GridHeaderBackground, ForeColor = AppTheme.GridHeaderText,
+                SelectionBackColor = AppTheme.GridHeaderBackground, SelectionForeColor = AppTheme.GridHeaderText,
+                Font = AppTheme.FontGridHeader
+            }
+        };
+        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "PId", Visible = false });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Name", HeaderText = "Name", FillWeight = 40 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Phone", HeaderText = "Phone", FillWeight = 30 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Email", HeaderText = "Email", FillWeight = 30 });
+
+        var teamSet  = new HashSet<int>();
+        var spareSet = new HashSet<int>();
+        List<(int Id, string Name, string Phone, string Email)> all = [];
+
+        try
+        {
+            using var db = new BocceDbContext();
+            if (_seasonId.HasValue)
+                teamSet = db.TeamPlayers
+                    .Where(tp => tp.Team.Division.SeasonId == _seasonId.Value)
+                    .Select(tp => tp.PlayerId).Distinct().ToHashSet();
+            if (_leagueId.HasValue)
+                spareSet = db.SpareLists
+                    .Where(s => s.LeagueId == _leagueId.Value && s.IsActive)
+                    .Select(s => s.PlayerId).ToHashSet();
+            all = db.Players
+                .Where(p => p.IsActive)
+                .OrderBy(p => p.LastName).ThenBy(p => p.FirstName)
+                .AsEnumerable()
+                .Where(p => excludeIds == null || !excludeIds.Contains(p.Id))
+                .Select(p => (p.Id,
+                    $"{p.LastName}, {p.FirstName}".Trim().TrimStart(',').Trim(),
+                    p.Phone ?? "", p.Email ?? ""))
+                .ToList();
+        }
+        catch { }
+
+        void Filter(string q)
+        {
+            grid.Rows.Clear();
+            foreach (var (id, name, phone, email) in all)
+            {
+                if (chkExTeam.Checked  && teamSet.Contains(id))  continue;
+                if (chkExSpare.Checked && spareSet.Contains(id)) continue;
+                if (!string.IsNullOrWhiteSpace(q) && !SearchQueryService.MatchesAnyTerm(name, q)) continue;
+                grid.Rows.Add(id, name, phone, email);
+            }
+        }
+
+        search.TextChanged        += (_, _) => Filter(search.Text);
+        chkExTeam.CheckedChanged  += (_, _) => Filter(search.Text);
+        chkExSpare.CheckedChanged += (_, _) => Filter(search.Text);
+        Filter("");
+
+        var bar = new Panel { Dock = DockStyle.Bottom, Height = 46, BackColor = AppTheme.Surface };
+        var btnOk  = new Button { Text = "Select", DialogResult = DialogResult.OK,     Left = 12,  Top = 8, Width = 100, Height = 30, FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White, Font = AppTheme.FontButton, FlatAppearance = { BorderSize = 0 } };
+        var btnCxl = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Left = 124, Top = 8, Width = 80,  Height = 30, FlatStyle = FlatStyle.Flat, Font = AppTheme.FontButton };
+        bar.Controls.AddRange([btnOk, btnCxl]);
+
+        Panel? newPersonBar = null;
+        if (showCreateNew)
+        {
+            newPersonBar = new Panel { Dock = DockStyle.Bottom, Height = 42, BackColor = AppTheme.ContentBackground };
+            var btnNew = new Button
+            {
+                Text = "+ New Person...", Left = 8, Top = 6, Width = 130, Height = 30,
+                FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White,
+                Font = AppTheme.FontButton, FlatAppearance = { BorderSize = 0 }
+            };
+            btnNew.Click += (_, _) =>
+            {
+                int? newId = CreateNewPlayerInline(form);
+                if (newId.HasValue) { form.Tag = newId; form.DialogResult = DialogResult.OK; }
+            };
+            newPersonBar.Controls.Add(btnNew);
+        }
+
+        var controls = new List<Control> { grid, bar, search, filterBar };
+        if (newPersonBar != null) controls.Add(newPersonBar);
+        form.Controls.AddRange([.. controls]);
+        form.AcceptButton = btnOk;
+        form.CancelButton = btnCxl;
+
+        var result = new List<int>();
+        if (form.ShowDialog(this) == DialogResult.OK)
+        {
+            if (form.Tag is int createdId)
+                result.Add(createdId);
+            else
+                result.AddRange(grid.SelectedRows.Cast<DataGridViewRow>()
+                    .Select(r => r.Cells[0].Value)
+                    .Where(v => v != null && v != DBNull.Value)
+                    .Select(v => Convert.ToInt32(v)));
+        }
+        return result;
+    }
+
     private int? PickPlayerDialog(string title, HashSet<int>? excludeIds, bool showCreateNew)
     {
         using var form = new Form

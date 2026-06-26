@@ -11,7 +11,6 @@ public sealed record CascadeImpact(
     int TotalDivisions,
     int TotalTeams,
     int SpareListCount,
-    int OfficialCount,
     int AnnouncementCount,
     int EmailListCount,
     int ParameterCount);
@@ -42,7 +41,6 @@ public static class LeagueService
             TotalDivisions:    seasonImpacts.Sum(s => s.Divisions),
             TotalTeams:        seasonImpacts.Sum(s => s.Teams),
             SpareListCount:    db.SpareLists.Count(sl => sl.LeagueId == leagueId),
-            OfficialCount:     db.LeagueOfficials.Count(o => o.LeagueId == leagueId),
             AnnouncementCount: db.Announcements.Count(a => a.LeagueId == leagueId),
             EmailListCount:    db.EmailLists.Count(e => e.LeagueId == leagueId),
             ParameterCount:    db.LeagueParameters.Count(p => p.LeagueId == leagueId));
@@ -97,12 +95,9 @@ public static class LeagueService
                 foreach (var teamId in teamIds)
                 {
                     db.TeamPlayers.RemoveRange(db.TeamPlayers.Where(tp => tp.TeamId == teamId));
-                    db.TeamParameters.RemoveRange(db.TeamParameters.Where(tp => tp.TeamId == teamId));
                     db.TeamStandings.RemoveRange(db.TeamStandings.Where(ts => ts.TeamId == teamId));
                 }
                 db.Teams.RemoveRange(db.Teams.Where(t => t.DivisionId == divisionId));
-                db.DivisionParameters.RemoveRange(
-                    db.DivisionParameters.Where(p => p.DivisionId == divisionId));
             }
             db.Divisions.RemoveRange(db.Divisions.Where(d => d.SeasonId == seasonId));
 
@@ -121,32 +116,11 @@ public static class LeagueService
             db.SeasonDaySlots.RemoveRange(db.SeasonDaySlots.Where(s => s.SeasonId == seasonId));
             db.SeasonTimeSlots.RemoveRange(db.SeasonTimeSlots.Where(s => s.SeasonId == seasonId));
 
-            // Team applicants for this season
-            var applicantIds = db.TeamApplicants.Where(ta => ta.SeasonId == seasonId)
-                                                .Select(ta => ta.Id).ToList();
-            if (applicantIds.Count > 0)
-            {
-                db.TeamApplicantPlayers.RemoveRange(
-                    db.TeamApplicantPlayers.Where(p => applicantIds.Contains(p.TeamApplicantId)));
-                db.TeamApplicantDaySlots.RemoveRange(
-                    db.TeamApplicantDaySlots.Where(d => applicantIds.Contains(d.TeamApplicantId)));
-                db.TeamApplicantTimeSlots.RemoveRange(
-                    db.TeamApplicantTimeSlots.Where(t => applicantIds.Contains(t.TeamApplicantId)));
-                db.TeamApplicants.RemoveRange(db.TeamApplicants.Where(ta => ta.SeasonId == seasonId));
-            }
         }
         db.Seasons.RemoveRange(db.Seasons.Where(s => s.LeagueId == leagueId));
 
-        // SpareRequests reference SpareList entries — delete before removing spare list rows
-        var spareListIds = db.SpareLists.Where(sl => sl.LeagueId == leagueId)
-                                        .Select(sl => sl.Id).ToList();
-        if (spareListIds.Count > 0)
-            db.SpareRequests.RemoveRange(
-                db.SpareRequests.Where(sr => spareListIds.Contains(sr.SpareListId)));
         db.SpareLists.RemoveRange(db.SpareLists.Where(sl => sl.LeagueId == leagueId));
         db.LookingForTeams.RemoveRange(db.LookingForTeams.Where(l => l.LeagueId == leagueId));
-
-        db.LeagueOfficials.RemoveRange(db.LeagueOfficials.Where(o => o.LeagueId == leagueId));
         db.Announcements.RemoveRange(db.Announcements.Where(a => a.LeagueId == leagueId));
 
         var emailListIds = db.EmailLists.Where(el => el.LeagueId == leagueId)

@@ -33,6 +33,7 @@ public class ReportSpareListPanel : UserControl
         {
             using var db = new BocceDbContext();
             var leagueId = AppParameterService.GetDefaultLeagueId(db);
+            var seasonId = AppParameterService.GetDefaultSeasonId(db);
 
             if (!leagueId.HasValue)
             {
@@ -47,6 +48,8 @@ public class ReportSpareListPanel : UserControl
                 return;
             }
 
+            var season = seasonId.HasValue ? db.Seasons.FirstOrDefault(s => s.Id == seasonId.Value) : null;
+
             var data = SpareListReportService.BuildSpareListData(leagueId.Value);
 
             if (data.Count == 0)
@@ -55,7 +58,8 @@ public class ReportSpareListPanel : UserControl
                 return;
             }
 
-            var doc = SpareListReportService.BuildDocument(league.Name, data);
+            var clubName = AppParameterService.GetAppParameter(db, "ClubName") ?? "Bocce League";
+            var doc = SpareListReportService.BuildDocument(clubName, league.Name, season?.Name ?? "N/A", data);
             doc.DocumentName = $"{league.Name} - Spare List";
             SpareListReportService.ShowPrintPreview(this, doc, league.Name, data);
         }

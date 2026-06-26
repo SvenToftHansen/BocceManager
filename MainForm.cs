@@ -11,10 +11,10 @@ public partial class MainForm : Form
     {
         Dashboard,
         Leagues, Seasons, Divisions,
-        Players, Teams,
+        Players, Teams, TeamApplicants, LookingForTeam,
         ScoreEntry, Schedule,
         Standings, Playoffs, ReportTeamListing, ReportScheduleGeneric, ReportSpareLists,
-        SpareLists, Announcements, Fees, EmailLists, Documents, Parameters, Courts, Utilities, Theme
+        SpareLists, Announcements, Fees, EmailLists, EmailCompose, EmailHistory, Documents, Parameters, Courts, Utilities, Theme
     }
 
     private NavSection _currentSection = NavSection.Dashboard;
@@ -290,12 +290,17 @@ public partial class MainForm : Form
         AddStandaloneItem("Dashboard", NavSection.Dashboard);
 
         AddGroup("LEAGUE", add => {
-            add("Leagues",     NavSection.Leagues);
-            add("Seasons",     NavSection.Seasons);
-            add("Divisions",   NavSection.Divisions);
-            add("Players",     NavSection.Players);
-            add("Teams",       NavSection.Teams);
+            add("Leagues",   NavSection.Leagues);
+            add("Seasons",   NavSection.Seasons);
+            add("Divisions", NavSection.Divisions);
             add("Spare Lists", NavSection.SpareLists);
+        });
+
+        AddGroup("ROSTER", add => {
+            add("Players",          NavSection.Players);
+            add("Teams",            NavSection.Teams);
+            add("Team Applicants",  NavSection.TeamApplicants);
+            add("Looking For Team", NavSection.LookingForTeam);
         });
 
         AddGroup("OPERATIONS", add => {
@@ -311,10 +316,15 @@ public partial class MainForm : Form
             add("Spare List",   NavSection.ReportSpareLists);
         });
 
+        AddGroup("EMAIL", add => {
+            add("Email Lists",    NavSection.EmailLists);
+            add("Compose",        NavSection.EmailCompose);
+            add("Sent History",   NavSection.EmailHistory);
+        });
+
         AddGroup("ADMINISTRATION", add => {
             add("Announcements",  NavSection.Announcements);
             add("Fees",           NavSection.Fees);
-            add("Email Lists",    NavSection.EmailLists);
             add("Documents",      NavSection.Documents);
             add("Parameters",     NavSection.Parameters);
             add("Courts",         NavSection.Courts);
@@ -392,7 +402,9 @@ public partial class MainForm : Form
         NavSection.Seasons    => new SeasonPanel(),
         NavSection.Divisions  => new DivisionPanel(),
         NavSection.Players    => new PlayerPanel(),
-        NavSection.Teams      => new DivisionPanel(teamsOnly: true),
+        NavSection.Teams           => new DivisionPanel(teamsOnly: true),
+        NavSection.TeamApplicants  => new TeamApplicantsPanel(),
+        NavSection.LookingForTeam  => new LookingForTeamPanel(),
         NavSection.Documents  => new DocumentsPanel(),
         NavSection.Parameters => new ParametersPanel(),
         NavSection.Courts     => new CourtPanel(),
@@ -402,6 +414,7 @@ public partial class MainForm : Form
         NavSection.ReportScheduleGeneric => new ReportSchedulePanel(),
         NavSection.ReportSpareLists      => new ReportSpareListPanel(),
         NavSection.SpareLists => new SpareListPanel(),
+        NavSection.Fees       => new FeesPanel(),
         NavSection.Utilities  => new UtilitiesPanel(),
         NavSection.Theme      => new ThemePanel(),
         _ => new PlaceholderPanel(SectionTitle(section))
@@ -435,7 +448,9 @@ public partial class MainForm : Form
         NavSection.Seasons       => "Seasons",
         NavSection.Divisions     => "Divisions",
         NavSection.Players       => "Players",
-        NavSection.Teams         => "Teams",
+        NavSection.Teams           => "Teams",
+        NavSection.TeamApplicants  => "Team Applicants",
+        NavSection.LookingForTeam  => "Looking For Team",
         NavSection.ScoreEntry    => "Score Entry",
         NavSection.Schedule              => "Schedule",
         NavSection.Standings             => "Standings",
@@ -447,6 +462,8 @@ public partial class MainForm : Form
         NavSection.Announcements => "Announcements",
         NavSection.Fees          => "Fees",
         NavSection.EmailLists    => "Email Lists",
+        NavSection.EmailCompose  => "Compose Email",
+        NavSection.EmailHistory  => "Sent History",
         NavSection.Documents     => "Documents",
         NavSection.Parameters    => "Parameters",
         NavSection.Courts        => "Courts",
@@ -519,6 +536,8 @@ public partial class MainForm : Form
                 sectionsToEnable.Add(NavSection.Divisions);
                 sectionsToEnable.Add(NavSection.Players);
                 sectionsToEnable.Add(NavSection.Teams);
+                sectionsToEnable.Add(NavSection.TeamApplicants);
+                sectionsToEnable.Add(NavSection.LookingForTeam);
                 sectionsToEnable.Add(NavSection.ScoreEntry);
                 sectionsToEnable.Add(NavSection.Schedule);
                 sectionsToEnable.Add(NavSection.Standings);
@@ -530,11 +549,21 @@ public partial class MainForm : Form
                 sectionsToEnable.Add(NavSection.Announcements);
                 sectionsToEnable.Add(NavSection.Fees);
                 sectionsToEnable.Add(NavSection.EmailLists);
+                sectionsToEnable.Add(NavSection.EmailCompose);
+                sectionsToEnable.Add(NavSection.EmailHistory);
             }
 
             foreach (var section in _navItems.Keys)
             {
-                _navItems[section].Enabled = sectionsToEnable.Contains(section);
+                var item    = _navItems[section];
+                bool enable = sectionsToEnable.Contains(section);
+                item.Enabled   = enable;
+                // Always restore nav colors — ApplyDisabledStylesToAll overwrites them with
+                // content-area colors (white bg / dark text) which persist after re-enabling.
+                item.ForeColor = AppTheme.NavText;
+                item.BackColor = section == _currentSection
+                    ? AppTheme.NavSelected
+                    : AppTheme.NavBackground;
             }
         }
         catch { }
