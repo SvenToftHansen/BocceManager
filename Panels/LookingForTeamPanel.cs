@@ -1580,17 +1580,53 @@ public class LookingForTeamPanel : UserControl
         if (players.Count == 0) return null;
         if (players.Count == 1) return players[0]!.Id;
 
+        // Calculate positions up front — no Dock, fully absolute
+        const int lblY    = 12;
+        const int radiosY = 38;
+        const int btnH    = 44;
+        int radioHeight   = players.Count * 28;
+        int btnsY         = radiosY + radioHeight + 10;
+        int clientH       = btnsY + btnH + 8;
+        int formH         = clientH + SystemInformation.CaptionHeight + SystemInformation.BorderSize.Height * 2;
+
         using var form = new Form
         {
-            Text = "Select Group Leader", Width = 380,
-            Height = 80 + players.Count * 28 + 50,   // label + radios + buttons
+            Text = "Select Group Leader", Width = 380, Height = formH,
             StartPosition = FormStartPosition.CenterParent,
             FormBorderStyle = FormBorderStyle.FixedDialog,
             MaximizeBox = false, MinimizeBox = false,
             BackColor = AppTheme.ContentBackground
         };
 
-        var btnPanel = new Panel { Dock = DockStyle.Bottom, Height = 44, BackColor = AppTheme.Surface };
+        var lbl = new Label
+        {
+            Text = "Select the group leader:",
+            Location = new Point(12, lblY), AutoSize = true,
+            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary
+        };
+
+        var radioPanel = new Panel { Location = new Point(12, radiosY), Width = 340, Height = radioHeight };
+        var radios = new List<(RadioButton Radio, int PlayerId)>();
+        int ry = 0;
+        foreach (var player in players)
+        {
+            var radio = new RadioButton
+            {
+                Text = $"{player!.LastName}, {player.FirstName}",
+                Location = new Point(0, ry), AutoSize = true,
+                Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary
+            };
+            if (radios.Count == 0) radio.Checked = true;
+            radioPanel.Controls.Add(radio);
+            radios.Add((radio, player.Id));
+            ry += 28;
+        }
+
+        var btnPanel = new Panel
+        {
+            Location = new Point(0, btnsY), Size = new Size(form.ClientSize.Width, btnH),
+            BackColor = AppTheme.Surface
+        };
         var btnOk = new Button
         {
             Text = "OK", Location = new Point(8, 10), Size = new Size(90, 24),
@@ -1607,35 +1643,7 @@ public class LookingForTeamPanel : UserControl
         };
         btnPanel.Controls.AddRange([btnOk, btnCancel]);
 
-        // Radio buttons in a fixed panel (no Dock) so label doesn't collide
-        var radioPanel = new Panel { Location = new Point(12, 40), Width = 340, AutoSize = true };
-        var radios = new List<(RadioButton Radio, int PlayerId)>();
-        int y = 0;
-        foreach (var player in players)
-        {
-            var radio = new RadioButton
-            {
-                Text = $"{player!.LastName}, {player.FirstName}",
-                Location = new Point(0, y), AutoSize = true,
-                Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary
-            };
-            if (radios.Count == 0) radio.Checked = true;
-            radioPanel.Controls.Add(radio);
-            radios.Add((radio, player.Id));
-            y += 28;
-        }
-
-        var lbl = new Label
-        {
-            Text = "Select the group leader:",
-            Location = new Point(12, 12), AutoSize = true,
-            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary
-        };
-
-        // Add fill content first, then docked bottom — correct WinForms z-order
-        form.Controls.Add(radioPanel);
-        form.Controls.Add(lbl);
-        form.Controls.Add(btnPanel);
+        form.Controls.AddRange([lbl, radioPanel, btnPanel]);
         form.AcceptButton = btnOk;
         form.CancelButton = btnCancel;
 
