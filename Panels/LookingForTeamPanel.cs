@@ -17,15 +17,11 @@ public class LookingForTeamPanel : UserControl
     private bool _isDirty;
 
     // ── Left — grid ────────────────────────────────────────────────────────────
-    private DataGridView _grid    = null!;
-    private ComboBox     _cmbShow = null!;
+    private DataGridView _grid          = null!;
+    private ComboBox     _cmbDisplayMode = null!;
 
     // ── Right — detail ─────────────────────────────────────────────────────────
-    private Label          _lblPlayerName = null!;
     private Label          _lblPlacedAs   = null!;
-    private TabControl     _tabs          = null!;
-    private TabPage        _tabDetails    = null!;
-    private TabPage        _tabGroup      = null!;
     private CheckedListBox _clbPrefDays   = null!;
     private CheckedListBox _clbPrefTimes  = null!;
     private ComboBox       _cmbPrefTeam   = null!;
@@ -121,22 +117,22 @@ public class LookingForTeamPanel : UserControl
         };
         _btnRemove.Click += (_, _) => RemoveFromLft();
 
-        var showLbl = new Label
+        var modeLbl = new Label
         {
-            Text = "Show:", Location = new Point(291, 14), AutoSize = true,
+            Text = "Mode:", Location = new Point(291, 14), AutoSize = true,
             Font = AppTheme.FontDefault, ForeColor = AppTheme.TextSecondary
         };
-        _cmbShow = new ComboBox
+        _cmbDisplayMode = new ComboBox
         {
             Location = new Point(337, 11), Size = new Size(170, 26),
             DropDownStyle = ComboBoxStyle.DropDownList,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary
         };
-        _cmbShow.Items.AddRange(["Unplaced only", "All"]);
-        _cmbShow.SelectedIndex = 0;
-        _cmbShow.SelectedIndexChanged += (_, _) => LoadGrid();
+        _cmbDisplayMode.Items.AddRange(["Groups", "Individuals"]);
+        _cmbDisplayMode.SelectedIndex = 0;
+        _cmbDisplayMode.SelectedIndexChanged += (_, _) => LoadGrid();
 
-        topBar.Controls.AddRange([_btnAddPlayer, _btnRemove, showLbl, _cmbShow]);
+        topBar.Controls.AddRange([_btnAddPlayer, _btnRemove, modeLbl, _cmbDisplayMode]);
 
         _mainSplit = new SplitContainer
         {
@@ -223,133 +219,35 @@ public class LookingForTeamPanel : UserControl
 
     private Control BuildDetailPanel()
     {
-        var outer = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground };
+        var outer = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground, Padding = new Padding(8) };
 
-        _lblPlayerName = new Label
-        {
-            Location = new Point(12, 10), Size = new Size(380, 28),
-            Font = AppTheme.FontDefaultBold, ForeColor = AppTheme.TextPrimary
-        };
+        var scrollPane = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+
+        int y = 0;
+        const int lx = 0, fx = 100, fw = 200;
+
+        // Placed As label
         _lblPlacedAs = new Label
         {
-            Location = new Point(12, 40), AutoSize = true,
+            Location = new Point(lx, y), AutoSize = true,
             Font = AppTheme.FontDefault, ForeColor = AppTheme.TextSecondary, Visible = false
         };
+        scrollPane.Controls.Add(_lblPlacedAs);
+        y += 25;
 
-        _tabs = new TabControl
-        {
-            Location = new Point(0, 70),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
-            Size = new Size(400, 400),
-            Font = AppTheme.FontDefault
-        };
-        outer.Resize += (_, _) =>
-        {
-            _tabs.Size = new Size(outer.ClientSize.Width, Math.Max(100, outer.ClientSize.Height - 70));
-        };
-
-        _tabDetails = new TabPage("Details");
-        _tabGroup   = new TabPage("Group");
-        _tabs.TabPages.AddRange([_tabDetails, _tabGroup]);
-
-        BuildDetailsTab();
-        BuildGroupTab();
-
-        outer.Controls.AddRange([_lblPlayerName, _lblPlacedAs, _tabs]);
-        return outer;
-    }
-
-    private void BuildDetailsTab()
-    {
-        var outerPnl = new Panel { Dock = DockStyle.Fill };
-
-        var pnl = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 10, 12, 0), AutoScroll = true };
-
-        int y = 10;
-        const int lx = 0, fx = 170, fw = 240;
-
-        pnl.Controls.Add(Lbl("Preferred Days", lx, y));
-        _clbPrefDays = new CheckedListBox
-        {
-            Location = new Point(fx, y), Size = new Size(fw, 110),
-            CheckOnClick = true,
-            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
-            BorderStyle = BorderStyle.FixedSingle
-        };
-        _clbPrefDays.ItemCheck += (_, _) => BeginInvoke(() => { if (!_isLoadingData) OnFieldChanged(null, EventArgs.Empty); });
-        pnl.Controls.Add(_clbPrefDays);
-        y += 120;
-
-        pnl.Controls.Add(Lbl("Preferred Times", lx, y));
-        _clbPrefTimes = new CheckedListBox
-        {
-            Location = new Point(fx, y), Size = new Size(fw, 110),
-            CheckOnClick = true,
-            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
-            BorderStyle = BorderStyle.FixedSingle
-        };
-        _clbPrefTimes.ItemCheck += (_, _) => BeginInvoke(() => { if (!_isLoadingData) OnFieldChanged(null, EventArgs.Empty); });
-        pnl.Controls.Add(_clbPrefTimes);
-        y += 120;
-
-        pnl.Controls.Add(Lbl("Preferred Team", lx, y));
-        _cmbPrefTeam = new ComboBox
-        {
-            Location = new Point(fx, y), Size = new Size(fw, 26),
-            DropDownStyle = ComboBoxStyle.DropDownList,
-            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary
-        };
-        _cmbPrefTeam.SelectedIndexChanged += OnFieldChanged;
-        pnl.Controls.Add(_cmbPrefTeam);
-        y += 36;
-
-        pnl.Controls.Add(Lbl("Notes", lx, y));
-        _txtNotes = new TextBox
-        {
-            Location = new Point(fx, y), Size = new Size(fw, 80),
-            Multiline = true, ScrollBars = ScrollBars.Vertical,
-            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface,
-            ForeColor = AppTheme.TextPrimary, BorderStyle = BorderStyle.FixedSingle
-        };
-        _txtNotes.TextChanged += OnFieldChanged;
-        pnl.Controls.Add(_txtNotes);
-
-        var btnBar = new Panel { Dock = DockStyle.Bottom, Height = 46, BackColor = AppTheme.Surface };
-        _btnSave = new Button
-        {
-            Text = "Save", Location = new Point(12, 8), Size = new Size(90, 30),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
-        };
-        _btnSave.Click += (_, _) => SaveEntry();
-
-        _btnCancel = new Button
-        {
-            Text = "Cancel", Location = new Point(114, 8), Size = new Size(80, 30),
-            FlatStyle = FlatStyle.Flat, Font = AppTheme.FontButton, Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 1 }, Visible = false
-        };
-        _btnCancel.Click += (_, _) => CancelEdit();
-        btnBar.Controls.AddRange([_btnSave, _btnCancel]);
-
-        outerPnl.Controls.Add(pnl);
-        outerPnl.Controls.Add(btnBar);
-        _tabDetails.Controls.Add(outerPnl);
-    }
-
-    private void BuildGroupTab()
-    {
-        var pnl = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
+        // Group grid and buttons
+        scrollPane.Controls.Add(Lbl("Group Members", lx, y));
+        y += 20;
 
         _grpGrid = new DataGridView
         {
-            Dock = DockStyle.Fill,
+            Location = new Point(lx, y), Size = new Size(fw + 100, 120),
             SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             MultiSelect = false, ReadOnly = true,
             AllowUserToAddRows = false, RowHeadersVisible = false,
-            BorderStyle = BorderStyle.None,
+            BorderStyle = BorderStyle.FixedSingle,
             BackgroundColor = AppTheme.ContentBackground,
-            Font = AppTheme.FontDefault, RowTemplate = { Height = 28 },
+            Font = AppTheme.FontDefault, RowTemplate = { Height = 24 },
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
             EnableHeadersVisualStyles = false,
             ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
@@ -363,11 +261,14 @@ public class LookingForTeamPanel : UserControl
         _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GName",  HeaderText = "Member", FillWeight = 50 });
         _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GPhone", HeaderText = "Phone",  FillWeight = 25 });
         _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GEmail", HeaderText = "Email",  FillWeight = 25 });
+        scrollPane.Controls.Add(_grpGrid);
+        y += 130;
 
-        var btnBar = new Panel { Dock = DockStyle.Bottom, Height = 42, BackColor = AppTheme.Surface };
+        // Group buttons (smaller)
+        var grpBtnPanel = new Panel { Location = new Point(lx, y), Size = new Size(fw + 100, 32), AutoSize = true };
         _btnAddMember = new Button
         {
-            Text = "+ Add Member", Left = 8, Top = 6, Width = 120, Height = 30,
+            Text = "+ Add", Left = 0, Top = 0, Width = 70, Height = 22,
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
         };
@@ -375,7 +276,7 @@ public class LookingForTeamPanel : UserControl
 
         _btnRemMember = new Button
         {
-            Text = "Remove from Group", Left = 140, Top = 6, Width = 150, Height = 30,
+            Text = "Remove", Left = 75, Top = 0, Width = 70, Height = 22,
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
         };
@@ -383,7 +284,7 @@ public class LookingForTeamPanel : UserControl
 
         _btnRenameGrp = new Button
         {
-            Text = "Rename Group", Left = 302, Top = 6, Width = 120, Height = 30,
+            Text = "Rename", Left = 150, Top = 0, Width = 70, Height = 22,
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
         };
@@ -391,7 +292,7 @@ public class LookingForTeamPanel : UserControl
 
         _btnDeleteGrp = new Button
         {
-            Text = "Delete Group", Left = 434, Top = 6, Width = 120, Height = 30,
+            Text = "Delete", Left = 225, Top = 0, Width = 70, Height = 22,
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
         };
@@ -400,9 +301,81 @@ public class LookingForTeamPanel : UserControl
         _grpGrid.SelectionChanged += (_, _) =>
             _btnRemMember.Enabled = _grpGrid.SelectedRows.Count > 0;
 
-        btnBar.Controls.AddRange([_btnAddMember, _btnRemMember, _btnRenameGrp, _btnDeleteGrp]);
-        pnl.Controls.AddRange([_grpGrid, btnBar]);
-        _tabGroup.Controls.Add(pnl);
+        grpBtnPanel.Controls.AddRange([_btnAddMember, _btnRemMember, _btnRenameGrp, _btnDeleteGrp]);
+        scrollPane.Controls.Add(grpBtnPanel);
+        y += 35;
+
+        // Days and Times on same row
+        scrollPane.Controls.Add(Lbl("Preferred Days", lx, y));
+        _clbPrefDays = new CheckedListBox
+        {
+            Location = new Point(fx, y), Size = new Size(fw / 2 - 5, 80),
+            CheckOnClick = true,
+            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
+            BorderStyle = BorderStyle.FixedSingle
+        };
+        _clbPrefDays.ItemCheck += (_, _) => BeginInvoke(() => { if (!_isLoadingData) OnFieldChanged(null, EventArgs.Empty); });
+        scrollPane.Controls.Add(_clbPrefDays);
+
+        scrollPane.Controls.Add(Lbl("Preferred Times", lx + fx + fw / 2, y));
+        _clbPrefTimes = new CheckedListBox
+        {
+            Location = new Point(fx + fw / 2, y), Size = new Size(fw / 2 - 5, 80),
+            CheckOnClick = true,
+            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
+            BorderStyle = BorderStyle.FixedSingle
+        };
+        _clbPrefTimes.ItemCheck += (_, _) => BeginInvoke(() => { if (!_isLoadingData) OnFieldChanged(null, EventArgs.Empty); });
+        scrollPane.Controls.Add(_clbPrefTimes);
+        y += 95;
+
+        // Preferred Team
+        scrollPane.Controls.Add(Lbl("Preferred Team", lx, y));
+        _cmbPrefTeam = new ComboBox
+        {
+            Location = new Point(fx, y), Size = new Size(fw, 24),
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary
+        };
+        _cmbPrefTeam.SelectedIndexChanged += OnFieldChanged;
+        scrollPane.Controls.Add(_cmbPrefTeam);
+        y += 32;
+
+        // Notes (2-line fixed height)
+        scrollPane.Controls.Add(Lbl("Notes", lx, y));
+        _txtNotes = new TextBox
+        {
+            Location = new Point(fx, y), Size = new Size(fw, 40),
+            Multiline = true, ScrollBars = ScrollBars.None,
+            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface,
+            ForeColor = AppTheme.TextPrimary, BorderStyle = BorderStyle.FixedSingle
+        };
+        _txtNotes.TextChanged += OnFieldChanged;
+        scrollPane.Controls.Add(_txtNotes);
+        y += 50;
+
+        // Save/Cancel buttons (smaller)
+        var btnBar = new Panel { Location = new Point(lx, y), Size = new Size(150, 30) };
+        _btnSave = new Button
+        {
+            Text = "Save", Location = new Point(0, 0), Size = new Size(70, 24),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
+        };
+        _btnSave.Click += (_, _) => SaveEntry();
+
+        _btnCancel = new Button
+        {
+            Text = "Cancel", Location = new Point(75, 0), Size = new Size(70, 24),
+            FlatStyle = FlatStyle.Flat, Font = AppTheme.FontButton, Cursor = Cursors.Hand,
+            FlatAppearance = { BorderSize = 1 }, Visible = false
+        };
+        _btnCancel.Click += (_, _) => CancelEdit();
+        btnBar.Controls.AddRange([_btnSave, _btnCancel]);
+        scrollPane.Controls.Add(btnBar);
+
+        outer.Controls.Add(scrollPane);
+        return outer;
     }
 
     // ── Data loading ───────────────────────────────────────────────────────────
@@ -533,7 +506,7 @@ public class LookingForTeamPanel : UserControl
             _grid.ClearSelection();
             if (!_leagueId.HasValue || !_seasonId.HasValue) return;
 
-            bool unplacedOnly = _cmbShow.SelectedIndex == 0;
+            bool showGroups = _cmbDisplayMode.SelectedIndex == 0;
             try
             {
                 using var db = new BocceDbContext();
@@ -542,7 +515,10 @@ public class LookingForTeamPanel : UserControl
                     .Include(l => l.Group)
                     .Where(l => l.LeagueId == _leagueId.Value && l.SeasonId == _seasonId.Value);
 
-                if (unplacedOnly) query = query.Where(l => l.TeamId == null);
+                if (showGroups)
+                    query = query.Where(l => l.LookingForTeamGroupId.HasValue);
+                else
+                    query = query.Where(l => !l.LookingForTeamGroupId.HasValue);
 
                 var list = query.ToList();
 
@@ -611,10 +587,6 @@ public class LookingForTeamPanel : UserControl
             if (e == null) return;
 
             bool isPlaced = e.TeamId.HasValue;
-            string playerName = _grid.SelectedRows.Count > 0
-                ? _grid.SelectedRows[0].Cells["GName"].Value?.ToString() ?? "" : "";
-
-            _lblPlayerName.Text = playerName;
 
             if (isPlaced && e.Team != null)
             {
@@ -661,7 +633,6 @@ public class LookingForTeamPanel : UserControl
             ClearDirty();
 
             LoadGroupMembers(lftId, e.LookingForTeamGroupId);
-            UpdateGroupTabTitle(e.LookingForTeamGroupId);
         }
         finally { _isLoadingData = false; }
     }
@@ -688,21 +659,6 @@ public class LookingForTeamPanel : UserControl
         catch { }
     }
 
-    private void UpdateGroupTabTitle(int? groupId)
-    {
-        if (!groupId.HasValue) { _tabGroup.Text = "Group"; return; }
-        try
-        {
-            using var db = new BocceDbContext();
-            var grp = db.LookingForTeamGroups.FirstOrDefault(g => g.Id == groupId.Value);
-            if (grp == null) { _tabGroup.Text = "Group"; return; }
-            int count = db.LookingForTeams.Count(l => l.LookingForTeamGroupId == groupId.Value);
-            string title = grp.Name ?? $"Group {groupId}";
-            _tabGroup.Text = $"{title} ({count})";
-        }
-        catch { _tabGroup.Text = "Group"; }
-    }
-
     private void ClearDetail()
     {
         _isLoadingData = true;
@@ -710,7 +666,6 @@ public class LookingForTeamPanel : UserControl
         {
             _selectedLftId       = null;
             _selectedGroupId     = null;
-            _lblPlayerName.Text  = "";
             _lblPlacedAs.Visible = false;
             for (int i = 0; i < _clbPrefDays.Items.Count; i++)
                 _clbPrefDays.SetItemChecked(i, false);
@@ -719,7 +674,6 @@ public class LookingForTeamPanel : UserControl
             if (_cmbPrefTeam.Items.Count > 0) _cmbPrefTeam.SelectedIndex = 0;
             _txtNotes.Text        = "";
             _grpGrid.Rows.Clear();
-            _tabGroup.Text        = "Group";
             _btnRemove.Enabled    = false;
             _btnSave.Enabled      = false;
             _btnCancel.Visible    = false;
