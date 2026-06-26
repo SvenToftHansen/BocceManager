@@ -558,11 +558,14 @@ public class LookingForTeamPanel : UserControl
                 {
                     string name = $"{e.Player.LastName}, {e.Player.FirstName}".Trim().TrimStart(',').Trim();
                     string grpLabel = "(no group)";
+                    bool isLeader = false;
                     if (e.LookingForTeamGroupId.HasValue && groupDict.ContainsKey(e.LookingForTeamGroupId.Value))
                     {
                         var grp = groupDict[e.LookingForTeamGroupId.Value];
                         grpLabel = grp.Name ?? "";
+                        isLeader = grp.GroupLeaderId == e.Id;
                     }
+                    if (!showGroups && isLeader) name = "◆ " + name;
                     _grid.Rows.Add(e.Id, e.PlayerId, e.LookingForTeamGroupId,
                         name, e.Player.Phone ?? "", e.Player.Email ?? "", grpLabel);
                 }
