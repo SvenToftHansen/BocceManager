@@ -90,8 +90,38 @@ public class LookingForTeamPanel : UserControl
     // ── UI Construction ────────────────────────────────────────────────────────
     private void BuildUi()
     {
-        var topBar = new Panel { Dock = DockStyle.Top, Height = 46, BackColor = AppTheme.Surface };
+        var bottomBar = new Panel { Dock = DockStyle.Bottom, Height = 46, BackColor = AppTheme.Surface };
+        _btnSave = new Button
+        {
+            Text = "Save", Location = new Point(12, 8), Size = new Size(90, 30),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
+        };
+        _btnSave.Click += (_, _) => SaveEntry();
 
+        _btnCancel = new Button
+        {
+            Text = "Cancel", Location = new Point(114, 8), Size = new Size(80, 30),
+            FlatStyle = FlatStyle.Flat, Font = AppTheme.FontButton, Cursor = Cursors.Hand,
+            FlatAppearance = { BorderSize = 1 }, Visible = false
+        };
+        _btnCancel.Click += (_, _) => CancelEdit();
+        bottomBar.Controls.AddRange([_btnSave, _btnCancel]);
+
+        // Create top-level TabControl with two tabs
+        var mainTabs = new TabControl
+        {
+            Dock = DockStyle.Fill,
+            Font = AppTheme.FontDefault
+        };
+
+        // Tab 1: "Looking for Placement" - contains toolbar, grid and detail panel
+        var tabLfp = new TabPage("Looking for Placement");
+
+        // Build Tab 1 with its own toolbar
+        var tab1Panel = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground };
+
+        var topBar = new Panel { Dock = DockStyle.Top, Height = 46, BackColor = AppTheme.Surface };
         _btnAddPlayer = new Button
         {
             Text = "+ Add Player to LFT", Location = new Point(12, 8), Size = new Size(165, 30),
@@ -125,33 +155,6 @@ public class LookingForTeamPanel : UserControl
 
         topBar.Controls.AddRange([_btnAddPlayer, _btnRemove, showLbl, _cmbShow]);
 
-        var bottomBar = new Panel { Dock = DockStyle.Bottom, Height = 46, BackColor = AppTheme.Surface };
-        _btnSave = new Button
-        {
-            Text = "Save", Location = new Point(12, 8), Size = new Size(90, 30),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
-        };
-        _btnSave.Click += (_, _) => SaveEntry();
-
-        _btnCancel = new Button
-        {
-            Text = "Cancel", Location = new Point(114, 8), Size = new Size(80, 30),
-            FlatStyle = FlatStyle.Flat, Font = AppTheme.FontButton, Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 1 }, Visible = false
-        };
-        _btnCancel.Click += (_, _) => CancelEdit();
-        bottomBar.Controls.AddRange([_btnSave, _btnCancel]);
-
-        // Create top-level TabControl with two tabs
-        var mainTabs = new TabControl
-        {
-            Dock = DockStyle.Fill,
-            Font = AppTheme.FontDefault
-        };
-
-        // Tab 1: "Looking for Placement" - contains the grid and detail panel
-        var tabLfp = new TabPage("Looking for Placement");
         _mainSplit = new SplitContainer
         {
             Dock = DockStyle.Fill,
@@ -162,7 +165,10 @@ public class LookingForTeamPanel : UserControl
         _mainSplit.Panel2.Controls.Add(BuildDetailPanel());
         _mainSplit.SizeChanged   += (_, _) => SafeApplySplit();
         _mainSplit.HandleCreated += (_, _) => BeginInvoke(new Action(SafeApplySplit));
-        tabLfp.Controls.Add(_mainSplit);
+
+        tab1Panel.Controls.Add(_mainSplit);
+        tab1Panel.Controls.Add(topBar);
+        tabLfp.Controls.Add(tab1Panel);
 
         // Tab 2: "Placement" - empty for now (will be implemented later)
         var tabPlacement = new TabPage("Placement");
@@ -178,7 +184,6 @@ public class LookingForTeamPanel : UserControl
 
         Controls.Add(mainTabs);
         Controls.Add(bottomBar);
-        Controls.Add(topBar);
     }
 
     private void SafeApplySplit()
