@@ -44,7 +44,7 @@ public class LookingForTeamPanel : UserControl
     private Button _btnCancel    = null!;
 
     private SplitContainer _mainSplit     = null!;
-    private const int      PreferredLeftW = 420;
+    private const int      PreferredLeftW = 550;
 
     // ── Constructor ────────────────────────────────────────────────────────────
     public LookingForTeamPanel()
@@ -171,7 +171,7 @@ public class LookingForTeamPanel : UserControl
     private void SafeApplySplit()
     {
         if (_mainSplit.Width <= 1) return;
-        const int leftMin = 300, rightMin = 320;
+        const int leftMin = 350, rightMin = 250;
         int total = Math.Max(0, _mainSplit.Width - 1);
         int lMin = leftMin, rMin = rightMin;
         if (lMin + rMin > total)
