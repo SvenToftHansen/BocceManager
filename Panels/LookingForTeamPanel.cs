@@ -15,7 +15,6 @@ public class LookingForTeamPanel : UserControl
     private int? _selectedGroupId;
     private bool _isLoadingData;
     private bool _isDirty;
-    private List<DivisionItem> _allDivisions = [];
 
     // ── Left — grid ────────────────────────────────────────────────────────────
     private DataGridView _grid    = null!;
@@ -27,12 +26,15 @@ public class LookingForTeamPanel : UserControl
     private TabControl     _tabs          = null!;
     private TabPage        _tabDetails    = null!;
     private TabPage        _tabGroup      = null!;
-    private CheckedListBox _clbDivisions  = null!;
+    private CheckedListBox _clbPrefDays   = null!;
+    private CheckedListBox _clbPrefTimes  = null!;
     private ComboBox       _cmbPrefTeam   = null!;
     private TextBox        _txtNotes      = null!;
     private DataGridView   _grpGrid       = null!;
     private Button         _btnAddMember  = null!;
     private Button         _btnRemMember  = null!;
+    private Button         _btnRenameGrp  = null!;
+    private Button         _btnDeleteGrp  = null!;
 
     // ── Toolbar buttons ────────────────────────────────────────────────────────
     private Button _btnAddPlayer = null!;
@@ -79,7 +81,7 @@ public class LookingForTeamPanel : UserControl
         }
         finally
         {
-            LoadDivisionData();
+            LoadDayTimeData();
             LoadPreferredTeamCombo();
             LoadGrid();
             _isLoadingData = false;
@@ -264,16 +266,28 @@ public class LookingForTeamPanel : UserControl
         int y = 10;
         const int lx = 0, fx = 170, fw = 240;
 
-        pnl.Controls.Add(Lbl("Preferred Divisions", lx, y));
-        _clbDivisions = new CheckedListBox
+        pnl.Controls.Add(Lbl("Preferred Days", lx, y));
+        _clbPrefDays = new CheckedListBox
         {
             Location = new Point(fx, y), Size = new Size(fw, 110),
             CheckOnClick = true,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
             BorderStyle = BorderStyle.FixedSingle
         };
-        _clbDivisions.ItemCheck += (_, _) => BeginInvoke(() => { if (!_isLoadingData) OnFieldChanged(null, EventArgs.Empty); });
-        pnl.Controls.Add(_clbDivisions);
+        _clbPrefDays.ItemCheck += (_, _) => BeginInvoke(() => { if (!_isLoadingData) OnFieldChanged(null, EventArgs.Empty); });
+        pnl.Controls.Add(_clbPrefDays);
+        y += 120;
+
+        pnl.Controls.Add(Lbl("Preferred Times", lx, y));
+        _clbPrefTimes = new CheckedListBox
+        {
+            Location = new Point(fx, y), Size = new Size(fw, 110),
+            CheckOnClick = true,
+            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
+            BorderStyle = BorderStyle.FixedSingle
+        };
+        _clbPrefTimes.ItemCheck += (_, _) => BeginInvoke(() => { if (!_isLoadingData) OnFieldChanged(null, EventArgs.Empty); });
+        pnl.Controls.Add(_clbPrefTimes);
         y += 120;
 
         pnl.Controls.Add(Lbl("Preferred Team", lx, y));
@@ -345,35 +359,54 @@ public class LookingForTeamPanel : UserControl
         };
         _btnRemMember.Click += (_, _) => RemoveMember();
 
+        _btnRenameGrp = new Button
+        {
+            Text = "Rename Group", Left = 302, Top = 6, Width = 120, Height = 30,
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
+        };
+        _btnRenameGrp.Click += (_, _) => RenameGroup();
+
+        _btnDeleteGrp = new Button
+        {
+            Text = "Delete Group", Left = 434, Top = 6, Width = 120, Height = 30,
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
+        };
+        _btnDeleteGrp.Click += (_, _) => DeleteGroup();
+
         _grpGrid.SelectionChanged += (_, _) =>
             _btnRemMember.Enabled = _grpGrid.SelectedRows.Count > 0;
 
-        btnBar.Controls.AddRange([_btnAddMember, _btnRemMember]);
+        btnBar.Controls.AddRange([_btnAddMember, _btnRemMember, _btnRenameGrp, _btnDeleteGrp]);
         pnl.Controls.AddRange([_grpGrid, btnBar]);
         _tabGroup.Controls.Add(pnl);
     }
 
     // ── Data loading ───────────────────────────────────────────────────────────
-    private void LoadDivisionData()
+    private void LoadDayTimeData()
     {
-        _allDivisions.Clear();
-        if (!_seasonId.HasValue) { _clbDivisions?.Items.Clear(); return; }
+        _clbPrefDays.Items.Clear();
+        _clbPrefTimes.Items.Clear();
+
         try
         {
             using var db = new BocceDbContext();
-            var divs = db.Divisions
-                .Where(d => d.SeasonId == _seasonId.Value)
-                .OrderBy(d => d.SortName).ThenBy(d => d.Name)
-                .Select(d => new { d.Id, d.Name })
+            var days = db.DaySlots
+                .Where(d => d.IsActive)
+                .OrderBy(d => d.DayNbr)
                 .ToList();
-            foreach (var d in divs)
-                _allDivisions.Add(new DivisionItem(d.Id, d.Name));
+            foreach (var d in days)
+                _clbPrefDays.Items.Add(new DayItem(d.Id, d.DayName, d.DayAbbr));
+
+            var times = db.TimeSlots
+                .Where(t => t.IsActive)
+                .OrderBy(t => t.SortOrder ?? 999)
+                .ToList();
+            foreach (var t in times)
+                _clbPrefTimes.Items.Add(new TimeItem(t.Id, t.Timeslot12h, t.Timeslot24h));
         }
         catch { }
-
-        _clbDivisions.Items.Clear();
-        foreach (var d in _allDivisions)
-            _clbDivisions.Items.Add(d);
     }
 
     private void LoadPreferredTeamCombo()
@@ -502,7 +535,8 @@ public class LookingForTeamPanel : UserControl
             using var db = new BocceDbContext();
             var e = db.LookingForTeams
                 .Include(l => l.Team)
-                .Include(l => l.PreferredDivisions)
+                .Include(l => l.PreferredDays)
+                .Include(l => l.PreferredTimes)
                 .FirstOrDefault(l => l.Id == lftId);
             if (e == null) return;
 
@@ -522,11 +556,18 @@ public class LookingForTeamPanel : UserControl
                 _lblPlacedAs.Visible = false;
             }
 
-            var checkedIds = e.PreferredDivisions.Select(d => d.DivisionId).ToHashSet();
-            for (int i = 0; i < _clbDivisions.Items.Count; i++)
+            var checkedDayIds = e.PreferredDays.Select(d => d.DaySlotId).ToHashSet();
+            for (int i = 0; i < _clbPrefDays.Items.Count; i++)
             {
-                bool check = _clbDivisions.Items[i] is DivisionItem d && d.Id.HasValue && checkedIds.Contains(d.Id.Value);
-                _clbDivisions.SetItemChecked(i, check);
+                bool check = _clbPrefDays.Items[i] is DayItem d && d.Id.HasValue && checkedDayIds.Contains(d.Id.Value);
+                _clbPrefDays.SetItemChecked(i, check);
+            }
+
+            var checkedTimeIds = e.PreferredTimes.Select(t => t.TimeSlotId).ToHashSet();
+            for (int i = 0; i < _clbPrefTimes.Items.Count; i++)
+            {
+                bool check = _clbPrefTimes.Items[i] is TimeItem t && t.Id.HasValue && checkedTimeIds.Contains(t.Id.Value);
+                _clbPrefTimes.SetItemChecked(i, check);
             }
 
             _cmbPrefTeam.SelectedIndex = 0;
@@ -543,7 +584,9 @@ public class LookingForTeamPanel : UserControl
 
             _btnRemove.Enabled    = true;
             _btnAssign.Enabled    = !isPlaced;
-            _btnAddMember.Enabled = true;
+            _btnAddMember.Enabled = _selectedGroupId.HasValue;
+            _btnRenameGrp.Enabled = _selectedGroupId.HasValue;
+            _btnDeleteGrp.Enabled = _selectedGroupId.HasValue;
             _btnSave.Enabled      = false;
             _btnCancel.Visible    = false;
             ClearDirty();
@@ -600,8 +643,10 @@ public class LookingForTeamPanel : UserControl
             _selectedGroupId     = null;
             _lblPlayerName.Text  = "";
             _lblPlacedAs.Visible = false;
-            for (int i = 0; i < _clbDivisions.Items.Count; i++)
-                _clbDivisions.SetItemChecked(i, false);
+            for (int i = 0; i < _clbPrefDays.Items.Count; i++)
+                _clbPrefDays.SetItemChecked(i, false);
+            for (int i = 0; i < _clbPrefTimes.Items.Count; i++)
+                _clbPrefTimes.SetItemChecked(i, false);
             if (_cmbPrefTeam.Items.Count > 0) _cmbPrefTeam.SelectedIndex = 0;
             _txtNotes.Text        = "";
             _grpGrid.Rows.Clear();
@@ -612,6 +657,8 @@ public class LookingForTeamPanel : UserControl
             _btnCancel.Visible    = false;
             _btnAddMember.Enabled = false;
             _btnRemMember.Enabled = false;
+            _btnRenameGrp.Enabled = false;
+            _btnDeleteGrp.Enabled = false;
             ClearDirty();
         }
         finally { _isLoadingData = false; }
@@ -704,9 +751,12 @@ public class LookingForTeamPanel : UserControl
                     db.LookingForTeams.Add(entry);
                     db.SaveChanges();
 
-                    foreach (int divId in details.PrefDivisionIds)
-                        db.LookingForTeamDivisions.Add(new LookingForTeamDivision
-                            { LookingForTeamId = entry.Id, DivisionId = divId });
+                    foreach (int dayId in details.PrefDayIds)
+                        db.LookingForTeamPreferredDays.Add(new LookingForTeamPreferredDay
+                            { LookingForTeamId = entry.Id, DaySlotId = dayId });
+                    foreach (int timeId in details.PrefTimeIds)
+                        db.LookingForTeamPreferredTimes.Add(new LookingForTeamPreferredTime
+                            { LookingForTeamId = entry.Id, TimeSlotId = timeId });
                     db.SaveChanges();
 
                     if (firstLftId == 0) firstLftId = entry.Id;
@@ -746,9 +796,12 @@ public class LookingForTeamPanel : UserControl
             db.LookingForTeams.Add(entry);
             db.SaveChanges();
 
-            foreach (int divId in singleDetails.PrefDivisionIds)
-                db.LookingForTeamDivisions.Add(new LookingForTeamDivision
-                    { LookingForTeamId = entry.Id, DivisionId = divId });
+            foreach (int dayId in singleDetails.PrefDayIds)
+                db.LookingForTeamPreferredDays.Add(new LookingForTeamPreferredDay
+                    { LookingForTeamId = entry.Id, DaySlotId = dayId });
+            foreach (int timeId in singleDetails.PrefTimeIds)
+                db.LookingForTeamPreferredTimes.Add(new LookingForTeamPreferredTime
+                    { LookingForTeamId = entry.Id, TimeSlotId = timeId });
             db.SaveChanges();
             newLftId = entry.Id;
             AppLogger.Info("Added player {PlayerId} to LFT for season {SeasonId}", picked[0], _seasonId.Value);
@@ -818,10 +871,16 @@ public class LookingForTeamPanel : UserControl
     {
         if (!_selectedLftId.HasValue) return;
 
-        var checkedDivIds = _clbDivisions.CheckedItems
-            .OfType<DivisionItem>()
+        var checkedDayIds = _clbPrefDays.CheckedItems
+            .OfType<DayItem>()
             .Where(d => d.Id.HasValue)
             .Select(d => d.Id!.Value)
+            .ToHashSet();
+
+        var checkedTimeIds = _clbPrefTimes.CheckedItems
+            .OfType<TimeItem>()
+            .Where(t => t.Id.HasValue)
+            .Select(t => t.Id!.Value)
             .ToHashSet();
 
         int? prefTeamId = (_cmbPrefTeam.SelectedItem as TeamItem)?.Id;
@@ -830,19 +889,27 @@ public class LookingForTeamPanel : UserControl
         {
             using var db = new BocceDbContext();
             var e = db.LookingForTeams
-                .Include(l => l.PreferredDivisions)
+                .Include(l => l.PreferredDays)
+                .Include(l => l.PreferredTimes)
                 .FirstOrDefault(l => l.Id == _selectedLftId.Value);
             if (e == null) return;
 
             e.PreferredTeamId = prefTeamId;
             e.Notes           = _txtNotes.Text.Trim().NullIfEmpty();
 
-            var existingIds = e.PreferredDivisions.Select(d => d.DivisionId).ToHashSet();
-            foreach (var del in e.PreferredDivisions.Where(d => !checkedDivIds.Contains(d.DivisionId)).ToList())
-                db.LookingForTeamDivisions.Remove(del);
-            foreach (int addId in checkedDivIds.Where(id => !existingIds.Contains(id)))
-                db.LookingForTeamDivisions.Add(new LookingForTeamDivision
-                    { LookingForTeamId = e.Id, DivisionId = addId });
+            var existingDayIds = e.PreferredDays.Select(d => d.DaySlotId).ToHashSet();
+            foreach (var del in e.PreferredDays.Where(d => !checkedDayIds.Contains(d.DaySlotId)).ToList())
+                db.LookingForTeamPreferredDays.Remove(del);
+            foreach (int addId in checkedDayIds.Where(id => !existingDayIds.Contains(id)))
+                db.LookingForTeamPreferredDays.Add(new LookingForTeamPreferredDay
+                    { LookingForTeamId = e.Id, DaySlotId = addId });
+
+            var existingTimeIds = e.PreferredTimes.Select(t => t.TimeSlotId).ToHashSet();
+            foreach (var del in e.PreferredTimes.Where(t => !checkedTimeIds.Contains(t.TimeSlotId)).ToList())
+                db.LookingForTeamPreferredTimes.Remove(del);
+            foreach (int addId in checkedTimeIds.Where(id => !existingTimeIds.Contains(id)))
+                db.LookingForTeamPreferredTimes.Add(new LookingForTeamPreferredTime
+                    { LookingForTeamId = e.Id, TimeSlotId = addId });
 
             db.SaveChanges();
             AppLogger.Info("Updated LFT entry {Id}", _selectedLftId.Value);
@@ -1037,16 +1104,32 @@ public class LookingForTeamPanel : UserControl
                 "Remove from Group", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
 
+        int? groupId = null;
+        bool isFounder = false;
+        int remainingCount = 0;
+
         try
         {
             using var db = new BocceDbContext();
-            var member = db.LookingForTeams.Find(memberLftId);
+            var member = db.LookingForTeams
+                .Include(l => l.Player)
+                .FirstOrDefault(l => l.Id == memberLftId);
             if (member == null) return;
-            int? groupId = member.LookingForTeamGroupId;
+
+            groupId = member.LookingForTeamGroupId;
+            if (!groupId.HasValue) return;
+
+            var groupMembers = db.LookingForTeams
+                .Include(l => l.Player)
+                .Where(l => l.LookingForTeamGroupId == groupId.Value)
+                .OrderBy(l => l.Id)
+                .ToList();
+
+            isFounder = groupMembers.Count > 0 && groupMembers[0].Id == memberLftId;
+            remainingCount = groupMembers.Count - 1;
+
             member.LookingForTeamGroupId = null;
             db.SaveChanges();
-            if (groupId.HasValue) DissolveGroupIfSingleton(db, groupId.Value);
-            AppLogger.Info("Removed LFT {LftId} from group {GroupId}", memberLftId, groupId);
         }
         catch (Exception ex)
         {
@@ -1054,6 +1137,43 @@ public class LookingForTeamPanel : UserControl
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
+
+        if (isFounder && remainingCount > 0)
+        {
+            int? newLeaderId = PromptNewGroupLeader(groupId.Value, memberLftId);
+            if (newLeaderId.HasValue && newLeaderId.Value != memberLftId)
+            {
+                try
+                {
+                    using var db = new BocceDbContext();
+                    var newLeader = db.LookingForTeams
+                        .Include(l => l.Player)
+                        .FirstOrDefault(l => l.Id == newLeaderId.Value);
+                    if (newLeader?.LookingForTeamGroupId == groupId.Value)
+                    {
+                        var group = db.LookingForTeamGroups.Find(groupId.Value);
+                        if (group != null)
+                        {
+                            group.Name = newLeader.Player.LastName;
+                            db.SaveChanges();
+                            AppLogger.Info("Renamed group {GroupId} to {Name} (new leader)", groupId.Value, group.Name);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Could not update group leader:\n{ex.Message}", "Error",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        try
+        {
+            if (groupId.HasValue) DissolveGroupIfSingleton(new BocceDbContext(), groupId.Value);
+            AppLogger.Info("Removed LFT {LftId} from group {GroupId}", memberLftId, groupId);
+        }
+        catch { }
 
         try
         {
@@ -1064,6 +1184,173 @@ public class LookingForTeamPanel : UserControl
 
         LoadGrid();
         if (_selectedLftId.HasValue) LoadDetail(_selectedLftId.Value);
+    }
+
+    private void RenameGroup()
+    {
+        if (!_selectedGroupId.HasValue) return;
+
+        try
+        {
+            using var db = new BocceDbContext();
+            var members = db.LookingForTeams
+                .Include(l => l.Player)
+                .Where(l => l.LookingForTeamGroupId == _selectedGroupId.Value)
+                .OrderBy(l => l.Player.LastName).ThenBy(l => l.Player.FirstName)
+                .ToList();
+
+            if (members.Count == 0) return;
+
+            int? selectedMemberId = PromptSelectGroupMember("Rename group to member:", members);
+            if (!selectedMemberId.HasValue) return;
+
+            var selectedMember = members.FirstOrDefault(m => m.Id == selectedMemberId.Value);
+            if (selectedMember == null) return;
+
+            var group = db.LookingForTeamGroups.Find(_selectedGroupId.Value);
+            if (group != null)
+            {
+                group.Name = selectedMember.Player.LastName;
+                db.SaveChanges();
+                AppLogger.Info("Renamed group {GroupId} to {Name}", _selectedGroupId.Value, group.Name);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not rename group:\n{ex.Message}", "Error",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        LoadGrid();
+        if (_selectedLftId.HasValue) LoadDetail(_selectedLftId.Value);
+    }
+
+    private void DeleteGroup()
+    {
+        if (!_selectedGroupId.HasValue) return;
+
+        if (MessageBox.Show("Delete this entire group? All members will be removed from the group (but remain in LFT as solos).",
+                "Delete Group", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+            return;
+
+        try
+        {
+            using var db = new BocceDbContext();
+            var members = db.LookingForTeams
+                .Where(l => l.LookingForTeamGroupId == _selectedGroupId.Value)
+                .ToList();
+
+            foreach (var member in members)
+                member.LookingForTeamGroupId = null;
+
+            db.SaveChanges();
+
+            var group = db.LookingForTeamGroups.Find(_selectedGroupId.Value);
+            if (group != null)
+            {
+                db.LookingForTeamGroups.Remove(group);
+                db.SaveChanges();
+                AppLogger.Info("Deleted group {GroupId} with {Count} members", _selectedGroupId.Value, members.Count);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not delete group:\n{ex.Message}", "Error",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        _selectedGroupId = null;
+        ClearDetail();
+        LoadGrid();
+    }
+
+    private int? PromptSelectGroupMember(string prompt, List<LookingForTeam> members)
+    {
+        using var form = new Form
+        {
+            Text = "Select Group Member", Width = 400, Height = 320,
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false, MinimizeBox = false,
+            BackColor = AppTheme.ContentBackground
+        };
+
+        var lbl = new Label
+        {
+            Text = prompt, Location = new Point(12, 10), Size = new Size(360, 28),
+            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary
+        };
+
+        var grid = new DataGridView
+        {
+            Dock = DockStyle.Fill, Location = new Point(12, 46), Size = new Size(360, 200),
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            MultiSelect = false, ReadOnly = true,
+            AllowUserToAddRows = false, RowHeadersVisible = false,
+            BorderStyle = BorderStyle.None,
+            BackgroundColor = AppTheme.ContentBackground,
+            Font = AppTheme.FontDefault, RowTemplate = { Height = 28 },
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            EnableHeadersVisualStyles = false,
+            ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
+            {
+                BackColor = AppTheme.GridHeaderBackground, ForeColor = AppTheme.GridHeaderText,
+                SelectionBackColor = AppTheme.GridHeaderBackground, SelectionForeColor = AppTheme.GridHeaderText,
+                Font = AppTheme.FontGridHeader
+            }
+        };
+        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "LftId", Visible = false });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Name", HeaderText = "Name", FillWeight = 50 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Phone", HeaderText = "Phone", FillWeight = 25 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Email", HeaderText = "Email", FillWeight = 25 });
+
+        foreach (var m in members)
+        {
+            string name = $"{m.Player.LastName}, {m.Player.FirstName}".Trim().TrimStart(',').Trim();
+            grid.Rows.Add(m.Id, name, m.Player.Phone ?? "", m.Player.Email ?? "");
+        }
+
+        var bar = new Panel { Dock = DockStyle.Bottom, Height = 46, BackColor = AppTheme.Surface };
+        var btnOk = new Button
+        {
+            Text = "Select", DialogResult = DialogResult.OK, Left = 12, Top = 8, Width = 100, Height = 30,
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
+            Font = AppTheme.FontButton, FlatAppearance = { BorderSize = 0 }
+        };
+        var btnCxl = new Button
+        {
+            Text = "Cancel", DialogResult = DialogResult.Cancel, Left = 124, Top = 8, Width = 80, Height = 30,
+            FlatStyle = FlatStyle.Flat, Font = AppTheme.FontButton
+        };
+        bar.Controls.AddRange([btnOk, btnCxl]);
+
+        form.Controls.AddRange([lbl, grid, bar]);
+        form.AcceptButton = btnOk;
+        form.CancelButton = btnCxl;
+
+        if (form.ShowDialog(this) != DialogResult.OK || grid.SelectedRows.Count == 0) return null;
+        var v = grid.SelectedRows[0].Cells[0].Value;
+        return v != null && v != DBNull.Value ? Convert.ToInt32(v) : null;
+    }
+
+    private int? PromptNewGroupLeader(int groupId, int excludeLftId)
+    {
+        try
+        {
+            using var db = new BocceDbContext();
+            var members = db.LookingForTeams
+                .Include(l => l.Player)
+                .Where(l => l.LookingForTeamGroupId == groupId && l.Id != excludeLftId)
+                .OrderBy(l => l.Player.LastName).ThenBy(l => l.Player.FirstName)
+                .ToList();
+
+            if (members.Count == 0) return null;
+
+            return PromptSelectGroupMember("Who should be the new group leader?", members);
+        }
+        catch { return null; }
     }
 
     // ── Group helpers ──────────────────────────────────────────────────────────
@@ -1531,13 +1818,13 @@ public class LookingForTeamPanel : UserControl
         }
     }
 
-    private record LftInitDetails(int? PrefTeamId, List<int> PrefDivisionIds, string Notes);
+    private record LftInitDetails(int? PrefTeamId, List<int> PrefDayIds, List<int> PrefTimeIds, string Notes);
 
     private LftInitDetails? PromptLftDetails()
     {
         using var form = new Form
         {
-            Text = "Looking For Team — Details", Width = 480, Height = 370,
+            Text = "Looking For Team — Details", Width = 480, Height = 440,
             StartPosition = FormStartPosition.CenterParent,
             FormBorderStyle = FormBorderStyle.FixedDialog,
             MaximizeBox = false, MinimizeBox = false,
@@ -1547,14 +1834,24 @@ public class LookingForTeamPanel : UserControl
 
         int y = 10; const int lx = 0, fx = 160, fw = 270;
 
-        pnl.Controls.Add(Lbl("Preferred Divisions", lx, y));
-        var clbDiv = new CheckedListBox
+        pnl.Controls.Add(Lbl("Preferred Days", lx, y));
+        var clbDays = new CheckedListBox
         {
             Location = new Point(fx, y), Size = new Size(fw, 90), CheckOnClick = true,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, BorderStyle = BorderStyle.FixedSingle
         };
-        foreach (var d in _allDivisions) clbDiv.Items.Add(d);
-        pnl.Controls.Add(clbDiv);
+        foreach (var d in _clbPrefDays.Items.Cast<object>()) clbDays.Items.Add(d);
+        pnl.Controls.Add(clbDays);
+        y += 100;
+
+        pnl.Controls.Add(Lbl("Preferred Times", lx, y));
+        var clbTimes = new CheckedListBox
+        {
+            Location = new Point(fx, y), Size = new Size(fw, 90), CheckOnClick = true,
+            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, BorderStyle = BorderStyle.FixedSingle
+        };
+        foreach (var t in _clbPrefTimes.Items.Cast<object>()) clbTimes.Items.Add(t);
+        pnl.Controls.Add(clbTimes);
         y += 100;
 
         pnl.Controls.Add(Lbl("Preferred Team", lx, y));
@@ -1586,9 +1883,10 @@ public class LookingForTeamPanel : UserControl
 
         if (form.ShowDialog(this) != DialogResult.OK) return null;
 
-        var divIds  = clbDiv.CheckedItems.OfType<DivisionItem>().Where(d => d.Id.HasValue).Select(d => d.Id!.Value).ToList();
+        var dayIds  = clbDays.CheckedItems.OfType<DayItem>().Where(d => d.Id.HasValue).Select(d => d.Id!.Value).ToList();
+        var timeIds = clbTimes.CheckedItems.OfType<TimeItem>().Where(t => t.Id.HasValue).Select(t => t.Id!.Value).ToList();
         int? teamId = (cmbTeam.SelectedItem as TeamItem)?.Id;
-        return new LftInitDetails(teamId, divIds, txtNotes.Text.Trim());
+        return new LftInitDetails(teamId, dayIds, timeIds, txtNotes.Text.Trim());
     }
 
     private int? PickTeamDialog(string prompt)
@@ -1713,9 +2011,14 @@ public class LookingForTeamPanel : UserControl
         AutoSize = true, Location = new Point(x, y + 3)
     };
 
-    private sealed record DivisionItem(int? Id, string Name)
+    private sealed record DayItem(int? Id, string DayName, string DayAbbr)
     {
-        public override string ToString() => Name;
+        public override string ToString() => DayName;
+    }
+
+    private sealed record TimeItem(int? Id, string Time12h, string Time24h)
+    {
+        public override string ToString() => Time12h;
     }
 
     private sealed record TeamItem(int? Id, string Display)

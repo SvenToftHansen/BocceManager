@@ -51,6 +51,8 @@ public class LookingForTeam
     public Team? PreferredTeam { get; set; }
     public LookingForTeamGroup? Group { get; set; }
     public ICollection<LookingForTeamDivision> PreferredDivisions { get; set; } = [];
+    public ICollection<LookingForTeamPreferredDay> PreferredDays { get; set; } = [];
+    public ICollection<LookingForTeamPreferredTime> PreferredTimes { get; set; } = [];
 }
 
 // A set of players who want to be placed on the same team.
@@ -76,5 +78,27 @@ public class LookingForTeamDivision
 
     public LookingForTeam LookingForTeam { get; set; } = null!;
     public Division Division { get; set; } = null!;
+}
+
+// Junction: which days a particular LFT player prefers (multi-select).
+public class LookingForTeamPreferredDay
+{
+    public int Id { get; set; }
+    public int LookingForTeamId { get; set; }
+    public int DaySlotId { get; set; }
+
+    public LookingForTeam LookingForTeam { get; set; } = null!;
+    public DaySlot DaySlot { get; set; } = null!;
+}
+
+// Junction: which times a particular LFT player prefers (multi-select).
+public class LookingForTeamPreferredTime
+{
+    public int Id { get; set; }
+    public int LookingForTeamId { get; set; }
+    public int TimeSlotId { get; set; }
+
+    public LookingForTeam LookingForTeam { get; set; } = null!;
+    public TimeSlot TimeSlot { get; set; } = null!;
 }
 

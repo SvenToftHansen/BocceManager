@@ -32,6 +32,8 @@ public class BocceDbContext : DbContext
     public DbSet<LookingForTeam>        LookingForTeams        => Set<LookingForTeam>();
     public DbSet<LookingForTeamGroup>   LookingForTeamGroups   => Set<LookingForTeamGroup>();
     public DbSet<LookingForTeamDivision> LookingForTeamDivisions => Set<LookingForTeamDivision>();
+    public DbSet<LookingForTeamPreferredDay> LookingForTeamPreferredDays => Set<LookingForTeamPreferredDay>();
+    public DbSet<LookingForTeamPreferredTime> LookingForTeamPreferredTimes => Set<LookingForTeamPreferredTime>();
 
     // Team Applicants
     public DbSet<TeamApplicant>       TeamApplicants       => Set<TeamApplicant>();
@@ -185,6 +187,26 @@ model.Entity<SeasonCourt>().HasIndex(e => new { e.SeasonId, e.CourtId }).IsUniqu
         model.Entity<LookingForTeamDivision>()
             .HasOne(e => e.Division).WithMany()
             .HasForeignKey(e => e.DivisionId).OnDelete(DeleteBehavior.Cascade);
+
+        // LookingForTeamPreferredDay FKs
+        model.Entity<LookingForTeamPreferredDay>()
+            .HasIndex(e => new { e.LookingForTeamId, e.DaySlotId }).IsUnique();
+        model.Entity<LookingForTeamPreferredDay>()
+            .HasOne(e => e.LookingForTeam).WithMany(e => e.PreferredDays)
+            .HasForeignKey(e => e.LookingForTeamId).OnDelete(DeleteBehavior.Cascade);
+        model.Entity<LookingForTeamPreferredDay>()
+            .HasOne(e => e.DaySlot).WithMany()
+            .HasForeignKey(e => e.DaySlotId).OnDelete(DeleteBehavior.Cascade);
+
+        // LookingForTeamPreferredTime FKs
+        model.Entity<LookingForTeamPreferredTime>()
+            .HasIndex(e => new { e.LookingForTeamId, e.TimeSlotId }).IsUnique();
+        model.Entity<LookingForTeamPreferredTime>()
+            .HasOne(e => e.LookingForTeam).WithMany(e => e.PreferredTimes)
+            .HasForeignKey(e => e.LookingForTeamId).OnDelete(DeleteBehavior.Cascade);
+        model.Entity<LookingForTeamPreferredTime>()
+            .HasOne(e => e.TimeSlot).WithMany()
+            .HasForeignKey(e => e.TimeSlotId).OnDelete(DeleteBehavior.Cascade);
 
         // TeamApplicant FKs
         model.Entity<TeamApplicant>()

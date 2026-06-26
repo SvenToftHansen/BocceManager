@@ -3,6 +3,7 @@ using System;
 using BocceManager.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BocceManager.Data.Migrations
 {
     [DbContext(typeof(BocceDbContext))]
-    partial class BocceDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260626022214_AddPreferredDaysAndTimes")]
+    partial class AddPreferredDaysAndTimes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -641,10 +644,9 @@ namespace BocceManager.Data.Migrations
 
                     b.HasIndex("DaySlotId");
 
-                    b.HasIndex("LookingForTeamId", "DaySlotId")
-                        .IsUnique();
+                    b.HasIndex("LookingForTeamId");
 
-                    b.ToTable("LookingForTeamPreferredDays");
+                    b.ToTable("LookingForTeamPreferredDay");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.LookingForTeamPreferredTime", b =>
@@ -663,12 +665,11 @@ namespace BocceManager.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("LookingForTeamId");
+
                     b.HasIndex("TimeSlotId");
 
-                    b.HasIndex("LookingForTeamId", "TimeSlotId")
-                        .IsUnique();
-
-                    b.ToTable("LookingForTeamPreferredTimes");
+                    b.ToTable("LookingForTeamPreferredTime");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.MatchTeamResult", b =>

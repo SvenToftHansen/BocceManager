@@ -5,6 +5,20 @@
 - **Database**: PostgreSQL (production), SQLite (testing)
 - **Purpose**: Desktop admin and score-entry app for bocce league management
 
+## Working Habits
+
+### Git Safety Checkpoint
+**Rule**: Before starting any multi-file change or significant task, always `git commit` the current clean state first.
+
+**Why**: If API credits run out mid-task, the request fails immediately with no warning. Any partially-edited files are left in a broken state with no automatic rollback. A checkpoint commit ensures there is always a known-good state to `git reset --hard` back to.
+
+**How to apply**:
+- At the start of each session, if there are uncommitted changes that build cleanly, commit them before starting new work.
+- After each independently working logical chunk (e.g. a feature or panel), commit before moving to the next.
+- Use descriptive commit messages so it's clear what was completed vs what was interrupted.
+
+---
+
 ## Architectural Decisions
 
 ### Reporting System (Updated 2026-06-13)
