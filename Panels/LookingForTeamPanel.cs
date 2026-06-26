@@ -386,27 +386,75 @@ public class LookingForTeamPanel : UserControl
     // ── Data loading ───────────────────────────────────────────────────────────
     private void LoadDayTimeData()
     {
-        _clbPrefDays.Items.Clear();
-        _clbPrefTimes.Items.Clear();
+        var (days, times) = GetFilteredDayTimeData();
 
+        _clbPrefDays.Items.Clear();
+        foreach (var d in days)
+            _clbPrefDays.Items.Add(new DayItem(d.Id, d.DayName, d.DayAbbr));
+
+        _clbPrefTimes.Items.Clear();
+        foreach (var t in times)
+            _clbPrefTimes.Items.Add(new TimeItem(t.Id, t.Timeslot12h, t.Timeslot24h));
+    }
+
+    /// <summary>
+    /// Gets the filtered list of days and times actually used in active divisions of the current season.
+    /// If no season is selected, returns all active days/times as fallback.
+    /// </summary>
+    private (List<DaySlot> Days, List<TimeSlot> Times) GetFilteredDayTimeData()
+    {
         try
         {
             using var db = new BocceDbContext();
+
+            // If no season selected, return all active days/times
+            if (!_seasonId.HasValue)
+            {
+                var allDays = db.DaySlots
+                    .Where(d => d.IsActive)
+                    .OrderBy(d => d.DayNbr)
+                    .ToList();
+                var allTimes = db.TimeSlots
+                    .Where(t => t.IsActive)
+                    .OrderBy(t => t.SortOrder ?? 999)
+                    .ToList();
+                return (allDays, allTimes);
+            }
+
+            // Get distinct DaySlotIds and TimeSlotIds from active divisions in this season
+            var activeDivisions = db.Divisions
+                .Where(div => div.SeasonId == _seasonId.Value && div.IsActive)
+                .ToList();
+
+            var usedDayIds = activeDivisions
+                .Where(div => div.DaySlotId.HasValue)
+                .Select(div => div.DaySlotId!.Value)
+                .Distinct()
+                .ToHashSet();
+
+            var usedTimeIds = activeDivisions
+                .Where(div => div.TimeSlotId.HasValue)
+                .Select(div => div.TimeSlotId!.Value)
+                .Distinct()
+                .ToHashSet();
+
+            // Load only DaySlots and TimeSlots that are used
             var days = db.DaySlots
-                .Where(d => d.IsActive)
+                .Where(d => usedDayIds.Contains(d.Id))
                 .OrderBy(d => d.DayNbr)
                 .ToList();
-            foreach (var d in days)
-                _clbPrefDays.Items.Add(new DayItem(d.Id, d.DayName, d.DayAbbr));
 
             var times = db.TimeSlots
-                .Where(t => t.IsActive)
+                .Where(t => usedTimeIds.Contains(t.Id))
                 .OrderBy(t => t.SortOrder ?? 999)
                 .ToList();
-            foreach (var t in times)
-                _clbPrefTimes.Items.Add(new TimeItem(t.Id, t.Timeslot12h, t.Timeslot24h));
+
+            return (days, times);
         }
-        catch { }
+        catch
+        {
+            return (new List<DaySlot>(), new List<TimeSlot>());
+        }
     }
 
     private void LoadPreferredTeamCombo()
