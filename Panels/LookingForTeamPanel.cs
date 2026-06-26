@@ -459,6 +459,7 @@ public class LookingForTeamPanel : UserControl
                 using var db = new BocceDbContext();
                 var query = db.LookingForTeams
                     .Include(l => l.Player)
+                    .Include(l => l.Group)
                     .Where(l => l.LeagueId == _leagueId.Value && l.SeasonId == _seasonId.Value);
 
                 if (unplacedOnly) query = query.Where(l => l.TeamId == null);
@@ -467,17 +468,16 @@ public class LookingForTeamPanel : UserControl
                     .OrderBy(l => l.Player.LastName).ThenBy(l => l.Player.FirstName)
                     .ToList();
 
-                var groupCounts = list
-                    .Where(l => l.LookingForTeamGroupId.HasValue)
-                    .GroupBy(l => l.LookingForTeamGroupId!.Value)
-                    .ToDictionary(g => g.Key, g => g.Count());
+                var groupNames = db.LookingForTeamGroups
+                    .Where(g => g.SeasonId == _seasonId.Value)
+                    .ToDictionary(g => g.Id, g => g.Name ?? $"Group {g.Id}");
 
                 foreach (var e in list)
                 {
                     string name = $"{e.Player.LastName}, {e.Player.FirstName}".Trim().TrimStart(',').Trim();
                     string date = e.RegisteredDate.HasValue ? e.RegisteredDate.Value.ToString("yyyy-MM-dd") : "";
-                    string grpLabel = e.LookingForTeamGroupId.HasValue
-                        ? GroupLabel(groupCounts.GetValueOrDefault(e.LookingForTeamGroupId.Value, 1))
+                    string grpLabel = e.LookingForTeamGroupId.HasValue && groupNames.ContainsKey(e.LookingForTeamGroupId.Value)
+                        ? groupNames[e.LookingForTeamGroupId.Value]
                         : "Solo";
                     _grid.Rows.Add(e.Id, e.PlayerId, e.LookingForTeamGroupId,
                         name, e.Player.Phone ?? "", e.Player.Email ?? "", grpLabel, date);
