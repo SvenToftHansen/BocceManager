@@ -193,13 +193,6 @@ public class LookingForTeamPanel : UserControl
     {
         var pnl = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground };
 
-        var lbl = new Label
-        {
-            Text = "Players List", Dock = DockStyle.Top, Height = 24, Padding = new Padding(8, 4, 0, 0),
-            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextSecondary
-        };
-        pnl.Controls.Add(lbl);
-
         _grid = new DataGridView
         {
             Dock = DockStyle.Fill,
@@ -227,7 +220,13 @@ public class LookingForTeamPanel : UserControl
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GGrp",   HeaderText = "Group", FillWeight = 15 });
         _grid.SelectionChanged += OnGridSelectionChanged;
 
+        // Add grid first, then label — WinForms docks Top after Fill in reverse z-order
         pnl.Controls.Add(_grid);
+        pnl.Controls.Add(new Label
+        {
+            Text = "Players List", Dock = DockStyle.Top, Height = 22, Padding = new Padding(8, 4, 0, 0),
+            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextSecondary
+        });
         return pnl;
     }
 
@@ -754,130 +753,161 @@ public class LookingForTeamPanel : UserControl
             return;
         }
 
+        // Ask for shared preferences (days, times, team, notes) before any DB writes
+        var details = PromptLftDetails();
+        if (details == null) return;
+
+        // For 2+ players, ask whether they go as a group or as solo individuals
+        bool asGroup = true;
+        int? leaderPlayerId = null;
         if (picked.Count > 1)
         {
-            var ans = MessageBox.Show($"Add {picked.Count} players as a group or as solos?",
+            var ans = MessageBox.Show($"Add {picked.Count} players as a group?",
                 "Multiple Players", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
             if (ans == DialogResult.Cancel) return;
-            bool asGroup = ans == DialogResult.Yes;
+            asGroup = ans == DialogResult.Yes;
+        }
 
-            var details = PromptLftDetails();
-            if (details == null) return;
+        if (asGroup && picked.Count > 1)
+        {
+            using var db = new BocceDbContext();
+            leaderPlayerId = PromptSelectGroupLeader(picked, db);
+            if (!leaderPlayerId.HasValue) return;
+        }
 
-            int? groupId = null;
-            int? groupLeaderId = null;
-            if (asGroup)
+        // Each picked player: check team membership, create LFT entry, track IDs
+        var createdEntries = new Dictionary<int, int>(); // playerId → lftId
+        foreach (int playerId in picked)
+        {
+            if (!CheckAndHandleTeamMembership(playerId)) continue;
+            try
+            {
+                using var db = new BocceDbContext();
+                var entry = new LookingForTeam
+                {
+                    LeagueId        = _leagueId.Value,
+                    SeasonId        = _seasonId.Value,
+                    PlayerId        = playerId,
+                    PreferredTeamId = details.PrefTeamId,
+                    Notes           = details.Notes.NullIfEmpty()
+                };
+                db.LookingForTeams.Add(entry);
+                db.SaveChanges();
+
+                foreach (int dayId in details.PrefDayIds)
+                    db.LookingForTeamPreferredDays.Add(new LookingForTeamPreferredDay
+                        { LookingForTeamId = entry.Id, DaySlotId = dayId });
+                foreach (int timeId in details.PrefTimeIds)
+                    db.LookingForTeamPreferredTimes.Add(new LookingForTeamPreferredTime
+                        { LookingForTeamId = entry.Id, TimeSlotId = timeId });
+                db.SaveChanges();
+
+                createdEntries[playerId] = entry.Id;
+                AppLogger.Info("Added player {PlayerId} to LFT for season {SeasonId}", playerId, _seasonId.Value);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not add player:\n{ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+        }
+
+        if (createdEntries.Count == 0) return;
+
+        // Now create groups — every player gets a group (even solo = group of 1)
+        if (asGroup && createdEntries.Count > 0)
+        {
+            // Multi-player group (or forced single): one group for all
+            int leaderLftId = leaderPlayerId.HasValue && createdEntries.ContainsKey(leaderPlayerId.Value)
+                ? createdEntries[leaderPlayerId.Value]
+                : createdEntries.Values.First();
+
+            int leaderPid = leaderPlayerId ?? createdEntries.Keys.First();
+            try
+            {
+                using var db = new BocceDbContext();
+                var grp = CreateGroupForLeader(db, leaderPid, createdEntries.Count);
+                grp.GroupLeaderId = leaderLftId;
+                db.SaveChanges();
+
+                foreach (var lftId in createdEntries.Values)
+                {
+                    var lft = db.LookingForTeams.Find(lftId);
+                    if (lft != null) lft.LookingForTeamGroupId = grp.Id;
+                }
+                db.SaveChanges();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not create group:\n{ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+        else
+        {
+            // Solos: each player gets their own group of 1
+            foreach (var kvp in createdEntries)
             {
                 try
                 {
                     using var db = new BocceDbContext();
-                    groupLeaderId = PromptSelectGroupLeader(picked, db);
-                    if (!groupLeaderId.HasValue) return;
-
-                    var grp = new LookingForTeamGroup
-                    {
-                        LeagueId = _leagueId.Value,
-                        SeasonId = _seasonId.Value,
-                        Name = "Temp",
-                        GroupLeaderId = groupLeaderId,
-                        CreatedAt = DateTime.UtcNow
-                    };
-                    db.LookingForTeamGroups.Add(grp);
+                    var grp = CreateGroupForLeader(db, kvp.Key, 1);
+                    grp.GroupLeaderId = kvp.Value;
                     db.SaveChanges();
-                    groupId = grp.Id;
 
-                    var p1 = db.Players.FirstOrDefault(p => p.Id == picked[0]);
-                    string groupName = p1 != null ? $"{p1.LastName}_{grp.Id}" : $"Group_{grp.Id}";
-                    grp.Name = groupName;
+                    var lft = db.LookingForTeams.Find(kvp.Value);
+                    if (lft != null) lft.LookingForTeamGroupId = grp.Id;
                     db.SaveChanges();
                 }
                 catch { }
             }
-
-            int firstLftId = 0;
-            foreach (int playerId in picked)
-            {
-                if (!CheckAndHandleTeamMembership(playerId)) continue;
-
-                try
-                {
-                    using var db = new BocceDbContext();
-                    var entry = new LookingForTeam
-                    {
-                        LeagueId        = _leagueId.Value,
-                        SeasonId        = _seasonId.Value,
-                        PlayerId        = playerId,
-                        PreferredTeamId = details.PrefTeamId,
-                        Notes           = details.Notes.NullIfEmpty(),
-                        LookingForTeamGroupId = groupId
-                    };
-                    db.LookingForTeams.Add(entry);
-                    db.SaveChanges();
-
-                    foreach (int dayId in details.PrefDayIds)
-                        db.LookingForTeamPreferredDays.Add(new LookingForTeamPreferredDay
-                            { LookingForTeamId = entry.Id, DaySlotId = dayId });
-                    foreach (int timeId in details.PrefTimeIds)
-                        db.LookingForTeamPreferredTimes.Add(new LookingForTeamPreferredTime
-                            { LookingForTeamId = entry.Id, TimeSlotId = timeId });
-                    db.SaveChanges();
-
-                    if (firstLftId == 0) firstLftId = entry.Id;
-                    AppLogger.Info("Added player {PlayerId} to LFT for season {SeasonId}", playerId, _seasonId.Value);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Could not add player:\n{ex.Message}", "Error",
-                        MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-            }
-
-            _selectedLftId = firstLftId > 0 ? firstLftId : null;
-            LoadGrid();
-            return;
         }
 
-        // Single player - existing flow
-        if (!CheckAndHandleTeamMembership(picked[0])) return;
-
-        var singleDetails = PromptLftDetails();
-        if (singleDetails == null) return;
-
-        int newLftId;
-        try
-        {
-            using var db = new BocceDbContext();
-            var entry = new LookingForTeam
-            {
-                LeagueId        = _leagueId.Value,
-                SeasonId        = _seasonId.Value,
-                PlayerId        = picked[0],
-                PreferredTeamId = singleDetails.PrefTeamId,
-                Notes           = singleDetails.Notes.NullIfEmpty()
-            };
-            db.LookingForTeams.Add(entry);
-            db.SaveChanges();
-
-            foreach (int dayId in singleDetails.PrefDayIds)
-                db.LookingForTeamPreferredDays.Add(new LookingForTeamPreferredDay
-                    { LookingForTeamId = entry.Id, DaySlotId = dayId });
-            foreach (int timeId in singleDetails.PrefTimeIds)
-                db.LookingForTeamPreferredTimes.Add(new LookingForTeamPreferredTime
-                    { LookingForTeamId = entry.Id, TimeSlotId = timeId });
-            db.SaveChanges();
-            newLftId = entry.Id;
-            AppLogger.Info("Added player {PlayerId} to LFT for season {SeasonId}", picked[0], _seasonId.Value);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Could not add player:\n{ex.Message}", "Error",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return;
-        }
-
-        _selectedLftId = newLftId;
+        _selectedLftId = createdEntries.Values.First();
         LoadGrid();
+    }
+
+    private LookingForTeamGroup CreateGroupForLeader(BocceDbContext db, int leaderPlayerId, int memberCount)
+    {
+        var player   = db.Players.First(p => p.Id == leaderPlayerId);
+        string baseName = player.LastName;
+
+        // Count existing groups in this season whose name starts with the same last name
+        var existing = db.LookingForTeamGroups
+            .Where(g => g.SeasonId == _seasonId!.Value && g.Name != null && g.Name.StartsWith(baseName + " ("))
+            .ToList();
+        int disambiguator = existing.Count;
+
+        var grp = new LookingForTeamGroup
+        {
+            LeagueId  = _leagueId!.Value,
+            SeasonId  = _seasonId!.Value,
+            Name      = $"{baseName} ({memberCount}.{disambiguator})",
+            CreatedAt = DateTime.UtcNow
+        };
+        db.LookingForTeamGroups.Add(grp);
+        db.SaveChanges();
+        return grp;
+    }
+
+    private void UpdateGroupName(BocceDbContext db, int groupId)
+    {
+        var grp = db.LookingForTeamGroups.Find(groupId);
+        if (grp == null) return;
+        int count = db.LookingForTeams.Count(l => l.LookingForTeamGroupId == groupId);
+        if (grp.Name == null) return;
+
+        // Replace the count portion: "Smith (3.0)" → "Smith (4.0)"
+        int parenOpen = grp.Name.LastIndexOf('(');
+        int dotPos    = grp.Name.LastIndexOf('.');
+        int parenClose = grp.Name.LastIndexOf(')');
+        if (parenOpen >= 0 && dotPos > parenOpen && parenClose > dotPos)
+        {
+            string suffix = grp.Name[(dotPos)..parenClose]; // ".0"
+            string basePart = grp.Name[..parenOpen].TrimEnd();
+            grp.Name = $"{basePart} ({count}{suffix})";
+        }
     }
 
     private void RemoveFromLft()
@@ -906,16 +936,22 @@ public class LookingForTeamPanel : UserControl
                         "Remove Entire Group", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                     return;
 
+                // Break circular FK: null GroupLeaderId before deleting LFT rows
+                var grp = db.LookingForTeamGroups.Find(groupId);
+                if (grp != null) { grp.GroupLeaderId = null; db.SaveChanges(); }
+
                 var groupMembers = db.LookingForTeams
                     .Where(l => l.LookingForTeamGroupId == groupId)
-                    .Include(l => l.PreferredDivisions)
                     .ToList();
 
                 foreach (var member in groupMembers)
                 {
-                    db.LookingForTeams.Remove(member);
+                    member.LookingForTeamGroupId = null;
                 }
-                db.LookingForTeamGroups.Remove(e.Group!);
+                db.SaveChanges();
+
+                db.LookingForTeams.RemoveRange(groupMembers);
+                if (grp != null) db.LookingForTeamGroups.Remove(grp);
                 db.SaveChanges();
             }
             else
@@ -1061,8 +1097,29 @@ public class LookingForTeamPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
+
+            // Check group size limit before adding
+            var currentLft = db.LookingForTeams.Find(_selectedLftId.Value);
+            if (currentLft?.LookingForTeamGroupId.HasValue == true)
+            {
+                int currentSize = db.LookingForTeams.Count(l => l.LookingForTeamGroupId == currentLft.LookingForTeamGroupId.Value);
+                if (currentSize >= 5)
+                {
+                    MessageBox.Show("Maximum 5 players per group.", "Group Full",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
+
             int newLftId = EnsureLftEntry(db, pickedPlayerId.Value);
             MergeIntoGroup(db, _selectedLftId.Value, newLftId);
+
+            // Update group name to reflect new count
+            var updatedLft = db.LookingForTeams.Find(_selectedLftId.Value);
+            if (updatedLft?.LookingForTeamGroupId.HasValue == true)
+                UpdateGroupName(db, updatedLft.LookingForTeamGroupId.Value);
+            db.SaveChanges();
+
             AppLogger.Info("Added player {PlayerId} to group via LFT {LftId}", pickedPlayerId.Value, _selectedLftId.Value);
         }
         catch (Exception ex)
@@ -1089,36 +1146,60 @@ public class LookingForTeamPanel : UserControl
         int memberLftId   = Convert.ToInt32(_grpGrid.SelectedRows[0].Cells["GLftId"].Value);
         string memberName = _grpGrid.SelectedRows[0].Cells["GName"].Value?.ToString() ?? "member";
 
-        if (MessageBox.Show($"Remove {memberName} from this group?\n(They will remain in the LFT list as Solo.)",
+        if (MessageBox.Show($"Remove {memberName} from this group?\n(They will remain in the LFT list as Individual.)",
                 "Remove from Group", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
-
-        int? groupId = null;
-        bool isFounder = false;
-        int remainingCount = 0;
 
         try
         {
             using var db = new BocceDbContext();
-            var member = db.LookingForTeams
-                .Include(l => l.Player)
-                .FirstOrDefault(l => l.Id == memberLftId);
+            var member = db.LookingForTeams.FirstOrDefault(l => l.Id == memberLftId);
             if (member == null) return;
 
-            groupId = member.LookingForTeamGroupId;
+            int? groupId = member.LookingForTeamGroupId;
             if (!groupId.HasValue) return;
 
-            var groupMembers = db.LookingForTeams
-                .Include(l => l.Player)
-                .Where(l => l.LookingForTeamGroupId == groupId.Value)
-                .OrderBy(l => l.Id)
-                .ToList();
+            var group = db.LookingForTeamGroups.Find(groupId.Value);
+            bool isLeader = group?.GroupLeaderId == memberLftId;
 
-            isFounder = groupMembers.Count > 0 && groupMembers[0].Id == memberLftId;
-            remainingCount = groupMembers.Count - 1;
-
+            // Remove this member from the group
             member.LookingForTeamGroupId = null;
             db.SaveChanges();
+
+            var remaining = db.LookingForTeams
+                .Include(l => l.Player)
+                .Where(l => l.LookingForTeamGroupId == groupId.Value)
+                .ToList();
+
+            if (remaining.Count == 0)
+            {
+                // Group is now empty — dissolve it
+                if (group != null) { group.GroupLeaderId = null; db.SaveChanges(); db.LookingForTeamGroups.Remove(group); db.SaveChanges(); }
+            }
+            else if (isLeader && remaining.Count > 0)
+            {
+                // Leader removed — prompt for new leader
+                int? newLeaderPid = PromptSelectGroupLeader(remaining.Select(m => m.PlayerId).ToList(), db);
+                if (!newLeaderPid.HasValue) { member.LookingForTeamGroupId = groupId; db.SaveChanges(); return; }
+
+                var newLeaderLft = remaining.First(m => m.PlayerId == newLeaderPid.Value);
+                if (group != null)
+                {
+                    group.GroupLeaderId = newLeaderLft.Id;
+                    db.Entry(group).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
+                }
+                UpdateGroupName(db, groupId.Value);
+                db.SaveChanges();
+                AppLogger.Info("New leader LFT {LftId} set for group {GroupId}", newLeaderLft.Id, groupId.Value);
+            }
+            else
+            {
+                // Non-leader removed — just update the count in the name
+                UpdateGroupName(db, groupId.Value);
+                db.SaveChanges();
+            }
+
+            AppLogger.Info("Removed LFT {LftId} from group {GroupId}", memberLftId, groupId);
         }
         catch (Exception ex)
         {
@@ -1126,43 +1207,6 @@ public class LookingForTeamPanel : UserControl
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
-
-        if (isFounder && remainingCount > 0)
-        {
-            int? newLeaderId = PromptNewGroupLeader(groupId.Value, memberLftId);
-            if (newLeaderId.HasValue && newLeaderId.Value != memberLftId)
-            {
-                try
-                {
-                    using var db = new BocceDbContext();
-                    var newLeader = db.LookingForTeams
-                        .Include(l => l.Player)
-                        .FirstOrDefault(l => l.Id == newLeaderId.Value);
-                    if (newLeader?.LookingForTeamGroupId == groupId.Value)
-                    {
-                        var group = db.LookingForTeamGroups.Find(groupId.Value);
-                        if (group != null)
-                        {
-                            group.Name = newLeader.Player.LastName;
-                            db.SaveChanges();
-                            AppLogger.Info("Renamed group {GroupId} to {Name} (new leader)", groupId.Value, group.Name);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Could not update group leader:\n{ex.Message}", "Error",
-                        MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
-        }
-
-        try
-        {
-            if (groupId.HasValue) DissolveGroupIfSingleton(new BocceDbContext(), groupId.Value);
-            AppLogger.Info("Removed LFT {LftId} from group {GroupId}", memberLftId, groupId);
-        }
-        catch { }
 
         try
         {
