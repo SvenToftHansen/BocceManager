@@ -198,7 +198,7 @@ public class LookingForTeamPanel : UserControl
             Dock = DockStyle.Fill,
             SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             MultiSelect = false, ReadOnly = true,
-            AllowUserToAddRows = false, RowHeadersVisible = false,
+            AllowUserToAddRows = false, RowHeadersVisible = false, AllowUserToResizeRows = false,
             BorderStyle = BorderStyle.None,
             BackgroundColor = AppTheme.ContentBackground,
             Font = AppTheme.FontDefault, RowTemplate = { Height = 28 },
