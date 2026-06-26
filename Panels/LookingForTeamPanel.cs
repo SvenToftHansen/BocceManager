@@ -158,11 +158,11 @@ public class LookingForTeamPanel : UserControl
 
         _cmbDisplayMode = new ComboBox
         {
-            Location = new Point(337, 11), Size = new Size(170, 26),
+            Location = new Point(337, 11), Size = new Size(200, 26),
             DropDownStyle = ComboBoxStyle.DropDownList,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary
         };
-        _cmbDisplayMode.Items.AddRange(["Groups", "Individuals"]);
+        _cmbDisplayMode.Items.AddRange(["GROUPS", "ALL PLAYERS"]);
         _cmbDisplayMode.SelectedIndex = 0;
         _cmbDisplayMode.SelectedIndexChanged += (_, _) => LoadGrid();
 
@@ -191,6 +191,15 @@ public class LookingForTeamPanel : UserControl
 
     private Control BuildGrid()
     {
+        var pnl = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground };
+
+        var lbl = new Label
+        {
+            Text = "Players List", Dock = DockStyle.Top, Height = 24, Padding = new Padding(8, 4, 0, 0),
+            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextSecondary
+        };
+        pnl.Controls.Add(lbl);
+
         _grid = new DataGridView
         {
             Dock = DockStyle.Fill,
@@ -218,7 +227,6 @@ public class LookingForTeamPanel : UserControl
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GGrp",   HeaderText = "Group", FillWeight = 15 });
         _grid.SelectionChanged += OnGridSelectionChanged;
 
-        var pnl = new Panel { Dock = DockStyle.Fill };
         pnl.Controls.Add(_grid);
         return pnl;
     }
@@ -531,16 +539,18 @@ public class LookingForTeamPanel : UserControl
                 if (showGroups)
                     query = query.Where(l => l.Group != null && l.Group.GroupLeaderId == l.Id);
                 else
-                    query = query.Where(l => !l.LookingForTeamGroupId.HasValue);
+                    query = query.ToList().AsQueryable();
 
                 var list = query.ToList();
 
-                var groupNames = db.LookingForTeamGroups
+                var groupDict = db.LookingForTeamGroups
                     .Where(g => g.SeasonId == _seasonId.Value)
-                    .ToDictionary(g => g.Id, g => g.Name ?? $"Group {g.Id}");
+                    .ToDictionary(g => g.Id, g => g);
 
                 var sorted = list
-                    .OrderBy(l => l.LookingForTeamGroupId.HasValue ? groupNames.GetValueOrDefault(l.LookingForTeamGroupId.Value, "Group") : "zzz_Solos")
+                    .OrderBy(l => l.LookingForTeamGroupId.HasValue && groupDict.ContainsKey(l.LookingForTeamGroupId.Value)
+                        ? $"{groupDict[l.LookingForTeamGroupId.Value].Name}_{l.LookingForTeamGroupId.Value}"
+                        : "zzz_Individual")
                     .ThenBy(l => l.Player.LastName)
                     .ThenBy(l => l.Player.FirstName)
                     .ToList();
@@ -548,9 +558,12 @@ public class LookingForTeamPanel : UserControl
                 foreach (var e in sorted)
                 {
                     string name = $"{e.Player.LastName}, {e.Player.FirstName}".Trim().TrimStart(',').Trim();
-                    string grpLabel = e.LookingForTeamGroupId.HasValue && groupNames.ContainsKey(e.LookingForTeamGroupId.Value)
-                        ? groupNames[e.LookingForTeamGroupId.Value]
-                        : "Solo";
+                    string grpLabel = "Individual";
+                    if (e.LookingForTeamGroupId.HasValue && groupDict.ContainsKey(e.LookingForTeamGroupId.Value))
+                    {
+                        var grp = groupDict[e.LookingForTeamGroupId.Value];
+                        grpLabel = $"{grp.Name}_{grp.Id}";
+                    }
                     _grid.Rows.Add(e.Id, e.PlayerId, e.LookingForTeamGroupId,
                         name, e.Player.Phone ?? "", e.Player.Email ?? "", grpLabel);
                 }
@@ -761,19 +774,22 @@ public class LookingForTeamPanel : UserControl
                     groupLeaderId = PromptSelectGroupLeader(picked, db);
                     if (!groupLeaderId.HasValue) return;
 
-                    var p1 = db.Players.FirstOrDefault(p => p.Id == picked[0]);
-                    string groupName = p1 != null ? p1.LastName : "Group";
                     var grp = new LookingForTeamGroup
                     {
                         LeagueId = _leagueId.Value,
                         SeasonId = _seasonId.Value,
-                        Name = groupName,
+                        Name = "Temp",
                         GroupLeaderId = groupLeaderId,
                         CreatedAt = DateTime.UtcNow
                     };
                     db.LookingForTeamGroups.Add(grp);
                     db.SaveChanges();
                     groupId = grp.Id;
+
+                    var p1 = db.Players.FirstOrDefault(p => p.Id == picked[0]);
+                    string groupName = p1 != null ? $"{p1.LastName}_{grp.Id}" : $"Group_{grp.Id}";
+                    grp.Name = groupName;
+                    db.SaveChanges();
                 }
                 catch { }
             }
@@ -868,41 +884,80 @@ public class LookingForTeamPanel : UserControl
     {
         if (!_selectedLftId.HasValue) return;
 
+        bool isGroupMode = _cmbDisplayMode.SelectedIndex == 0;
+
         try
         {
             using var db = new BocceDbContext();
-            var e = db.LookingForTeams.Find(_selectedLftId.Value);
+            var e = db.LookingForTeams.Include(l => l.Group).First(l => l.Id == _selectedLftId.Value);
             if (e?.TeamId.HasValue == true)
             {
                 MessageBox.Show("This player has already been placed on a team. Remove the team assignment first.",
                     "Cannot Remove", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-        }
-        catch { return; }
 
-        if (MessageBox.Show("Remove this player from the Looking for Team list?",
-                "Confirm Remove", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
-            return;
-
-        try
-        {
-            using var db = new BocceDbContext();
-            var e = db.LookingForTeams
-                .Include(l => l.PreferredDivisions)
-                .FirstOrDefault(l => l.Id == _selectedLftId.Value);
-            if (e != null)
+            if (isGroupMode && e.LookingForTeamGroupId.HasValue)
             {
+                var groupId = e.LookingForTeamGroupId.Value;
+                var groupSize = db.LookingForTeams.Count(l => l.LookingForTeamGroupId == groupId);
+
+                if (MessageBox.Show($"This will remove ALL {groupSize} players in this group.\n\nContinue?",
+                        "Remove Entire Group", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                    return;
+
+                var groupMembers = db.LookingForTeams
+                    .Where(l => l.LookingForTeamGroupId == groupId)
+                    .Include(l => l.PreferredDivisions)
+                    .ToList();
+
+                foreach (var member in groupMembers)
+                {
+                    db.LookingForTeams.Remove(member);
+                }
+                db.LookingForTeamGroups.Remove(e.Group!);
+                db.SaveChanges();
+            }
+            else
+            {
+                if (MessageBox.Show("Remove this player from the Looking for Team list?",
+                        "Confirm Remove", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                    return;
+
                 int? groupId = e.LookingForTeamGroupId;
                 if (groupId.HasValue)
                 {
+                    var group = db.LookingForTeamGroups.Find(groupId.Value);
+                    if (group?.GroupLeaderId == e.Id)
+                    {
+                        var otherMembers = db.LookingForTeams
+                            .Where(l => l.LookingForTeamGroupId == groupId && l.Id != e.Id)
+                            .ToList();
+
+                        if (otherMembers.Count > 0)
+                        {
+                            int? newLeaderId = PromptSelectGroupLeader(
+                                otherMembers.Select(m => m.PlayerId).ToList(), db);
+                            if (!newLeaderId.HasValue) return;
+
+                            var newLeader = otherMembers.FirstOrDefault(m => m.PlayerId == newLeaderId);
+                            if (newLeader != null && group != null)
+                            {
+                                group.GroupLeaderId = newLeader.Id;
+                                db.SaveChanges();
+                            }
+                        }
+                    }
+
                     e.LookingForTeamGroupId = null;
                     db.SaveChanges();
                     DissolveGroupIfSingleton(db, groupId.Value);
                 }
+
                 db.LookingForTeams.Remove(e);
                 db.SaveChanges();
             }
+
             _selectedLftId = null; _selectedGroupId = null;
             ClearDetail();
             LoadGrid();
