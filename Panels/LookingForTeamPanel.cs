@@ -1263,7 +1263,14 @@ public class LookingForTeamPanel : UserControl
             var group = db.LookingForTeamGroups.Find(_selectedGroupId.Value);
             if (group != null)
             {
-                group.Name = selectedMember.Player.LastName;
+                string baseName   = selectedMember.Player.LastName;
+                int memberCount   = members.Count;
+                // Disambiguator: count other groups with the same base name (excluding this one)
+                int disambiguator = db.LookingForTeamGroups
+                    .Where(g => g.SeasonId == _seasonId!.Value && g.Id != group.Id
+                                && g.Name != null && g.Name.StartsWith(baseName + " ("))
+                    .Count();
+                group.Name = $"{baseName} ({memberCount}.{disambiguator})";
                 db.SaveChanges();
                 AppLogger.Info("Renamed group {GroupId} to {Name}", _selectedGroupId.Value, group.Name);
             }
@@ -1321,9 +1328,14 @@ public class LookingForTeamPanel : UserControl
 
     private int? PromptSelectGroupMember(string prompt, List<LookingForTeam> members)
     {
+        const int lblH = 32, btnBarH = 46;
+        int gridH   = Math.Max(members.Count * 28 + 28, 60); // rows + header
+        int formH   = lblH + gridH + btnBarH
+                      + SystemInformation.CaptionHeight + SystemInformation.BorderSize.Height * 2 + 8;
+
         using var form = new Form
         {
-            Text = "Select Group Member", Width = 400, Height = 320,
+            Text = "Select Group Member", Width = 420, Height = formH,
             StartPosition = FormStartPosition.CenterParent,
             FormBorderStyle = FormBorderStyle.FixedDialog,
             MaximizeBox = false, MinimizeBox = false,
@@ -1332,13 +1344,13 @@ public class LookingForTeamPanel : UserControl
 
         var lbl = new Label
         {
-            Text = prompt, Location = new Point(12, 10), Size = new Size(360, 28),
+            Text = prompt, Location = new Point(12, 8), Size = new Size(390, 24),
             Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary
         };
 
         var grid = new DataGridView
         {
-            Dock = DockStyle.Fill, Location = new Point(12, 46), Size = new Size(360, 200),
+            Location = new Point(0, lblH), Size = new Size(form.ClientSize.Width, gridH),
             SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             MultiSelect = false, ReadOnly = true,
             AllowUserToAddRows = false, RowHeadersVisible = false,
@@ -1355,7 +1367,7 @@ public class LookingForTeamPanel : UserControl
             }
         };
         grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "LftId", Visible = false });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Name", HeaderText = "Name", FillWeight = 50 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Name",  HeaderText = "Name",  FillWeight = 50 });
         grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Phone", HeaderText = "Phone", FillWeight = 25 });
         grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Email", HeaderText = "Email", FillWeight = 25 });
 
@@ -1365,7 +1377,8 @@ public class LookingForTeamPanel : UserControl
             grid.Rows.Add(m.Id, name, m.Player.Phone ?? "", m.Player.Email ?? "");
         }
 
-        var bar = new Panel { Dock = DockStyle.Bottom, Height = 46, BackColor = AppTheme.Surface };
+        int barY = lblH + gridH;
+        var bar = new Panel { Location = new Point(0, barY), Size = new Size(form.ClientSize.Width, btnBarH), BackColor = AppTheme.Surface };
         var btnOk = new Button
         {
             Text = "Select", DialogResult = DialogResult.OK, Left = 12, Top = 8, Width = 100, Height = 30,
