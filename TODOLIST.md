@@ -45,6 +45,27 @@ _Generated 2026-06-15 from TODO.md, memory files, and app state analysis_
   - Assign players to teams from this panel
   - Mark LFT players with ◆ in picker
 
+- [x] **Team Applicants Panel** — Group applicant registration and placement *(built 2026-06-24)*
+  - LEAGUE nav group, below Teams
+  - Left: list filtered by Pending/All; Right: Group tab + Members tab + LFT Pool tab
+  - Group tab: GroupName, email, phone, preferred division, notes
+  - Members tab: add existing players (picker) or new people (name/email/phone dialog); remove
+  - LFT Pool tab: all unplaced LFT players for season; Assign to Team button
+  - "Place Group..." button: confirm dialog → creates team, players, TeamPlayer records in one transaction
+  - DivisionPanel: "Place Applicant..." button on teams toolbar; shows picker filtered to prefer current division
+
+- [x] **Looking For Team Panel** — Standalone panel in ROSTER nav group *(built 2026-06-25)*
+  - Add player with filter (all / exclude team members / exclude spare list members)
+  - Edit preferred division, registered date, notes per entry
+  - Assign to team picker with player count display ("A - Hansen (4)") and room filters
+  - LFT Pool tab removed from Team Applicants panel; Players/Teams/Team Applicants/LFT moved to ROSTER nav group
+
+- [ ] **Looking For Team Panel — Enhancements** 
+  - [ ] Multiple selection on "Add Player to LFT" — select multiple players, dialog offers "Add as Group" or "Add as Solos"
+  - [ ] Create new team option in "Assign to Team" dialog — if selected division has room, allow creating new team and assigning player
+  - [ ] Add Member button improvement — investigate intermittent failure when adding existing players to a group
+  - [ ] Show team day/time on preferred team display and team picker *(done 2026-06-25, shows day-time in parentheses)*
+
 ---
 
 ## Season Management
@@ -130,6 +151,17 @@ _Generated 2026-06-15 from TODO.md, memory files, and app state analysis_
   - Send history log
   - Related: Email Lists Panel
 
+- [ ] **Brevo Account Reminder on Season Status Change** — prompt user to manage their Brevo plan when season transitions
+  - When season advances to "League Play": show reminder to upgrade Brevo plan with a button that opens Brevo billing page in browser
+  - When season is marked "Completed": show reminder to downgrade Brevo plan to save money
+  - Reminder should be a dismissible dialog, not a blocking modal
+  - Wire into the season status transition flow (see Season Status Transition Validation)
+
+- [ ] **Brevo Usage Dashboard** — show current Brevo sending stats in the admin area
+  - Call Brevo API to display: emails sent this month, remaining quota, current plan
+  - Helps user know whether to upgrade before season starts
+  - Add as a section in the Email or Parameters panel
+
 ---
 
 ## Admin / Utilities
@@ -178,6 +210,11 @@ _Generated 2026-06-15 from TODO.md, memory files, and app state analysis_
 ---
 
 ## Fixes / Polish
+
+- [ ] **Show Team Count in Brackets** — Add team count display across the app (divisions listings, panels)
+  - DivisionPanel teams list: "Division A (12)" 
+  - All division listings throughout app should show count in brackets
+  - Use Division.TeamCount for efficiency
 
 - [ ] **Player Adding Bug** — when adding players to a team that already has players, previously selected players should be greyed out / unavailable in the available list
 - [ ] **Leagues Panel Boolean Bug** — FormatException when displaying IsActive column in DataGridView (may be fixed — verify in Leagues panel)
