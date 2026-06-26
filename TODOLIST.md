@@ -60,11 +60,14 @@ _Generated 2026-06-15 from TODO.md, memory files, and app state analysis_
   - Assign to team picker with player count display ("A - Hansen (4)") and room filters
   - LFT Pool tab removed from Team Applicants panel; Players/Teams/Team Applicants/LFT moved to ROSTER nav group
 
-- [ ] **Looking For Team Panel — Enhancements** 
-  - [ ] Multiple selection on "Add Player to LFT" — select multiple players, dialog offers "Add as Group" or "Add as Solos"
-  - [ ] Create new team option in "Assign to Team" dialog — if selected division has room, allow creating new team and assigning player
-  - [ ] Add Member button improvement — investigate intermittent failure when adding existing players to a group
-  - [ ] Show team day/time on preferred team display and team picker *(done 2026-06-25, shows day-time in parentheses)*
+- [x] **Looking For Team Panel — Enhancements** *(done 2026-06-26)*
+  - [x] Multiple selection on "Add Player to LFT" — select multiple players, dialog offers "Add as Group" or "Add as Solos"
+  - [x] Show all group members including selected player (marked with ◆)
+  - [x] Auto-name groups by creator's last name (e.g., "Hansen's Group")
+  - [x] No default selection on panel load; detail panel empty until clicked
+  - [x] Show team day/time on preferred team display and team picker (MON-0900 format)
+  - [ ] Create new team option in "Assign to Team" dialog — if selected division has room, allow creating new team
+  - [ ] Add Member button improvement — investigate intermittent failure (appears to work reliably now)
 
 ---
 
@@ -211,10 +214,10 @@ _Generated 2026-06-15 from TODO.md, memory files, and app state analysis_
 
 ## Fixes / Polish
 
-- [ ] **Show Team Count in Brackets** — Add team count display across the app (divisions listings, panels)
-  - DivisionPanel teams list: "Division A (12)" 
-  - All division listings throughout app should show count in brackets
-  - Use Division.TeamCount for efficiency
+- [x] **Show Team Count in Brackets** *(done 2026-06-26)* — Add team count display across the app
+  - [x] SeasonPanel division list: "Division A (12)"
+  - [ ] Other panels (LeaguePanel, DivisionPanel, etc.) — future enhancement
+  - Uses Division.TeamCount for efficiency
 
 - [ ] **Player Adding Bug** — when adding players to a team that already has players, previously selected players should be greyed out / unavailable in the available list
 - [ ] **Leagues Panel Boolean Bug** — FormatException when displaying IsActive column in DataGridView (may be fixed — verify in Leagues panel)
