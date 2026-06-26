@@ -62,10 +62,12 @@ public class LookingForTeamGroup
     public int LeagueId { get; set; }
     public int SeasonId { get; set; }
     public string? Name { get; set; }
+    public int? GroupLeaderId { get; set; }  // FK to LookingForTeam: the group leader
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public League League { get; set; } = null!;
     public Season Season { get; set; } = null!;
+    public LookingForTeam? Leader { get; set; }
     public ICollection<LookingForTeam> Members { get; set; } = [];
 }
 

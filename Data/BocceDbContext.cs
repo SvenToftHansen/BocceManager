@@ -121,6 +121,7 @@ model.Entity<SeasonCourt>().HasIndex(e => new { e.SeasonId, e.CourtId }).IsUniqu
         model.Entity<SeasonFee>().HasIndex(e => new { e.PlayerId, e.SeasonId }).IsUnique();
         model.Entity<Team>().HasIndex(e => new { e.DivisionId, e.TeamLetter }).IsUnique();
         model.Entity<TeamPlayer>().HasIndex(e => new { e.TeamId, e.PlayerId }).IsUnique();
+        model.Entity<LookingForTeamGroup>().HasIndex(e => new { e.LeagueId, e.SeasonId, e.Name }).IsUnique();
         model.Entity<TeamStanding>().HasIndex(e => new { e.TeamId, e.DivisionId }).IsUnique();
         model.Entity<ScheduleTemplate>().HasIndex(e => new { e.SeasonId, e.TeamCount }).IsUnique();
         model.Entity<EmailListMember>().HasIndex(e => new { e.EmailListId, e.PlayerId }).IsUnique();
@@ -177,6 +178,9 @@ model.Entity<SeasonCourt>().HasIndex(e => new { e.SeasonId, e.CourtId }).IsUniqu
         model.Entity<LookingForTeamGroup>()
             .HasOne(e => e.Season).WithMany()
             .HasForeignKey(e => e.SeasonId).OnDelete(DeleteBehavior.Cascade);
+        model.Entity<LookingForTeamGroup>()
+            .HasOne(e => e.Leader).WithMany()
+            .HasForeignKey(e => e.GroupLeaderId).OnDelete(DeleteBehavior.SetNull);
 
         // LookingForTeamDivision FKs
         model.Entity<LookingForTeamDivision>()
