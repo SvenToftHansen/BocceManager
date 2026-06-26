@@ -549,7 +549,7 @@ public class LookingForTeamPanel : UserControl
                 var sorted = list
                     .OrderBy(l => l.LookingForTeamGroupId.HasValue && groupDict.ContainsKey(l.LookingForTeamGroupId.Value)
                         ? $"{groupDict[l.LookingForTeamGroupId.Value].Name}_{l.LookingForTeamGroupId.Value}"
-                        : "zzz_Individual")
+                        : "zzz_NoGroup")
                     .ThenBy(l => l.Player.LastName)
                     .ThenBy(l => l.Player.FirstName)
                     .ToList();
@@ -557,7 +557,7 @@ public class LookingForTeamPanel : UserControl
                 foreach (var e in sorted)
                 {
                     string name = $"{e.Player.LastName}, {e.Player.FirstName}".Trim().TrimStart(',').Trim();
-                    string grpLabel = "Individual";
+                    string grpLabel = "(no group)";
                     if (e.LookingForTeamGroupId.HasValue && groupDict.ContainsKey(e.LookingForTeamGroupId.Value))
                     {
                         var grp = groupDict[e.LookingForTeamGroupId.Value];
@@ -1160,7 +1160,7 @@ public class LookingForTeamPanel : UserControl
         int memberLftId   = Convert.ToInt32(_grpGrid.SelectedRows[0].Cells["GLftId"].Value);
         string memberName = _grpGrid.SelectedRows[0].Cells["GName"].Value?.ToString() ?? "member";
 
-        if (MessageBox.Show($"Remove {memberName} from this group?\n(They will remain in the LFT list as Individual.)",
+        if (MessageBox.Show($"Remove {memberName} from this group?\n(They will remain in LFT in their own group of 1.)",
                 "Remove from Group", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
 
@@ -1190,9 +1190,9 @@ public class LookingForTeamPanel : UserControl
                 // Group is now empty — dissolve it
                 if (group != null) { group.GroupLeaderId = null; db.SaveChanges(); db.LookingForTeamGroups.Remove(group); db.SaveChanges(); }
             }
-            else if (isLeader && remaining.Count > 0)
+            else if (isLeader)
             {
-                // Leader removed — prompt for new leader
+                // Leader removed — auto-select if 1 remains, else prompt
                 int? newLeaderPid = PromptSelectGroupLeader(remaining.Select(m => m.PlayerId).ToList(), db);
                 if (!newLeaderPid.HasValue) { member.LookingForTeamGroupId = groupId; db.SaveChanges(); return; }
 
@@ -1213,7 +1213,13 @@ public class LookingForTeamPanel : UserControl
                 db.SaveChanges();
             }
 
-            AppLogger.Info("Removed LFT {LftId} from group {GroupId}", memberLftId, groupId);
+            // Removed player gets their own group of 1
+            var soloGrp = CreateGroupForLeader(db, member.PlayerId, 1);
+            soloGrp.GroupLeaderId = member.Id;
+            member.LookingForTeamGroupId = soloGrp.Id;
+            db.SaveChanges();
+
+            AppLogger.Info("Removed LFT {LftId} from group {GroupId}, placed in solo group {SoloGroupId}", memberLftId, groupId, soloGrp.Id);
         }
         catch (Exception ex)
         {
@@ -1277,7 +1283,7 @@ public class LookingForTeamPanel : UserControl
     {
         if (!_selectedGroupId.HasValue) return;
 
-        if (MessageBox.Show("Delete this entire group? All members will be removed from the group (but remain in LFT as solos).",
+        if (MessageBox.Show("Delete this entire group? Each member will remain in LFT in their own group of 1.",
                 "Delete Group", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             return;
 
@@ -1478,7 +1484,7 @@ public class LookingForTeamPanel : UserControl
         2 => "Pair",
         3 => "Trio",
         4 => "Quad",
-        _ => count <= 1 ? "Solo" : $"Group({count})"
+        _ => $"Group({count})"
     };
 
     // ── Team membership check ──────────────────────────────────────────────────
@@ -1563,62 +1569,72 @@ public class LookingForTeamPanel : UserControl
     // ── Dialogs ────────────────────────────────────────────────────────────────
     private int? PromptSelectGroupLeader(List<int> playerIds, BocceDbContext db)
     {
+        // Only one candidate — no dialog needed, auto-select them
+        if (playerIds.Count == 1) return playerIds[0];
+
+        var players = playerIds
+            .Select(id => db.Players.FirstOrDefault(p => p.Id == id))
+            .Where(p => p != null)
+            .ToList();
+
+        if (players.Count == 0) return null;
+        if (players.Count == 1) return players[0]!.Id;
+
         using var form = new Form
         {
-            Text = "Select Group Leader", Width = 400, Height = 300,
+            Text = "Select Group Leader", Width = 380,
+            Height = 80 + players.Count * 28 + 50,   // label + radios + buttons
             StartPosition = FormStartPosition.CenterParent,
             FormBorderStyle = FormBorderStyle.FixedDialog,
             MaximizeBox = false, MinimizeBox = false,
             BackColor = AppTheme.ContentBackground
         };
 
-        var lbl = new Label
-        {
-            Text = "Select which player is the group leader:",
-            Dock = DockStyle.Top, Height = 30, Padding = new Padding(8),
-            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary
-        };
-        form.Controls.Add(lbl);
-
-        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8), AutoScroll = true };
-
-        var radios = new List<(RadioButton Radio, int PlayerId)>();
-        int y = 0;
-        foreach (int playerId in playerIds)
-        {
-            var player = db.Players.FirstOrDefault(p => p.Id == playerId);
-            if (player == null) continue;
-
-            var radio = new RadioButton
-            {
-                Text = $"{player.LastName}, {player.FirstName}",
-                Location = new Point(0, y), AutoSize = true,
-                Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary
-            };
-            if (radios.Count == 0) radio.Checked = true;
-            panel.Controls.Add(radio);
-            radios.Add((radio, playerId));
-            y += 28;
-        }
-
-        var btnPanel = new Panel { Dock = DockStyle.Bottom, Height = 40, BackColor = AppTheme.Surface };
+        var btnPanel = new Panel { Dock = DockStyle.Bottom, Height = 44, BackColor = AppTheme.Surface };
         var btnOk = new Button
         {
-            Text = "OK", Location = new Point(8, 8), Size = new Size(90, 24),
+            Text = "OK", Location = new Point(8, 10), Size = new Size(90, 24),
             DialogResult = DialogResult.OK,
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }
         };
         var btnCancel = new Button
         {
-            Text = "Cancel", Location = new Point(106, 8), Size = new Size(90, 24),
+            Text = "Cancel", Location = new Point(106, 10), Size = new Size(90, 24),
             DialogResult = DialogResult.Cancel,
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 1 }
         };
         btnPanel.Controls.AddRange([btnOk, btnCancel]);
 
-        form.Controls.Add(panel);
+        // Radio buttons in a fixed panel (no Dock) so label doesn't collide
+        var radioPanel = new Panel { Location = new Point(12, 40), Width = 340, AutoSize = true };
+        var radios = new List<(RadioButton Radio, int PlayerId)>();
+        int y = 0;
+        foreach (var player in players)
+        {
+            var radio = new RadioButton
+            {
+                Text = $"{player!.LastName}, {player.FirstName}",
+                Location = new Point(0, y), AutoSize = true,
+                Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary
+            };
+            if (radios.Count == 0) radio.Checked = true;
+            radioPanel.Controls.Add(radio);
+            radios.Add((radio, player.Id));
+            y += 28;
+        }
+
+        var lbl = new Label
+        {
+            Text = "Select the group leader:",
+            Location = new Point(12, 12), AutoSize = true,
+            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary
+        };
+
+        // Add fill content first, then docked bottom — correct WinForms z-order
+        form.Controls.Add(radioPanel);
+        form.Controls.Add(lbl);
         form.Controls.Add(btnPanel);
         form.AcceptButton = btnOk;
         form.CancelButton = btnCancel;
