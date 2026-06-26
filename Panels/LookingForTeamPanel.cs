@@ -29,8 +29,6 @@ public class LookingForTeamPanel : UserControl
     private TabPage        _tabGroup      = null!;
     private CheckedListBox _clbDivisions  = null!;
     private ComboBox       _cmbPrefTeam   = null!;
-    private CheckBox       _chkRegDate    = null!;
-    private DateTimePicker _dtpRegDate    = null!;
     private TextBox        _txtNotes      = null!;
     private DataGridView   _grpGrid       = null!;
     private Button         _btnAddMember  = null!;
@@ -210,11 +208,10 @@ public class LookingForTeamPanel : UserControl
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GId",    Visible = false });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GPid",   Visible = false });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GGrpId", Visible = false });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GName",  HeaderText = "Name",      FillWeight = 28 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GPhone", HeaderText = "Phone",     FillWeight = 17 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GEmail", HeaderText = "Email",     FillWeight = 25 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GGrp",   HeaderText = "Group",     FillWeight = 12 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GDate",  HeaderText = "Reg. Date", FillWeight = 12 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GName",  HeaderText = "Name",  FillWeight = 35 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GPhone", HeaderText = "Phone", FillWeight = 20 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GEmail", HeaderText = "Email", FillWeight = 30 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GGrp",   HeaderText = "Group", FillWeight = 15 });
         _grid.SelectionChanged += OnGridSelectionChanged;
 
         var pnl = new Panel { Dock = DockStyle.Fill };
@@ -288,26 +285,6 @@ public class LookingForTeamPanel : UserControl
         };
         _cmbPrefTeam.SelectedIndexChanged += OnFieldChanged;
         pnl.Controls.Add(_cmbPrefTeam);
-        y += 36;
-
-        _chkRegDate = new CheckBox
-        {
-            Text = "Registered Date", Location = new Point(lx, y + 3), AutoSize = true,
-            Font = AppTheme.FontDefaultBold, ForeColor = AppTheme.TextPrimary
-        };
-        _dtpRegDate = new DateTimePicker
-        {
-            Location = new Point(fx, y), Size = new Size(fw, 26),
-            Format = DateTimePickerFormat.Short, Value = DateTime.Today, Enabled = false
-        };
-        _chkRegDate.CheckedChanged += (_, _) =>
-        {
-            _dtpRegDate.Enabled = _chkRegDate.Checked;
-            OnFieldChanged(null, EventArgs.Empty);
-        };
-        _dtpRegDate.ValueChanged += OnFieldChanged;
-        pnl.Controls.Add(_chkRegDate);
-        pnl.Controls.Add(_dtpRegDate);
         y += 36;
 
         pnl.Controls.Add(Lbl("Notes", lx, y));
@@ -475,12 +452,11 @@ public class LookingForTeamPanel : UserControl
                 foreach (var e in list)
                 {
                     string name = $"{e.Player.LastName}, {e.Player.FirstName}".Trim().TrimStart(',').Trim();
-                    string date = e.RegisteredDate.HasValue ? e.RegisteredDate.Value.ToString("yyyy-MM-dd") : "";
                     string grpLabel = e.LookingForTeamGroupId.HasValue && groupNames.ContainsKey(e.LookingForTeamGroupId.Value)
                         ? groupNames[e.LookingForTeamGroupId.Value]
                         : "Solo";
                     _grid.Rows.Add(e.Id, e.PlayerId, e.LookingForTeamGroupId,
-                        name, e.Player.Phone ?? "", e.Player.Email ?? "", grpLabel, date);
+                        name, e.Player.Phone ?? "", e.Player.Email ?? "", grpLabel);
                 }
             }
             catch { }
@@ -559,19 +535,6 @@ public class LookingForTeamPanel : UserControl
                 }
             }
 
-            if (e.RegisteredDate.HasValue)
-            {
-                _chkRegDate.Checked = true;
-                _dtpRegDate.Value   = e.RegisteredDate.Value.ToDateTime(TimeOnly.MinValue);
-                _dtpRegDate.Enabled = true;
-            }
-            else
-            {
-                _chkRegDate.Checked = false;
-                _dtpRegDate.Value   = DateTime.Today;
-                _dtpRegDate.Enabled = false;
-            }
-
             _txtNotes.Text = e.Notes ?? "";
 
             _btnRemove.Enabled    = true;
@@ -636,9 +599,6 @@ public class LookingForTeamPanel : UserControl
             for (int i = 0; i < _clbDivisions.Items.Count; i++)
                 _clbDivisions.SetItemChecked(i, false);
             if (_cmbPrefTeam.Items.Count > 0) _cmbPrefTeam.SelectedIndex = 0;
-            _chkRegDate.Checked   = false;
-            _dtpRegDate.Value     = DateTime.Today;
-            _dtpRegDate.Enabled   = false;
             _txtNotes.Text        = "";
             _grpGrid.Rows.Clear();
             _tabGroup.Text        = "Group";
@@ -735,7 +695,6 @@ public class LookingForTeamPanel : UserControl
                         PlayerId        = playerId,
                         PreferredTeamId = details.PrefTeamId,
                         Notes           = details.Notes.NullIfEmpty(),
-                        RegisteredDate  = details.RegDate,
                         LookingForTeamGroupId = groupId
                     };
                     db.LookingForTeams.Add(entry);
@@ -778,8 +737,7 @@ public class LookingForTeamPanel : UserControl
                 SeasonId        = _seasonId.Value,
                 PlayerId        = picked[0],
                 PreferredTeamId = singleDetails.PrefTeamId,
-                Notes           = singleDetails.Notes.NullIfEmpty(),
-                RegisteredDate  = singleDetails.RegDate
+                Notes           = singleDetails.Notes.NullIfEmpty()
             };
             db.LookingForTeams.Add(entry);
             db.SaveChanges();
@@ -862,8 +820,7 @@ public class LookingForTeamPanel : UserControl
             .Select(d => d.Id!.Value)
             .ToHashSet();
 
-        int? prefTeamId   = (_cmbPrefTeam.SelectedItem as TeamItem)?.Id;
-        DateOnly? regDate = _chkRegDate.Checked ? DateOnly.FromDateTime(_dtpRegDate.Value) : null;
+        int? prefTeamId = (_cmbPrefTeam.SelectedItem as TeamItem)?.Id;
 
         try
         {
@@ -875,7 +832,6 @@ public class LookingForTeamPanel : UserControl
 
             e.PreferredTeamId = prefTeamId;
             e.Notes           = _txtNotes.Text.Trim().NullIfEmpty();
-            e.RegisteredDate  = regDate;
 
             var existingIds = e.PreferredDivisions.Select(d => d.DivisionId).ToHashSet();
             foreach (var del in e.PreferredDivisions.Where(d => !checkedDivIds.Contains(d.DivisionId)).ToList())
@@ -1115,10 +1071,9 @@ public class LookingForTeamPanel : UserControl
 
         var entry = new LookingForTeam
         {
-            LeagueId       = _leagueId!.Value,
-            SeasonId       = _seasonId!.Value,
-            PlayerId       = playerId,
-            RegisteredDate = DateOnly.FromDateTime(DateTime.Today)
+            LeagueId = _leagueId!.Value,
+            SeasonId = _seasonId!.Value,
+            PlayerId = playerId
         };
         db.LookingForTeams.Add(entry);
         db.SaveChanges();
@@ -1572,7 +1527,7 @@ public class LookingForTeamPanel : UserControl
         }
     }
 
-    private record LftInitDetails(int? PrefTeamId, List<int> PrefDivisionIds, string Notes, DateOnly? RegDate);
+    private record LftInitDetails(int? PrefTeamId, List<int> PrefDivisionIds, string Notes);
 
     private LftInitDetails? PromptLftDetails()
     {
@@ -1610,20 +1565,6 @@ public class LookingForTeamPanel : UserControl
         pnl.Controls.Add(cmbTeam);
         y += 36;
 
-        var chkDate = new CheckBox
-        {
-            Text = "Registered Date", Location = new Point(lx, y + 3), AutoSize = true,
-            Font = AppTheme.FontDefaultBold, ForeColor = AppTheme.TextPrimary
-        };
-        var dtpDate = new DateTimePicker
-        {
-            Location = new Point(fx, y), Size = new Size(fw, 26),
-            Format = DateTimePickerFormat.Short, Value = DateTime.Today, Enabled = false
-        };
-        chkDate.CheckedChanged += (_, _) => dtpDate.Enabled = chkDate.Checked;
-        pnl.Controls.Add(chkDate); pnl.Controls.Add(dtpDate);
-        y += 36;
-
         pnl.Controls.Add(Lbl("Notes", lx, y));
         var txtNotes = new TextBox
         {
@@ -1643,8 +1584,7 @@ public class LookingForTeamPanel : UserControl
 
         var divIds  = clbDiv.CheckedItems.OfType<DivisionItem>().Where(d => d.Id.HasValue).Select(d => d.Id!.Value).ToList();
         int? teamId = (cmbTeam.SelectedItem as TeamItem)?.Id;
-        DateOnly? dt = chkDate.Checked ? DateOnly.FromDateTime(dtpDate.Value) : null;
-        return new LftInitDetails(teamId, divIds, txtNotes.Text.Trim(), dt);
+        return new LftInitDetails(teamId, divIds, txtNotes.Text.Trim());
     }
 
     private int? PickTeamDialog(string prompt)
