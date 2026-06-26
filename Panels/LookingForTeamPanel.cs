@@ -86,21 +86,54 @@ public class LookingForTeamPanel : UserControl
     // ── UI Construction ────────────────────────────────────────────────────────
     private void BuildUi()
     {
-
-        // Create top-level TabControl with two tabs
         var mainTabs = new TabControl
         {
             Dock = DockStyle.Fill,
             Font = AppTheme.FontDefault
         };
 
-        // Tab 1: "Looking for Placement" - contains toolbar, grid and detail panel
+        // Tab 1: "Looking for Placement" - grid + detail
         var tabLfp = new TabPage("Looking for Placement");
-
-        // Build Tab 1 with its own toolbar
         var tab1Panel = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground };
 
-        var topBar = new Panel { Dock = DockStyle.Top, Height = 46, BackColor = AppTheme.Surface };
+        _mainSplit = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            BackColor = AppTheme.ContentBackground,
+            Panel1MinSize = 0, Panel2MinSize = 0
+        };
+
+        // Left panel: grid + toolbar at bottom
+        var leftPanel = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground };
+        leftPanel.Controls.Add(BuildGrid());
+        leftPanel.Controls.Add(BuildLeftToolbar());
+
+        _mainSplit.Panel1.Controls.Add(leftPanel);
+        _mainSplit.Panel2.Controls.Add(BuildDetailPanel());
+        _mainSplit.SizeChanged   += (_, _) => SafeApplySplit();
+        _mainSplit.HandleCreated += (_, _) => BeginInvoke(new Action(SafeApplySplit));
+
+        tab1Panel.Controls.Add(_mainSplit);
+        tabLfp.Controls.Add(tab1Panel);
+
+        // Tab 2: "Placement" - placeholder
+        var tabPlacement = new TabPage("Placement");
+        var placeholderLbl = new Label
+        {
+            Text = "Placement workflow - Coming soon", Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleCenter,
+            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextMuted
+        };
+        tabPlacement.Controls.Add(placeholderLbl);
+
+        mainTabs.TabPages.AddRange([tabLfp, tabPlacement]);
+        Controls.Add(mainTabs);
+    }
+
+    private Control BuildLeftToolbar()
+    {
+        var toolbar = new Panel { Dock = DockStyle.Bottom, Height = 46, BackColor = AppTheme.Surface };
+
         _btnAddPlayer = new Button
         {
             Text = "+ Add Player to LFT", Location = new Point(12, 8), Size = new Size(165, 30),
@@ -122,6 +155,7 @@ public class LookingForTeamPanel : UserControl
             Text = "Mode:", Location = new Point(291, 14), AutoSize = true,
             Font = AppTheme.FontDefault, ForeColor = AppTheme.TextSecondary
         };
+
         _cmbDisplayMode = new ComboBox
         {
             Location = new Point(337, 11), Size = new Size(170, 26),
@@ -132,36 +166,8 @@ public class LookingForTeamPanel : UserControl
         _cmbDisplayMode.SelectedIndex = 0;
         _cmbDisplayMode.SelectedIndexChanged += (_, _) => LoadGrid();
 
-        topBar.Controls.AddRange([_btnAddPlayer, _btnRemove, modeLbl, _cmbDisplayMode]);
-
-        _mainSplit = new SplitContainer
-        {
-            Dock = DockStyle.Fill,
-            BackColor = AppTheme.ContentBackground,
-            Panel1MinSize = 0, Panel2MinSize = 0
-        };
-        _mainSplit.Panel1.Controls.Add(BuildGrid());
-        _mainSplit.Panel2.Controls.Add(BuildDetailPanel());
-        _mainSplit.SizeChanged   += (_, _) => SafeApplySplit();
-        _mainSplit.HandleCreated += (_, _) => BeginInvoke(new Action(SafeApplySplit));
-
-        tab1Panel.Controls.Add(_mainSplit);
-        tab1Panel.Controls.Add(topBar);
-        tabLfp.Controls.Add(tab1Panel);
-
-        // Tab 2: "Placement" - empty for now (will be implemented later)
-        var tabPlacement = new TabPage("Placement");
-        var placeholderLbl = new Label
-        {
-            Text = "Placement workflow - Coming soon", Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleCenter,
-            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextMuted
-        };
-        tabPlacement.Controls.Add(placeholderLbl);
-
-        mainTabs.TabPages.AddRange([tabLfp, tabPlacement]);
-
-        Controls.Add(mainTabs);
+        toolbar.Controls.AddRange([_btnAddPlayer, _btnRemove, modeLbl, _cmbDisplayMode]);
+        return toolbar;
     }
 
     private void SafeApplySplit()
@@ -220,34 +226,33 @@ public class LookingForTeamPanel : UserControl
     private Control BuildDetailPanel()
     {
         var outer = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground, Padding = new Padding(8) };
-
         var scrollPane = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
 
-        int y = 0;
-        const int lx = 0, fx = 100, fw = 200;
+        int y = 0, contentWidth = 300;
 
         // Placed As label
         _lblPlacedAs = new Label
         {
-            Location = new Point(lx, y), AutoSize = true,
+            Location = new Point(0, y), AutoSize = true,
             Font = AppTheme.FontDefault, ForeColor = AppTheme.TextSecondary, Visible = false
         };
         scrollPane.Controls.Add(_lblPlacedAs);
         y += 25;
 
-        // Group grid and buttons
-        scrollPane.Controls.Add(Lbl("Group Members", lx, y));
+        // Group Members label
+        scrollPane.Controls.Add(Lbl("Group Members", 0, y));
         y += 20;
 
+        // Group grid - fills width, 18px per row for max 5 players (~100px height)
         _grpGrid = new DataGridView
         {
-            Location = new Point(lx, y), Size = new Size(fw + 100, 120),
+            Location = new Point(0, y), Size = new Size(contentWidth, 100),
             SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             MultiSelect = false, ReadOnly = true,
             AllowUserToAddRows = false, RowHeadersVisible = false,
             BorderStyle = BorderStyle.FixedSingle,
             BackgroundColor = AppTheme.ContentBackground,
-            Font = AppTheme.FontDefault, RowTemplate = { Height = 24 },
+            Font = AppTheme.FontDefault, RowTemplate = { Height = 18 },
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
             EnableHeadersVisualStyles = false,
             ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
@@ -261,11 +266,13 @@ public class LookingForTeamPanel : UserControl
         _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GName",  HeaderText = "Member", FillWeight = 50 });
         _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GPhone", HeaderText = "Phone",  FillWeight = 25 });
         _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GEmail", HeaderText = "Email",  FillWeight = 25 });
+        _grpGrid.SelectionChanged += (_, _) =>
+            _btnRemMember.Enabled = _grpGrid.SelectedRows.Count > 0;
         scrollPane.Controls.Add(_grpGrid);
-        y += 130;
+        y += 110;
 
-        // Group buttons (smaller)
-        var grpBtnPanel = new Panel { Location = new Point(lx, y), Size = new Size(fw + 100, 32), AutoSize = true };
+        // Group buttons
+        var grpBtnPanel = new Panel { Location = new Point(0, y), Size = new Size(contentWidth, 28) };
         _btnAddMember = new Button
         {
             Text = "+ Add", Left = 0, Top = 0, Width = 70, Height = 22,
@@ -298,18 +305,18 @@ public class LookingForTeamPanel : UserControl
         };
         _btnDeleteGrp.Click += (_, _) => DeleteGroup();
 
-        _grpGrid.SelectionChanged += (_, _) =>
-            _btnRemMember.Enabled = _grpGrid.SelectedRows.Count > 0;
-
         grpBtnPanel.Controls.AddRange([_btnAddMember, _btnRemMember, _btnRenameGrp, _btnDeleteGrp]);
         scrollPane.Controls.Add(grpBtnPanel);
         y += 35;
 
+        // Preferred Days label above
+        scrollPane.Controls.Add(Lbl("Preferred Days", 0, y));
+        y += 18;
+
         // Days and Times on same row
-        scrollPane.Controls.Add(Lbl("Preferred Days", lx, y));
         _clbPrefDays = new CheckedListBox
         {
-            Location = new Point(fx, y), Size = new Size(fw / 2 - 5, 80),
+            Location = new Point(0, y), Size = new Size(contentWidth / 2 - 5, 80),
             CheckOnClick = true,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
             BorderStyle = BorderStyle.FixedSingle
@@ -317,10 +324,12 @@ public class LookingForTeamPanel : UserControl
         _clbPrefDays.ItemCheck += (_, _) => BeginInvoke(() => { if (!_isLoadingData) OnFieldChanged(null, EventArgs.Empty); });
         scrollPane.Controls.Add(_clbPrefDays);
 
-        scrollPane.Controls.Add(Lbl("Preferred Times", lx + fx + fw / 2, y));
+        // Preferred Times label above
+        scrollPane.Controls.Add(Lbl("Preferred Times", contentWidth / 2 + 5, y - 18));
+
         _clbPrefTimes = new CheckedListBox
         {
-            Location = new Point(fx + fw / 2, y), Size = new Size(fw / 2 - 5, 80),
+            Location = new Point(contentWidth / 2 + 5, y), Size = new Size(contentWidth / 2 - 5, 80),
             CheckOnClick = true,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
             BorderStyle = BorderStyle.FixedSingle
@@ -329,11 +338,13 @@ public class LookingForTeamPanel : UserControl
         scrollPane.Controls.Add(_clbPrefTimes);
         y += 95;
 
-        // Preferred Team
-        scrollPane.Controls.Add(Lbl("Preferred Team", lx, y));
+        // Preferred Team label above
+        scrollPane.Controls.Add(Lbl("Preferred Team", 0, y));
+        y += 18;
+
         _cmbPrefTeam = new ComboBox
         {
-            Location = new Point(fx, y), Size = new Size(fw, 24),
+            Location = new Point(0, y), Size = new Size(contentWidth, 24),
             DropDownStyle = ComboBoxStyle.DropDownList,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary
         };
@@ -341,11 +352,13 @@ public class LookingForTeamPanel : UserControl
         scrollPane.Controls.Add(_cmbPrefTeam);
         y += 32;
 
-        // Notes (2-line fixed height)
-        scrollPane.Controls.Add(Lbl("Notes", lx, y));
+        // Notes label above
+        scrollPane.Controls.Add(Lbl("Notes", 0, y));
+        y += 18;
+
         _txtNotes = new TextBox
         {
-            Location = new Point(fx, y), Size = new Size(fw, 40),
+            Location = new Point(0, y), Size = new Size(contentWidth, 40),
             Multiline = true, ScrollBars = ScrollBars.None,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface,
             ForeColor = AppTheme.TextPrimary, BorderStyle = BorderStyle.FixedSingle
@@ -354,8 +367,8 @@ public class LookingForTeamPanel : UserControl
         scrollPane.Controls.Add(_txtNotes);
         y += 50;
 
-        // Save/Cancel buttons (smaller)
-        var btnBar = new Panel { Location = new Point(lx, y), Size = new Size(150, 30) };
+        // Save/Cancel buttons
+        var btnBar = new Panel { Location = new Point(0, y), Size = new Size(150, 30) };
         _btnSave = new Button
         {
             Text = "Save", Location = new Point(0, 0), Size = new Size(70, 24),
@@ -516,7 +529,7 @@ public class LookingForTeamPanel : UserControl
                     .Where(l => l.LeagueId == _leagueId.Value && l.SeasonId == _seasonId.Value);
 
                 if (showGroups)
-                    query = query.Where(l => l.LookingForTeamGroupId.HasValue);
+                    query = query.Where(l => l.Group != null && l.Group.GroupLeaderId == l.Id);
                 else
                     query = query.Where(l => !l.LookingForTeamGroupId.HasValue);
 
@@ -721,6 +734,13 @@ public class LookingForTeamPanel : UserControl
         List<int> picked = PickPlayersDialog("Add Player(s) to Looking For Team", excludeIds: alreadyInLft, showCreateNew: true);
         if (picked.Count == 0) return;
 
+        if (picked.Count > 5)
+        {
+            MessageBox.Show("Maximum 5 players per group. Please select fewer players.", "Too Many Players",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
         if (picked.Count > 1)
         {
             var ans = MessageBox.Show($"Add {picked.Count} players as a group or as solos?",
@@ -732,11 +752,15 @@ public class LookingForTeamPanel : UserControl
             if (details == null) return;
 
             int? groupId = null;
+            int? groupLeaderId = null;
             if (asGroup)
             {
                 try
                 {
                     using var db = new BocceDbContext();
+                    groupLeaderId = PromptSelectGroupLeader(picked, db);
+                    if (!groupLeaderId.HasValue) return;
+
                     var p1 = db.Players.FirstOrDefault(p => p.Id == picked[0]);
                     string groupName = p1 != null ? p1.LastName : "Group";
                     var grp = new LookingForTeamGroup
@@ -744,6 +768,7 @@ public class LookingForTeamPanel : UserControl
                         LeagueId = _leagueId.Value,
                         SeasonId = _seasonId.Value,
                         Name = groupName,
+                        GroupLeaderId = groupLeaderId,
                         CreatedAt = DateTime.UtcNow
                     };
                     db.LookingForTeamGroups.Add(grp);
@@ -1420,6 +1445,76 @@ public class LookingForTeamPanel : UserControl
     }
 
     // ── Dialogs ────────────────────────────────────────────────────────────────
+    private int? PromptSelectGroupLeader(List<int> playerIds, BocceDbContext db)
+    {
+        using var form = new Form
+        {
+            Text = "Select Group Leader", Width = 400, Height = 300,
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false, MinimizeBox = false,
+            BackColor = AppTheme.ContentBackground
+        };
+
+        var lbl = new Label
+        {
+            Text = "Select which player is the group leader:",
+            Dock = DockStyle.Top, Height = 30, Padding = new Padding(8),
+            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary
+        };
+        form.Controls.Add(lbl);
+
+        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8), AutoScroll = true };
+
+        var radios = new List<(RadioButton Radio, int PlayerId)>();
+        int y = 0;
+        foreach (int playerId in playerIds)
+        {
+            var player = db.Players.FirstOrDefault(p => p.Id == playerId);
+            if (player == null) continue;
+
+            var radio = new RadioButton
+            {
+                Text = $"{player.LastName}, {player.FirstName}",
+                Location = new Point(0, y), AutoSize = true,
+                Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary
+            };
+            if (radios.Count == 0) radio.Checked = true;
+            panel.Controls.Add(radio);
+            radios.Add((radio, playerId));
+            y += 28;
+        }
+
+        var btnPanel = new Panel { Dock = DockStyle.Bottom, Height = 40, BackColor = AppTheme.Surface };
+        var btnOk = new Button
+        {
+            Text = "OK", Location = new Point(8, 8), Size = new Size(90, 24),
+            DialogResult = DialogResult.OK,
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }
+        };
+        var btnCancel = new Button
+        {
+            Text = "Cancel", Location = new Point(106, 8), Size = new Size(90, 24),
+            DialogResult = DialogResult.Cancel,
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 1 }
+        };
+        btnPanel.Controls.AddRange([btnOk, btnCancel]);
+
+        form.Controls.Add(panel);
+        form.Controls.Add(btnPanel);
+        form.AcceptButton = btnOk;
+        form.CancelButton = btnCancel;
+
+        if (form.ShowDialog(this) == DialogResult.OK)
+        {
+            var selected = radios.FirstOrDefault(r => r.Radio.Checked);
+            return selected.PlayerId > 0 ? selected.PlayerId : (int?)null;
+        }
+        return null;
+    }
+
     private List<int> PickPlayersDialog(string title, HashSet<int>? excludeIds, bool showCreateNew)
     {
         using var form = new Form
