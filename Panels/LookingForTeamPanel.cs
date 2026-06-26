@@ -441,15 +441,19 @@ public class LookingForTeamPanel : UserControl
 
                 if (unplacedOnly) query = query.Where(l => l.TeamId == null);
 
-                var list = query
-                    .OrderBy(l => l.Player.LastName).ThenBy(l => l.Player.FirstName)
-                    .ToList();
+                var list = query.ToList();
 
                 var groupNames = db.LookingForTeamGroups
                     .Where(g => g.SeasonId == _seasonId.Value)
                     .ToDictionary(g => g.Id, g => g.Name ?? $"Group {g.Id}");
 
-                foreach (var e in list)
+                var sorted = list
+                    .OrderBy(l => l.LookingForTeamGroupId.HasValue ? groupNames.GetValueOrDefault(l.LookingForTeamGroupId.Value, "Group") : "zzz_Solos")
+                    .ThenBy(l => l.Player.LastName)
+                    .ThenBy(l => l.Player.FirstName)
+                    .ToList();
+
+                foreach (var e in sorted)
                 {
                     string name = $"{e.Player.LastName}, {e.Player.FirstName}".Trim().TrimStart(',').Trim();
                     string grpLabel = e.LookingForTeamGroupId.HasValue && groupNames.ContainsKey(e.LookingForTeamGroupId.Value)
