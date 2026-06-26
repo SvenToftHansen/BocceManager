@@ -39,7 +39,6 @@ public class LookingForTeamPanel : UserControl
     // ── Toolbar buttons ────────────────────────────────────────────────────────
     private Button _btnAddPlayer = null!;
     private Button _btnRemove    = null!;
-    private Button _btnAssign    = null!;
     private Button _btnSave      = null!;
     private Button _btnCancel    = null!;
 
@@ -109,22 +108,14 @@ public class LookingForTeamPanel : UserControl
         };
         _btnRemove.Click += (_, _) => RemoveFromLft();
 
-        _btnAssign = new Button
-        {
-            Text = "Assign to Team...", Location = new Point(291, 8), Size = new Size(145, 30),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
-        };
-        _btnAssign.Click += (_, _) => AssignToTeam();
-
         var showLbl = new Label
         {
-            Text = "Show:", Location = new Point(454, 14), AutoSize = true,
+            Text = "Show:", Location = new Point(291, 14), AutoSize = true,
             Font = AppTheme.FontDefault, ForeColor = AppTheme.TextSecondary
         };
         _cmbShow = new ComboBox
         {
-            Location = new Point(500, 11), Size = new Size(170, 26),
+            Location = new Point(337, 11), Size = new Size(170, 26),
             DropDownStyle = ComboBoxStyle.DropDownList,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary
         };
@@ -132,7 +123,7 @@ public class LookingForTeamPanel : UserControl
         _cmbShow.SelectedIndex = 0;
         _cmbShow.SelectedIndexChanged += (_, _) => LoadGrid();
 
-        topBar.Controls.AddRange([_btnAddPlayer, _btnRemove, _btnAssign, showLbl, _cmbShow]);
+        topBar.Controls.AddRange([_btnAddPlayer, _btnRemove, showLbl, _cmbShow]);
 
         var bottomBar = new Panel { Dock = DockStyle.Bottom, Height = 46, BackColor = AppTheme.Surface };
         _btnSave = new Button
@@ -152,6 +143,15 @@ public class LookingForTeamPanel : UserControl
         _btnCancel.Click += (_, _) => CancelEdit();
         bottomBar.Controls.AddRange([_btnSave, _btnCancel]);
 
+        // Create top-level TabControl with two tabs
+        var mainTabs = new TabControl
+        {
+            Dock = DockStyle.Fill,
+            Font = AppTheme.FontDefault
+        };
+
+        // Tab 1: "Looking for Placement" - contains the grid and detail panel
+        var tabLfp = new TabPage("Looking for Placement");
         _mainSplit = new SplitContainer
         {
             Dock = DockStyle.Fill,
@@ -162,8 +162,21 @@ public class LookingForTeamPanel : UserControl
         _mainSplit.Panel2.Controls.Add(BuildDetailPanel());
         _mainSplit.SizeChanged   += (_, _) => SafeApplySplit();
         _mainSplit.HandleCreated += (_, _) => BeginInvoke(new Action(SafeApplySplit));
+        tabLfp.Controls.Add(_mainSplit);
 
-        Controls.Add(_mainSplit);
+        // Tab 2: "Placement" - empty for now (will be implemented later)
+        var tabPlacement = new TabPage("Placement");
+        var placeholderLbl = new Label
+        {
+            Text = "Placement workflow - Coming soon", Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleCenter,
+            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextMuted
+        };
+        tabPlacement.Controls.Add(placeholderLbl);
+
+        mainTabs.TabPages.AddRange([tabLfp, tabPlacement]);
+
+        Controls.Add(mainTabs);
         Controls.Add(bottomBar);
         Controls.Add(topBar);
     }
@@ -631,7 +644,6 @@ public class LookingForTeamPanel : UserControl
             _txtNotes.Text = e.Notes ?? "";
 
             _btnRemove.Enabled    = true;
-            _btnAssign.Enabled    = !isPlaced;
             _btnAddMember.Enabled = _selectedGroupId.HasValue;
             _btnRenameGrp.Enabled = _selectedGroupId.HasValue;
             _btnDeleteGrp.Enabled = _selectedGroupId.HasValue;
@@ -700,7 +712,6 @@ public class LookingForTeamPanel : UserControl
             _grpGrid.Rows.Clear();
             _tabGroup.Text        = "Group";
             _btnRemove.Enabled    = false;
-            _btnAssign.Enabled    = false;
             _btnSave.Enabled      = false;
             _btnCancel.Visible    = false;
             _btnAddMember.Enabled = false;
@@ -979,122 +990,6 @@ public class LookingForTeamPanel : UserControl
         _isDirty = false; _btnCancel.Visible = false;
         if (_selectedLftId.HasValue) LoadDetail(_selectedLftId.Value);
         else ClearDetail();
-    }
-
-    private void AssignToTeam()
-    {
-        if (!_selectedLftId.HasValue) return;
-        if (_isDirty)
-        {
-            MessageBox.Show("Save your changes before assigning.", "Unsaved Changes",
-                MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-
-        string playerName = _lblPlayerName.Text;
-        int? partnerPlayerId = null;
-
-        try
-        {
-            using var db = new BocceDbContext();
-            var player = db.Players.FirstOrDefault(p => p.Id == (int)(_grid.SelectedRows[0].Cells["GPid"].Value ?? 0));
-            if (player?.PartnerPlayerId.HasValue == true)
-                partnerPlayerId = player.PartnerPlayerId;
-        }
-        catch { }
-
-        List<(int LftId, string Name)> groupPeers = [];
-        if (_selectedGroupId.HasValue)
-        {
-            try
-            {
-                using var db = new BocceDbContext();
-                groupPeers = db.LookingForTeams
-                    .Include(l => l.Player)
-                    .Where(l => l.LookingForTeamGroupId == _selectedGroupId.Value
-                             && l.Id != _selectedLftId.Value
-                             && l.TeamId == null)
-                    .AsEnumerable()
-                    .Select(l => (l.Id,
-                        $"{l.Player.LastName}, {l.Player.FirstName}".Trim().TrimStart(',').Trim()))
-                    .ToList();
-            }
-            catch { }
-        }
-
-        int? teamId = PickTeamDialog($"Assign {playerName} to team:");
-        if (!teamId.HasValue) return;
-
-        List<int> toAssign = [_selectedLftId.Value];
-        int teamCapacity = 5;
-        try
-        {
-            using var db = new BocceDbContext();
-            var team = db.Teams.Include(t => t.Division).Include(t => t.TeamPlayers).FirstOrDefault(t => t.Id == teamId.Value);
-            if (team != null)
-            {
-                teamCapacity = team.Division.PlayersPerTeamMaximum ?? 5;
-                int roomNeeded = 1;
-                if (partnerPlayerId.HasValue) roomNeeded++;
-                if (groupPeers.Count > 0) roomNeeded += groupPeers.Count;
-                int availableRoom = teamCapacity - team.TeamPlayers.Count;
-
-                if (availableRoom < roomNeeded)
-                {
-                    string msg = $"Not enough room on this team. ";
-                    if (partnerPlayerId.HasValue)
-                        msg += $"Player {playerName} has a partner, needs {roomNeeded} spots but only {availableRoom} available.";
-                    else if (groupPeers.Count > 0)
-                        msg += $"Group needs {roomNeeded} spots but only {availableRoom} available.";
-                    else
-                        msg += $"Needs {roomNeeded} spots but only {availableRoom} available.";
-
-                    var choice = MessageBox.Show($"{msg}\n\nAssign anyway?", "Not Enough Room",
-                        MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-                    if (choice != DialogResult.Yes) return;
-                }
-            }
-        }
-        catch { }
-
-        if (groupPeers.Count > 0)
-        {
-            int teamCount = 0;
-            try { using var db = new BocceDbContext(); teamCount = db.TeamPlayers.Count(tp => tp.TeamId == teamId.Value); }
-            catch { }
-
-            var peers = groupPeers.Take(Math.Max(0, teamCapacity - teamCount - 1)).ToList();
-            if (peers.Count > 0)
-            {
-                string peerNames = string.Join("\n", peers.Select(p => $"  • {p.Name}"));
-                string msg = $"{playerName} is in a group with:\n{peerNames}\n\nAdd group members to the same team?";
-                var ans = MessageBox.Show(msg, "Group Members", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
-                if (ans == DialogResult.Cancel) return;
-                if (ans == DialogResult.Yes) toAssign.AddRange(peers.Select(p => p.LftId));
-            }
-        }
-
-        foreach (int lid in toAssign)
-        {
-            try
-            {
-                using var db = new BocceDbContext();
-                var (ok, msg) = TeamApplicantService.PlaceLftPlayer(db, lid, teamId.Value);
-                if (!ok && lid == _selectedLftId.Value)
-                {
-                    MessageBox.Show(msg, "Assignment Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-        }
-
-        ClearDetail();
-        LoadGrid();
     }
 
     // ── Group management ───────────────────────────────────────────────────────
@@ -1935,82 +1830,6 @@ public class LookingForTeamPanel : UserControl
         var timeIds = clbTimes.CheckedItems.OfType<TimeItem>().Where(t => t.Id.HasValue).Select(t => t.Id!.Value).ToList();
         int? teamId = (cmbTeam.SelectedItem as TeamItem)?.Id;
         return new LftInitDetails(teamId, dayIds, timeIds, txtNotes.Text.Trim());
-    }
-
-    private int? PickTeamDialog(string prompt)
-    {
-        using var form = new Form
-        {
-            Text = "Select Team", Width = 600, Height = 540,
-            StartPosition = FormStartPosition.CenterParent,
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false, MinimizeBox = false,
-            BackColor = AppTheme.ContentBackground
-        };
-
-        var filterBar = new Panel { Dock = DockStyle.Top, Height = 62, BackColor = AppTheme.Surface };
-        var chkMax4 = new CheckBox { Text = "Only teams with room (≤ 4 players)",           Location = new Point(10, 10), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary };
-        var chkMax3 = new CheckBox { Text = "Only teams with lots of room (≤ 3 players)", Location = new Point(10, 36), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary };
-        filterBar.Controls.AddRange([chkMax4, chkMax3]);
-
-        var hint = new Label
-        {
-            Dock = DockStyle.Top, Height = 28, Text = $"  {prompt}",
-            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextMuted, BackColor = AppTheme.Surface,
-            TextAlign = ContentAlignment.MiddleLeft
-        };
-
-        var grid = MakePickerGrid(["TId", "Division", "Team", "Time"]);
-        grid.Columns["Time"].FillWeight = 15;
-        grid.DoubleClick += (_, _) => { if (grid.SelectedRows.Count > 0) form.DialogResult = DialogResult.OK; };
-
-        List<(int Id, string Div, string Display, string DayTime, int Count, int MaxCapacity)> teams = [];
-        try
-        {
-            using var db = new BocceDbContext();
-            teams = db.Teams
-                .Include(t => t.Division)
-                .Include(t => t.TeamPlayers)
-                .Where(t => t.Division.SeasonId == _seasonId && t.IsActive)
-                .OrderBy(t => t.Division.SortName).ThenBy(t => t.SortOrder)
-                .AsEnumerable()
-                .Select(t => (t.Id, t.Division.Name,
-                    $"{t.TeamLetter} — {t.EffectiveDisplayName} ({t.TeamPlayers.Count})",
-                    ExtractDayTime(t.SystemName),
-                    t.TeamPlayers.Count,
-                    t.Division.PlayersPerTeamMaximum ?? 5))
-                .ToList();
-        }
-        catch { }
-
-        void Filter()
-        {
-            grid.Rows.Clear();
-            foreach (var (id, div, display, dayTime, count, max) in teams)
-            {
-                if (chkMax4.Checked && count >= 5) continue;
-                if (chkMax3.Checked && count >= 4) continue;
-                grid.Rows.Add(id, div, display, dayTime);
-            }
-            if (grid.Rows.Count > 0) grid.Rows[0].Selected = true;
-        }
-
-        chkMax4.CheckedChanged += (_, _) => Filter();
-        chkMax3.CheckedChanged += (_, _) => Filter();
-        Filter();
-
-        var bar = PickerBar(form);
-        ((Button)bar.Controls[0]!).Text = "Assign";
-        form.Controls.AddRange([grid, bar, hint, filterBar]);
-        form.AcceptButton = (Button)bar.Controls[0];
-        form.CancelButton = (Button)bar.Controls[1];
-
-        if (form.ShowDialog(this) == DialogResult.OK && grid.SelectedRows.Count > 0)
-        {
-            var v = grid.SelectedRows[0].Cells[0].Value;
-            if (v != null && v != DBNull.Value) return Convert.ToInt32(v);
-        }
-        return null;
     }
 
     // ── Helper factories ───────────────────────────────────────────────────────
