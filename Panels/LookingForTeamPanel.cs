@@ -561,7 +561,7 @@ public class LookingForTeamPanel : UserControl
                     if (e.LookingForTeamGroupId.HasValue && groupDict.ContainsKey(e.LookingForTeamGroupId.Value))
                     {
                         var grp = groupDict[e.LookingForTeamGroupId.Value];
-                        grpLabel = $"{grp.Name}_{grp.Id}";
+                        grpLabel = grp.Name ?? "";
                     }
                     _grid.Rows.Add(e.Id, e.PlayerId, e.LookingForTeamGroupId,
                         name, e.Player.Phone ?? "", e.Player.Email ?? "", grpLabel);
