@@ -354,14 +354,17 @@ public static class AppTheme
 
     public static void ApplyControlStyles(Control container)
     {
-        foreach (Control ctrl in GetAllControls(container))
+        // Materialize before modifying the tree (WrapWithBorder changes parent/child structure)
+        var allControls = GetAllControls(container).ToList();
+
+        foreach (var ctrl in allControls)
         {
             if (ctrl is TextBox tb &&
                 ctrl.Parent is not SearchBoxControl &&
                 ctrl.Parent is not NumericUpDown &&
                 tb.BorderStyle != BorderStyle.None)
             {
-                tb.BorderStyle = BorderStyle.Fixed3D;
+                AddBorderedField(tb);
             }
             else if (ctrl is RichTextBox rtb)
             {
@@ -381,6 +384,30 @@ public static class AppTheme
                     btn.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(btn.BackColor);
             }
         }
+    }
+
+    // Removes the TextBox's own border and paints a custom colored border in the parent,
+    // turning theme-accent-colored on focus. No layout changes — border is painted outside
+    // the TextBox bounds in the parent's Paint event.
+    private static void AddBorderedField(TextBox tb)
+    {
+        var parent = tb.Parent;
+        if (parent == null) return;
+
+        tb.BorderStyle = BorderStyle.None;
+
+        parent.Paint += (_, e) =>
+        {
+            var color = (tb.Focused || tb.ContainsFocus) ? Accent : TextSecondary;
+            var r = new Rectangle(tb.Left - 1, tb.Top - 1, tb.Width + 2, tb.Height + 2);
+            ControlPaint.DrawBorder(e.Graphics, r, color, ButtonBorderStyle.Solid);
+        };
+
+        // Repaint the 1px ring around the TextBox when focus enters/leaves
+        tb.Enter += (_, _) =>
+            parent.Invalidate(new Rectangle(tb.Left - 1, tb.Top - 1, tb.Width + 2, tb.Height + 2), false);
+        tb.Leave += (_, _) =>
+            parent.Invalidate(new Rectangle(tb.Left - 1, tb.Top - 1, tb.Width + 2, tb.Height + 2), false);
     }
 
     private static IEnumerable<Control> GetAllControls(Control container)
