@@ -1,3 +1,5 @@
+using BocceManager.UI.Controls;
+
 namespace BocceManager.UI.Theme;
 
 public static class AppTheme
@@ -347,6 +349,37 @@ public static class AppTheme
         {
             if (!control.Enabled)
                 ApplyDisabledStyle(control);
+        }
+    }
+
+    public static void ApplyControlStyles(Control container)
+    {
+        foreach (Control ctrl in GetAllControls(container))
+        {
+            if (ctrl is TextBox tb &&
+                ctrl.Parent is not SearchBoxControl &&
+                ctrl.Parent is not NumericUpDown &&
+                tb.BorderStyle != BorderStyle.None)
+            {
+                tb.BorderStyle = BorderStyle.Fixed3D;
+            }
+            else if (ctrl is RichTextBox rtb)
+            {
+                rtb.BorderStyle = BorderStyle.Fixed3D;
+            }
+            else if (ctrl is ListBox lb)
+            {
+                lb.BorderStyle = BorderStyle.Fixed3D;
+            }
+            else if (ctrl is Button btn &&
+                     ctrl.Parent is not SearchBoxControl &&
+                     btn.FlatStyle == FlatStyle.Flat)
+            {
+                btn.FlatAppearance.BorderSize = 1;
+                btn.FlatAppearance.BorderColor = ControlPaint.Dark(btn.BackColor);
+                if (btn.FlatAppearance.MouseDownBackColor == Color.Empty)
+                    btn.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(btn.BackColor);
+            }
         }
     }
 

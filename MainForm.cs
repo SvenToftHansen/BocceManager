@@ -390,6 +390,7 @@ public partial class MainForm : Form
 
         pnlContent.Controls.Clear();
         pnlContent.Controls.Add(_currentPanel);
+        AppTheme.ApplyControlStyles(_currentPanel);
 
         lblCtxPageTitle.Text = SectionTitle(section);
         pnlNav.Refresh();

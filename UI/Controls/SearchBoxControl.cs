@@ -35,10 +35,10 @@ public class SearchBoxControl : UserControl
     {
         if (placeholder != null)
             _placeholder = placeholder;
-        Height = 28;
         BackColor = Color.Black;
         Padding = new Padding(1);
         BuildUI();
+        Height = _textBox.PreferredHeight + 2;
     }
 
     private void BuildUI()
