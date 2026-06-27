@@ -14,7 +14,6 @@ public class LookingForTeamPanel : UserControl
     private int? _selectedLftId;
     private int? _selectedGroupId;
     private bool _isLoadingData;
-    private bool _isDirty;
 
     // ── Left — grid ────────────────────────────────────────────────────────────
     private DataGridView _grid          = null!;
@@ -22,9 +21,9 @@ public class LookingForTeamPanel : UserControl
 
     // ── Right — detail ─────────────────────────────────────────────────────────
     private Label          _lblPlacedAs   = null!;
+    private Label          _lblPrefTimes  = null!;
     private CheckedListBox _clbPrefDays   = null!;
     private CheckedListBox _clbPrefTimes  = null!;
-    private ComboBox       _cmbPrefTeam   = null!;
     private TextBox        _txtNotes      = null!;
     private DataGridView   _grpGrid       = null!;
     private Button         _btnAddMember  = null!;
@@ -35,11 +34,8 @@ public class LookingForTeamPanel : UserControl
     // ── Toolbar buttons ────────────────────────────────────────────────────────
     private Button _btnAddPlayer = null!;
     private Button _btnRemove    = null!;
-    private Button _btnSave      = null!;
-    private Button _btnCancel    = null!;
 
-    private SplitContainer _mainSplit     = null!;
-    private const int      PreferredLeftW = 550;
+    private SplitContainer _mainSplit = null!;
 
     // ── Constructor ────────────────────────────────────────────────────────────
     public LookingForTeamPanel()
@@ -77,7 +73,6 @@ public class LookingForTeamPanel : UserControl
         finally
         {
             LoadDayTimeData();
-            LoadPreferredTeamCombo();
             LoadGrid();
             _isLoadingData = false;
         }
@@ -178,14 +173,14 @@ public class LookingForTeamPanel : UserControl
         int lMin = leftMin, rMin = rightMin;
         if (lMin + rMin > total)
         {
-            double ratio = leftMin / (double)(leftMin + rightMin);
-            lMin = (int)Math.Floor(total * ratio);
+            lMin = (int)Math.Floor(total * 0.60);
             rMin = total - lMin;
         }
         _mainSplit.Panel1MinSize = lMin;
         _mainSplit.Panel2MinSize = rMin;
-        int maxLeft = _mainSplit.Width - rMin;
-        int clamped = Math.Max(lMin, Math.Min(PreferredLeftW, maxLeft));
+        int target   = (int)(_mainSplit.Width * 0.60);
+        int maxLeft  = _mainSplit.Width - rMin;
+        int clamped  = Math.Max(lMin, Math.Min(target, maxLeft));
         if (clamped > 0) _mainSplit.SplitterDistance = clamped;
     }
 
@@ -232,31 +227,64 @@ public class LookingForTeamPanel : UserControl
 
     private Control BuildDetailPanel()
     {
-        var outer = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground, Padding = new Padding(8) };
-        var scrollPane = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        // Heights: header=22, 5 rows @ 18px each, 1px border = 22+90+1 = 113 → round to 115
+        const int grpGridH = 115;
+        // Preferred days/times: enough for 7 items (CheckedListBox default ~20px/item)
+        const int prefH    = 158;
+        const int notesH   = 60;
+        const int gap      = 4;
 
-        int y = 0, contentWidth = 300;
+        var outer = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground };
 
-        // Placed As label
-        _lblPlacedAs = new Label
+        // ── Bottom button bar (same style as left toolbar) ─────────────────────
+        var btnBar = new Panel { Dock = DockStyle.Bottom, Height = 46, BackColor = AppTheme.Surface };
+        _btnAddMember = new Button
         {
-            Location = new Point(0, y), AutoSize = true,
-            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextSecondary, Visible = false
+            Text = "+ Add Member", Left = 12, Top = 8, Width = 110, Height = 30,
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
         };
-        scrollPane.Controls.Add(_lblPlacedAs);
-        y += 25;
+        _btnAddMember.Click += (_, _) => AddMember();
+        _btnRemMember = new Button
+        {
+            Text = "Remove Member", Left = 130, Top = 8, Width = 120, Height = 30,
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
+        };
+        _btnRemMember.Click += (_, _) => RemoveMember();
+        _btnRenameGrp = new Button
+        {
+            Text = "Rename Group", Left = 258, Top = 8, Width = 110, Height = 30,
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
+        };
+        _btnRenameGrp.Click += (_, _) => RenameGroup();
+        _btnDeleteGrp = new Button
+        {
+            Text = "Delete Group", Left = 376, Top = 8, Width = 110, Height = 30,
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
+        };
+        _btnDeleteGrp.Click += (_, _) => DeleteGroup();
+        btnBar.Controls.AddRange([_btnAddMember, _btnRemMember, _btnRenameGrp, _btnDeleteGrp]);
 
-        // Group Members label
-        scrollPane.Controls.Add(Lbl("Group Members", 0, y));
-        y += 20;
+        // ── "Group Members" heading — Dock.Top, aligns with left "Players List" ─
+        var grpLbl = new Label
+        {
+            Text = "Group Members", Dock = DockStyle.Top, Height = 22, Padding = new Padding(8, 4, 0, 0),
+            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextSecondary
+        };
 
-        // Group grid - fills width, 18px per row for max 5 players (~100px height)
+        // ── Scrollable content (fills between heading and button bar) ──────────
+        var scrollPane = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.ContentBackground };
+
+        // grpGrid at top of scrollPane (width set in LayoutDetailControls)
         _grpGrid = new DataGridView
         {
-            Location = new Point(0, y), Size = new Size(contentWidth, 100),
+            Location = new Point(0, 0), Height = grpGridH,
             SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             MultiSelect = false, ReadOnly = true,
-            AllowUserToAddRows = false, RowHeadersVisible = false,
+            AllowUserToAddRows = false, RowHeadersVisible = false, AllowUserToResizeRows = false,
             BorderStyle = BorderStyle.FixedSingle,
             BackgroundColor = AppTheme.ContentBackground,
             Font = AppTheme.FontDefault, RowTemplate = { Height = 18 },
@@ -273,129 +301,82 @@ public class LookingForTeamPanel : UserControl
         _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GName",  HeaderText = "Member", FillWeight = 50 });
         _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GPhone", HeaderText = "Phone",  FillWeight = 25 });
         _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GEmail", HeaderText = "Email",  FillWeight = 25 });
-        _grpGrid.SelectionChanged += (_, _) =>
-            _btnRemMember.Enabled = _grpGrid.SelectedRows.Count > 0;
-        scrollPane.Controls.Add(_grpGrid);
-        y += 110;
+        _grpGrid.SelectionChanged += (_, _) => _btnRemMember.Enabled = _grpGrid.SelectedRows.Count > 0;
 
-        // Group buttons
-        var grpBtnPanel = new Panel { Location = new Point(0, y), Size = new Size(contentWidth, 28) };
-        _btnAddMember = new Button
+        // Placed-as info below grid (hidden until player is placed)
+        _lblPlacedAs = new Label
         {
-            Text = "+ Add", Left = 0, Top = 0, Width = 70, Height = 22,
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
+            Location = new Point(0, grpGridH + 4), AutoSize = true,
+            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextSecondary, Visible = false
         };
-        _btnAddMember.Click += (_, _) => AddMember();
 
-        _btnRemMember = new Button
-        {
-            Text = "Remove", Left = 75, Top = 0, Width = 70, Height = 22,
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
-        };
-        _btnRemMember.Click += (_, _) => RemoveMember();
+        int prefY = grpGridH + 28;
 
-        _btnRenameGrp = new Button
-        {
-            Text = "Rename", Left = 150, Top = 0, Width = 70, Height = 22,
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
-        };
-        _btnRenameGrp.Click += (_, _) => RenameGroup();
+        var lblDays = new Label { Text = "Preferred Days", Location = new Point(0, prefY),
+            AutoSize = true, Font = AppTheme.FontDefaultBold, ForeColor = AppTheme.TextPrimary };
+        _lblPrefTimes = new Label { Text = "Preferred Times", Location = new Point(0, prefY),
+            AutoSize = true, Font = AppTheme.FontDefaultBold, ForeColor = AppTheme.TextPrimary };
+        prefY += 20;
 
-        _btnDeleteGrp = new Button
-        {
-            Text = "Delete", Left = 225, Top = 0, Width = 70, Height = 22,
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
-        };
-        _btnDeleteGrp.Click += (_, _) => DeleteGroup();
-
-        grpBtnPanel.Controls.AddRange([_btnAddMember, _btnRemMember, _btnRenameGrp, _btnDeleteGrp]);
-        scrollPane.Controls.Add(grpBtnPanel);
-        y += 35;
-
-        // Preferred Days label above
-        scrollPane.Controls.Add(Lbl("Preferred Days", 0, y));
-        y += 18;
-
-        // Days and Times on same row
         _clbPrefDays = new CheckedListBox
         {
-            Location = new Point(0, y), Size = new Size(contentWidth / 2 - 5, 80),
+            Location = new Point(0, prefY), Height = prefH,
             CheckOnClick = true,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
             BorderStyle = BorderStyle.FixedSingle
         };
-        _clbPrefDays.ItemCheck += (_, _) => BeginInvoke(() => { if (!_isLoadingData) OnFieldChanged(null, EventArgs.Empty); });
-        scrollPane.Controls.Add(_clbPrefDays);
-
-        // Preferred Times label above
-        scrollPane.Controls.Add(Lbl("Preferred Times", contentWidth / 2 + 5, y - 18));
+        _clbPrefDays.ItemCheck += (_, _) =>
+            BeginInvoke(() => { if (!_isLoadingData && _selectedLftId.HasValue) SaveEntry(); });
 
         _clbPrefTimes = new CheckedListBox
         {
-            Location = new Point(contentWidth / 2 + 5, y), Size = new Size(contentWidth / 2 - 5, 80),
+            Location = new Point(0, prefY), Height = prefH,
             CheckOnClick = true,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
             BorderStyle = BorderStyle.FixedSingle
         };
-        _clbPrefTimes.ItemCheck += (_, _) => BeginInvoke(() => { if (!_isLoadingData) OnFieldChanged(null, EventArgs.Empty); });
-        scrollPane.Controls.Add(_clbPrefTimes);
-        y += 95;
+        _clbPrefTimes.ItemCheck += (_, _) =>
+            BeginInvoke(() => { if (!_isLoadingData && _selectedLftId.HasValue) SaveEntry(); });
 
-        // Preferred Team label above
-        scrollPane.Controls.Add(Lbl("Preferred Team", 0, y));
-        y += 18;
-
-        _cmbPrefTeam = new ComboBox
-        {
-            Location = new Point(0, y), Size = new Size(contentWidth, 24),
-            DropDownStyle = ComboBoxStyle.DropDownList,
-            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary
-        };
-        _cmbPrefTeam.SelectedIndexChanged += OnFieldChanged;
-        scrollPane.Controls.Add(_cmbPrefTeam);
-        y += 32;
-
-        // Notes label above
-        scrollPane.Controls.Add(Lbl("Notes", 0, y));
-        y += 18;
+        int notesY = prefY + prefH + 8;
+        var lblNotes = new Label { Text = "Notes", Location = new Point(0, notesY),
+            AutoSize = true, Font = AppTheme.FontDefaultBold, ForeColor = AppTheme.TextPrimary };
+        notesY += 20;
 
         _txtNotes = new TextBox
         {
-            Location = new Point(0, y), Size = new Size(contentWidth, 40),
+            Location = new Point(0, notesY), Height = notesH,
             Multiline = true, ScrollBars = ScrollBars.None,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface,
             ForeColor = AppTheme.TextPrimary, BorderStyle = BorderStyle.FixedSingle
         };
-        _txtNotes.TextChanged += OnFieldChanged;
-        scrollPane.Controls.Add(_txtNotes);
-        y += 50;
+        _txtNotes.Leave += (_, _) => { if (!_isLoadingData && _selectedLftId.HasValue) SaveEntry(); };
 
-        // Save/Cancel buttons
-        var btnBar = new Panel { Location = new Point(0, y), Size = new Size(150, 30) };
-        _btnSave = new Button
-        {
-            Text = "Save", Location = new Point(0, 0), Size = new Size(70, 24),
-            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
-        };
-        _btnSave.Click += (_, _) => SaveEntry();
+        scrollPane.Controls.AddRange([_grpGrid, _lblPlacedAs, lblDays, _lblPrefTimes,
+                                       _clbPrefDays, _clbPrefTimes, lblNotes, _txtNotes]);
 
-        _btnCancel = new Button
-        {
-            Text = "Cancel", Location = new Point(75, 0), Size = new Size(70, 24),
-            FlatStyle = FlatStyle.Flat, Font = AppTheme.FontButton, Cursor = Cursors.Hand,
-            FlatAppearance = { BorderSize = 1 }, Visible = false
-        };
-        _btnCancel.Click += (_, _) => CancelEdit();
-        btnBar.Controls.AddRange([_btnSave, _btnCancel]);
-        scrollPane.Controls.Add(btnBar);
+        // Resize width-dependent controls when scrollPane resizes
+        void DoLayout() => LayoutDetailControls(scrollPane.ClientSize.Width, gap);
+        scrollPane.Resize += (_, _) => DoLayout();
+        scrollPane.HandleCreated += (_, _) => BeginInvoke(new Action(DoLayout));
 
-        outer.Controls.Add(scrollPane);
+        // Z-order: add scrollPane first (Fill, processed last), grpLbl next (Top), btnBar last (Bottom, processed first)
+        outer.Controls.Add(scrollPane);  // processed last → Dock.Fill
+        outer.Controls.Add(grpLbl);      // processed second → Dock.Top
+        outer.Controls.Add(btnBar);      // processed first → Dock.Bottom
         return outer;
+    }
+
+    private void LayoutDetailControls(int w, int gap = 4)
+    {
+        if (w <= gap * 2) return;
+        int halfW = (w - gap) / 2;
+        _grpGrid.Width = w;
+        _clbPrefDays.Width = halfW;
+        _lblPrefTimes.Location = new Point(halfW + gap, _lblPrefTimes.Location.Y);
+        _clbPrefTimes.Location = new Point(halfW + gap, _clbPrefTimes.Location.Y);
+        _clbPrefTimes.Width = w - halfW - gap;
+        _txtNotes.Width = w;
     }
 
     // ── Data loading ───────────────────────────────────────────────────────────
@@ -470,51 +451,6 @@ public class LookingForTeamPanel : UserControl
         {
             return (new List<DaySlot>(), new List<TimeSlot>());
         }
-    }
-
-    private void LoadPreferredTeamCombo()
-    {
-        _cmbPrefTeam.Items.Clear();
-        _cmbPrefTeam.Items.Add(new TeamItem(null, "(any team)"));
-        if (!_seasonId.HasValue) { _cmbPrefTeam.SelectedIndex = 0; return; }
-        try
-        {
-            using var db = new BocceDbContext();
-            var teams = db.Teams
-                .Include(t => t.Division)
-                .Include(t => t.TeamPlayers)
-                .Where(t => t.Division.SeasonId == _seasonId.Value && t.IsActive)
-                .OrderBy(t => t.Division.SortName).ThenBy(t => t.SortOrder)
-                .AsEnumerable()
-                .ToList();
-            foreach (var t in teams)
-            {
-                string dayTime = ExtractDayTime(t.SystemName);
-                string display = $"{t.TeamLetter} — {t.EffectiveDisplayName} ({t.TeamPlayers.Count}) {dayTime}".Trim();
-                _cmbPrefTeam.Items.Add(new TeamItem(t.Id, display));
-            }
-        }
-        catch { }
-        _cmbPrefTeam.SelectedIndex = 0;
-    }
-
-    private static string ExtractDayTime(string systemName)
-    {
-        if (string.IsNullOrEmpty(systemName)) return "";
-        var parts = systemName.Split('-');
-        if (parts.Length >= 3)
-        {
-            string day = parts[1].ToUpper();
-            string time = parts[2];
-            if (time.Length == 4 && int.TryParse(time, out int timeVal))
-            {
-                int hour = timeVal / 100;
-                int min = timeVal % 100;
-                return $"({day}-{hour:D2}{min:D2})";
-            }
-            return $"({day}-{time})";
-        }
-        return "";
     }
 
     private void LoadGrid()
@@ -607,7 +543,6 @@ public class LookingForTeamPanel : UserControl
     {
         if (_isLoadingData) return;
         if (_grid.SelectedRows.Count == 0) { ClearDetail(); return; }
-        if (_isDirty && !ConfirmDiscard()) { _grid.ClearSelection(); return; }
 
         _selectedLftId = Convert.ToInt32(_grid.SelectedRows[0].Cells["GId"].Value);
         var grpCell    = _grid.SelectedRows[0].Cells["GGrpId"].Value;
@@ -654,25 +589,12 @@ public class LookingForTeamPanel : UserControl
                 _clbPrefTimes.SetItemChecked(i, check);
             }
 
-            _cmbPrefTeam.SelectedIndex = 0;
-            if (e.PreferredTeamId.HasValue)
-            {
-                for (int i = 1; i < _cmbPrefTeam.Items.Count; i++)
-                {
-                    if (_cmbPrefTeam.Items[i] is TeamItem t && t.Id == e.PreferredTeamId)
-                    { _cmbPrefTeam.SelectedIndex = i; break; }
-                }
-            }
-
             _txtNotes.Text = e.Notes ?? "";
 
             _btnRemove.Enabled    = true;
             _btnAddMember.Enabled = _selectedGroupId.HasValue;
             _btnRenameGrp.Enabled = _selectedGroupId.HasValue;
             _btnDeleteGrp.Enabled = _selectedGroupId.HasValue;
-            _btnSave.Enabled      = false;
-            _btnCancel.Visible    = false;
-            ClearDirty();
 
             LoadGroupMembers(lftId, e.LookingForTeamGroupId);
         }
@@ -713,31 +635,18 @@ public class LookingForTeamPanel : UserControl
                 _clbPrefDays.SetItemChecked(i, false);
             for (int i = 0; i < _clbPrefTimes.Items.Count; i++)
                 _clbPrefTimes.SetItemChecked(i, false);
-            if (_cmbPrefTeam.Items.Count > 0) _cmbPrefTeam.SelectedIndex = 0;
             _txtNotes.Text        = "";
             _grpGrid.Rows.Clear();
             _btnRemove.Enabled    = false;
-            _btnSave.Enabled      = false;
-            _btnCancel.Visible    = false;
             _btnAddMember.Enabled = false;
             _btnRemMember.Enabled = false;
             _btnRenameGrp.Enabled = false;
             _btnDeleteGrp.Enabled = false;
-            ClearDirty();
         }
         finally { _isLoadingData = false; }
     }
 
-    // ── Dirty tracking ─────────────────────────────────────────────────────────
-    private void OnFieldChanged(object? sender, EventArgs e)
-    {
-        if (_isLoadingData) return;
-        _isDirty           = true;
-        _btnSave.Enabled   = true;
-        _btnCancel.Visible = true;
-    }
-
-    private void ClearDirty() { _isDirty = false; _btnSave.Enabled = false; }
+    // ── (autosave wired directly in BuildDetailPanel via Leave / ItemCheck) ────
 
     // ── Actions ────────────────────────────────────────────────────────────────
     private void AddPlayerToLft()
@@ -802,11 +711,10 @@ public class LookingForTeamPanel : UserControl
                 using var db = new BocceDbContext();
                 var entry = new LookingForTeam
                 {
-                    LeagueId        = _leagueId.Value,
-                    SeasonId        = _seasonId.Value,
-                    PlayerId        = playerId,
-                    PreferredTeamId = details.PrefTeamId,
-                    Notes           = details.Notes.NullIfEmpty()
+                    LeagueId = _leagueId.Value,
+                    SeasonId = _seasonId.Value,
+                    PlayerId = playerId,
+                    Notes    = details.Notes.NullIfEmpty()
                 };
                 db.LookingForTeams.Add(entry);
                 db.SaveChanges();
@@ -973,33 +881,78 @@ public class LookingForTeamPanel : UserControl
             }
             else
             {
-                if (MessageBox.Show("Remove this player from the Looking for Team list?",
-                        "Confirm Remove", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
-                    return;
-
                 int? groupId = e.LookingForTeamGroupId;
                 if (groupId.HasValue)
                 {
                     var group = db.LookingForTeamGroups.Find(groupId.Value);
-                    if (group?.GroupLeaderId == e.Id)
+                    bool isLeader = group?.GroupLeaderId == e.Id;
+
+                    if (isLeader)
                     {
                         var otherMembers = db.LookingForTeams
+                            .Include(l => l.Player)
                             .Where(l => l.LookingForTeamGroupId == groupId && l.Id != e.Id)
                             .ToList();
 
                         if (otherMembers.Count > 0)
                         {
-                            int? newLeaderId = PromptSelectGroupLeader(
-                                otherMembers.Select(m => m.PlayerId).ToList(), db);
-                            if (!newLeaderId.HasValue) return;
+                            var groupAns = MessageBox.Show(
+                                $"This player is the group leader.\n\nDelete the entire group ({otherMembers.Count + 1} players total)?",
+                                "Remove Group Leader", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                            if (groupAns == DialogResult.Cancel) return;
 
-                            var newLeader = otherMembers.FirstOrDefault(m => m.PlayerId == newLeaderId);
-                            if (newLeader != null && group != null)
+                            if (groupAns == DialogResult.Yes)
                             {
-                                group.GroupLeaderId = newLeader.Id;
+                                if (group != null) { group.GroupLeaderId = null; db.SaveChanges(); }
+                                var groupMembers = db.LookingForTeams
+                                    .Where(l => l.LookingForTeamGroupId == groupId.Value).ToList();
+                                foreach (var m in groupMembers) m.LookingForTeamGroupId = null;
+                                db.SaveChanges();
+                                db.LookingForTeams.RemoveRange(groupMembers);
+                                if (group != null) db.LookingForTeamGroups.Remove(group);
+                                db.SaveChanges();
+                                _selectedLftId = null; _selectedGroupId = null;
+                                ClearDetail(); LoadGrid();
+                                return;
+                            }
+
+                            // Just remove this player — prompt for new leader
+                            int? newLeaderPid = PromptSelectGroupLeader(
+                                otherMembers.Select(m => m.PlayerId).ToList(), db);
+                            if (!newLeaderPid.HasValue) return;
+
+                            var newLeaderLft = otherMembers.FirstOrDefault(m => m.PlayerId == newLeaderPid.Value);
+                            if (newLeaderLft != null && group != null)
+                            {
+                                group.GroupLeaderId = newLeaderLft.Id;
                                 db.Entry(group).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
+
+                                if (MessageBox.Show("Rename the group after the new leader?",
+                                        "Rename Group", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                                {
+                                    string baseName  = newLeaderLft.Player.LastName;
+                                    int memberCount  = otherMembers.Count;
+                                    int disambig = db.LookingForTeamGroups
+                                        .Where(g => g.SeasonId == _seasonId!.Value && g.Id != group.Id
+                                                    && g.Name != null && g.Name.StartsWith(baseName + " ("))
+                                        .Count();
+                                    group.Name = $"{baseName} ({memberCount}.{disambig})";
+                                }
                             }
                         }
+                        else
+                        {
+                            // Solo leader (group of 1) — confirm before removing
+                            if (MessageBox.Show("Remove this player from the Looking for Team list?",
+                                    "Confirm Remove", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                                return;
+                        }
+                    }
+                    else
+                    {
+                        if (MessageBox.Show("Remove this player from the Looking for Team list?",
+                                "Confirm Remove", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                            return;
                     }
 
                     e.LookingForTeamGroupId = null;
@@ -1009,6 +962,9 @@ public class LookingForTeamPanel : UserControl
                 }
                 else
                 {
+                    if (MessageBox.Show("Remove this player from the Looking for Team list?",
+                            "Confirm Remove", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                        return;
                     db.LookingForTeams.Remove(e);
                     db.SaveChanges();
                 }
@@ -1041,8 +997,6 @@ public class LookingForTeamPanel : UserControl
             .Select(t => t.Id!.Value)
             .ToHashSet();
 
-        int? prefTeamId = (_cmbPrefTeam.SelectedItem as TeamItem)?.Id;
-
         try
         {
             using var db = new BocceDbContext();
@@ -1052,8 +1006,7 @@ public class LookingForTeamPanel : UserControl
                 .FirstOrDefault(l => l.Id == _selectedLftId.Value);
             if (e == null) return;
 
-            e.PreferredTeamId = prefTeamId;
-            e.Notes           = _txtNotes.Text.Trim().NullIfEmpty();
+            e.Notes = _txtNotes.Text.Trim().NullIfEmpty();
 
             var existingDayIds = e.PreferredDays.Select(d => d.DaySlotId).ToHashSet();
             foreach (var del in e.PreferredDays.Where(d => !checkedDayIds.Contains(d.DaySlotId)).ToList())
@@ -1070,25 +1023,12 @@ public class LookingForTeamPanel : UserControl
                     { LookingForTeamId = e.Id, TimeSlotId = addId });
 
             db.SaveChanges();
-            AppLogger.Info("Updated LFT entry {Id}", _selectedLftId.Value);
+            AppLogger.Debug("Auto-saved LFT entry {Id}", _selectedLftId.Value);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Could not save:\n{ex.Message}", "Error",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return;
+            AppLogger.Error(ex, "Failed to auto-save LFT entry {Id}", _selectedLftId.Value);
         }
-
-        ClearDirty();
-        _btnCancel.Visible = false;
-        LoadGrid();
-    }
-
-    private void CancelEdit()
-    {
-        _isDirty = false; _btnCancel.Visible = false;
-        if (_selectedLftId.HasValue) LoadDetail(_selectedLftId.Value);
-        else ClearDetail();
     }
 
     // ── Group management ───────────────────────────────────────────────────────
@@ -1975,13 +1915,13 @@ public class LookingForTeamPanel : UserControl
         }
     }
 
-    private record LftInitDetails(int? PrefTeamId, List<int> PrefDayIds, List<int> PrefTimeIds, string Notes);
+    private record LftInitDetails(List<int> PrefDayIds, List<int> PrefTimeIds, string Notes);
 
     private LftInitDetails? PromptLftDetails()
     {
         using var form = new Form
         {
-            Text = "Looking For Team — Details", Width = 480, Height = 440,
+            Text = "Looking For Team — Details", Width = 480, Height = 390,
             StartPosition = FormStartPosition.CenterParent,
             FormBorderStyle = FormBorderStyle.FixedDialog,
             MaximizeBox = false, MinimizeBox = false,
@@ -1994,34 +1934,22 @@ public class LookingForTeamPanel : UserControl
         pnl.Controls.Add(Lbl("Preferred Days", lx, y));
         var clbDays = new CheckedListBox
         {
-            Location = new Point(fx, y), Size = new Size(fw, 90), CheckOnClick = true,
+            Location = new Point(fx, y), Size = new Size(fw, 100), CheckOnClick = true,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, BorderStyle = BorderStyle.FixedSingle
         };
         foreach (var d in _clbPrefDays.Items.Cast<object>()) clbDays.Items.Add(d);
         pnl.Controls.Add(clbDays);
-        y += 100;
+        y += 110;
 
         pnl.Controls.Add(Lbl("Preferred Times", lx, y));
         var clbTimes = new CheckedListBox
         {
-            Location = new Point(fx, y), Size = new Size(fw, 90), CheckOnClick = true,
+            Location = new Point(fx, y), Size = new Size(fw, 100), CheckOnClick = true,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, BorderStyle = BorderStyle.FixedSingle
         };
         foreach (var t in _clbPrefTimes.Items.Cast<object>()) clbTimes.Items.Add(t);
         pnl.Controls.Add(clbTimes);
-        y += 100;
-
-        pnl.Controls.Add(Lbl("Preferred Team", lx, y));
-        var cmbTeam = new ComboBox
-        {
-            Location = new Point(fx, y), Size = new Size(fw, 26),
-            DropDownStyle = ComboBoxStyle.DropDownList,
-            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface
-        };
-        foreach (var item in _cmbPrefTeam.Items.Cast<object>()) cmbTeam.Items.Add(item);
-        if (cmbTeam.Items.Count > 0) cmbTeam.SelectedIndex = 0;
-        pnl.Controls.Add(cmbTeam);
-        y += 36;
+        y += 110;
 
         pnl.Controls.Add(Lbl("Notes", lx, y));
         var txtNotes = new TextBox
@@ -2042,8 +1970,7 @@ public class LookingForTeamPanel : UserControl
 
         var dayIds  = clbDays.CheckedItems.OfType<DayItem>().Where(d => d.Id.HasValue).Select(d => d.Id!.Value).ToList();
         var timeIds = clbTimes.CheckedItems.OfType<TimeItem>().Where(t => t.Id.HasValue).Select(t => t.Id!.Value).ToList();
-        int? teamId = (cmbTeam.SelectedItem as TeamItem)?.Id;
-        return new LftInitDetails(teamId, dayIds, timeIds, txtNotes.Text.Trim());
+        return new LftInitDetails(dayIds, timeIds, txtNotes.Text.Trim());
     }
 
     // ── Helper factories ───────────────────────────────────────────────────────
@@ -2082,10 +2009,6 @@ public class LookingForTeamPanel : UserControl
         return bar;
     }
 
-    private bool ConfirmDiscard()
-        => MessageBox.Show("You have unsaved changes. Discard them?", "Unsaved Changes",
-            MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
-
     private static Label Lbl(string text, int x, int y) => new()
     {
         Text = text, Font = AppTheme.FontDefaultBold, ForeColor = AppTheme.TextPrimary,
@@ -2102,10 +2025,6 @@ public class LookingForTeamPanel : UserControl
         public override string ToString() => Time12h;
     }
 
-    private sealed record TeamItem(int? Id, string Display)
-    {
-        public override string ToString() => Display;
-    }
 }
 
 file static class LftStringExtensions
