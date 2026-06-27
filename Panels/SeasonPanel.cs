@@ -13,6 +13,7 @@ public class SeasonPanel : UserControl
     private bool _isDirty = false;
     private bool _isCreatingNew = false;
     private bool _isNewSeasonDraft = false;
+    private readonly System.Windows.Forms.Timer _autoSaveTimer = new() { Interval = 1500 };
     private bool _seasonNameCustomized = false;
     private bool _settingSeasonNameProgrammatically = false;
 
@@ -85,6 +86,7 @@ public class SeasonPanel : UserControl
         BackColor = AppTheme.ContentBackground;
         Dock = DockStyle.Fill;
         BuildUI();
+        _autoSaveTimer.Tick += (_, _) => { _autoSaveTimer.Stop(); if (_isDirty && !_isCreatingNew) SaveSeason(silent: true); };
         AppParameterService.DefaultsChanged += OnDefaultsChanged;
         LoadContext();
     }
@@ -181,7 +183,7 @@ public class SeasonPanel : UserControl
             TextAlign = ContentAlignment.MiddleLeft
         };
 
-        _txtSearch = new SearchBoxControl
+        _txtSearch = new SearchBoxControl("Search seasons...")
         {
             Dock = DockStyle.Top,
             Height = 28,
@@ -455,10 +457,10 @@ public class SeasonPanel : UserControl
 
         _btnSave = new Button
         {
-            Text = "Save Changes", Location = new Point(160, 10), Size = new Size(140, 32),
+            Text = "Create Season", Location = new Point(160, 10), Size = new Size(140, 32),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
-            Enabled = false
+            Visible = false
         };
         _btnSave.Click += (_, _) => SaveSeason();
 
@@ -470,7 +472,7 @@ public class SeasonPanel : UserControl
             FlatAppearance = { BorderSize = 1, BorderColor = AppTheme.Separator },
             Visible = false
         };
-        _btnCancel.Click += (_, _) => CancelAddSeason();
+        _btnCancel.Click += (_, _) => { if (_isCreatingNew) CancelAddSeason(); else CancelEditSeason(); };
 
         _btnDelete = new Button
         {
@@ -730,32 +732,10 @@ public class SeasonPanel : UserControl
     {
         if (_isLoadingData) return;
 
-        // Check for unsaved changes
-        if (_isDirty)
+        if (_isDirty && !_isCreatingNew)
         {
-            var result = MessageBox.Show(
-                "You have unsaved changes. Do you want to discard them?",
-                "Unsaved Changes",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning);
-
-            if (result == DialogResult.No)
-            {
-                // Restore previous selection
-                _isLoadingData = true;
-                try
-                {
-                    if (_previousSeasonId.HasValue)
-                        _lstSeasons.SelectedItem = _lstSeasons.Items.Cast<ListItem>().FirstOrDefault(x => x.Id == _previousSeasonId.Value);
-                    else
-                        _lstSeasons.SelectedIndex = -1;
-                }
-                finally
-                {
-                    _isLoadingData = false;
-                }
-                return;
-            }
+            _autoSaveTimer.Stop();
+            SaveSeason(silent: true);
         }
 
         if (_lstSeasons.SelectedItem is ListItem li)
@@ -824,10 +804,8 @@ public class SeasonPanel : UserControl
         LoadDivisions(seasonId);
         LoadSeasonSlots(seasonId);
         UpdateDeleteButtonState();
-        ClearDirty();
         _isCreatingNew = false;
-        _btnCancel.Visible = false;
-        _btnDelete.Visible = true;
+        ClearDirty();
         ApplyEditorLockState(_chkIsLocked.Checked);
     }
 
@@ -967,17 +945,16 @@ public class SeasonPanel : UserControl
             return;
         }
 
-        _isCreatingNew = true;
         _previousSeasonId = _selectedSeasonId;
         _lstSeasons.SelectedIndexChanged -= OnListSeasonSelected;
         _lstSeasons.ClearSelected();
         _lstSeasons.SelectedIndexChanged += OnListSeasonSelected;
         ClearEditor();
+        _isCreatingNew = true;  // Set after ClearEditor (which resets it)
         _isNewSeasonDraft = true;
         _seasonNameCustomized = false;
         ApplyDefaultSeasonNameForNewDraft();
-        _btnCancel.Visible = true;
-        _btnDelete.Visible = false;
+        UpdateButtonVisibility();
 
         try
         {
@@ -1021,9 +998,8 @@ public class SeasonPanel : UserControl
 
     private void CancelAddSeason()
     {
+        _autoSaveTimer.Stop();
         _isCreatingNew = false;
-        _btnCancel.Visible = false;
-        _btnDelete.Visible = _selectedSeasonId.HasValue;
         ClearEditor();
         if (_previousSeasonId.HasValue)
         {
@@ -1035,6 +1011,17 @@ public class SeasonPanel : UserControl
         {
             LoadSeasonList();
         }
+    }
+
+    private void CancelEditSeason()
+    {
+        _autoSaveTimer.Stop();
+        _isDirty = false;
+        if (_selectedSeasonId.HasValue)
+            LoadSeason(_selectedSeasonId.Value);
+        else
+            ClearEditor();
+        UpdateButtonVisibility();
     }
 
     private void OnSeasonStartDateChanged(object? sender, EventArgs e)
@@ -1154,49 +1141,46 @@ public class SeasonPanel : UserControl
     {
         if (_isLoadingData || _btnSave == null) return;
         _isDirty = true;
-        _btnSave.Enabled = true;
         UpdateButtonVisibility();
+        if (!_isCreatingNew) { _autoSaveTimer.Stop(); _autoSaveTimer.Start(); }
     }
 
     private void ClearDirty()
     {
         if (_btnSave == null) return;
         _isDirty = false;
-        _btnSave.Enabled = false;
+        _autoSaveTimer.Stop();
         UpdateButtonVisibility();
     }
 
     private void UpdateButtonVisibility()
     {
-        if (_isDirty || _isCreatingNew)
+        _btnSave.Visible = _isCreatingNew;
+        if (_isCreatingNew)
         {
-            _btnAdd.Visible = false;
+            _btnAdd.Visible    = false;
             _btnCancel.Visible = true;
             _btnDelete.Visible = false;
         }
         else
         {
-            _btnAdd.Visible = true;
+            _btnAdd.Visible    = true;
             _btnCancel.Visible = false;
-            _btnDelete.Visible = true;
+            _btnDelete.Visible = _selectedSeasonId.HasValue;
         }
     }
 
     // ── Save ──────────────────────────────────────────────────────────────────
 
-    private void SaveSeason()
+    private void SaveSeason(bool silent = false)
     {
         var name = _txtName.Text.Trim();
         if (string.IsNullOrEmpty(name))
         {
-            MessageBox.Show("Season name is required.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            _txtName.Focus(); return;
-        }
-        if (!_selectedLeagueId.HasValue)
-        {
-            MessageBox.Show("Select a league in the top bar first.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            if (!silent) { MessageBox.Show("Season name is required.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning); _txtName.Focus(); }
             return;
         }
+        if (!_selectedLeagueId.HasValue) return;
 
         bool isNew = !_selectedSeasonId.HasValue;
 
@@ -1210,20 +1194,14 @@ public class SeasonPanel : UserControl
 
             if (isDuplicate)
             {
-                MessageBox.Show($"A season named \"{name}\" already exists in this league.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-
-                if (_selectedSeasonId.HasValue)
-                {
-                    // For editing: restore original values
-                    LoadSeason(_selectedSeasonId.Value);
-                }
-                // For new: do nothing, stays in edit mode
+                if (!silent) MessageBox.Show($"A season named \"{name}\" already exists in this league.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                if (_selectedSeasonId.HasValue) LoadSeason(_selectedSeasonId.Value);
                 return;
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Validation failed:\n\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            if (!silent) MessageBox.Show($"Validation failed:\n\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
 
@@ -1291,15 +1269,16 @@ public class SeasonPanel : UserControl
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Save failed:\n\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            if (!silent) MessageBox.Show($"Save failed:\n\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            else AppLogger.Error(ex, "Autosave failed for season {Id}", _selectedSeasonId);
             return;
         }
 
         _selectedSeasonId = savedId;
 
-        string divMsg = "";
         if (isNew)
         {
+            string divMsg = "";
             if (_isCopied && _copySourceId.HasValue)
             {
                 var (divs, teams, players, lft) = CopySeasonData(_copySourceId.Value, savedId, _copyDivisions, _copyTeams);
@@ -1318,15 +1297,12 @@ public class SeasonPanel : UserControl
                 int n = BuildDivisionsFromSlots(savedId);
                 divMsg = n > 0 ? $"\n\n{n} division(s) created from selected day/time slots." : "";
             }
+            if (!silent) MessageBox.Show("Season created." + divMsg, "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
-
-        MessageBox.Show("Season saved." + divMsg, "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
         _isNewSeasonDraft = false;
         _previousSeasonId = null;
         _isCreatingNew = false;
-        _btnCancel.Visible = false;
-        _btnDelete.Visible = true;
         ClearDirty();
 
         LoadSeasonList();

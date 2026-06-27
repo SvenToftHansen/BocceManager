@@ -61,6 +61,7 @@ public class PlayerPanel : UserControl
     private bool _isSavingAndReloading = false;
     private bool _seasonIsLocked = false;
     private bool _isSearching = false;
+    private readonly System.Windows.Forms.Timer _autoSaveTimer = new() { Interval = 1500 };
 
     private SearchBoxControl _txtSearch = null!;
     private ListBox _lstPlayers = null!;
@@ -93,6 +94,7 @@ public class PlayerPanel : UserControl
         Dock = DockStyle.Fill;
 
         BuildUi();
+        _autoSaveTimer.Tick += (_, _) => { _autoSaveTimer.Stop(); if (_isDirty && !_isCreatingNew) SavePlayer(silent: true); };
         LoadPlayerLookup();
         SetMode(PlayerMode.View);
     }
@@ -585,37 +587,10 @@ public class PlayerPanel : UserControl
         if (_isSearching) return;  // Skip check during search filter
         if (_lstPlayers.SelectedItem is not PlayerListItem item) return;
 
-        // Check for unsaved changes
-        if (_isDirty)
+        if (_isDirty && !_isCreatingNew)
         {
-            var result = MessageBox.Show(
-                "You have unsaved changes. Do you want to discard them?",
-                "Unsaved Changes",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning);
-
-            if (result == DialogResult.No)
-            {
-                // Restore previous selection
-                _isLoadingData = true;
-                try
-                {
-                    if (_previousPlayerId.HasValue)
-                    {
-                        var prevItem = _lstPlayers.Items.Cast<PlayerListItem>()
-                            .FirstOrDefault(x => x.Id == _previousPlayerId.Value);
-                        if (prevItem != null)
-                            _lstPlayers.SelectedItem = prevItem;
-                    }
-                    else
-                        _lstPlayers.SelectedIndex = -1;
-                }
-                finally
-                {
-                    _isLoadingData = false;
-                }
-                return;
-            }
+            _autoSaveTimer.Stop();
+            SavePlayer(silent: true);
         }
 
         _previousPlayerId = _selectedPlayerId;
@@ -736,9 +711,8 @@ public class PlayerPanel : UserControl
 
         _btnEdit.Visible = false;  // Edit button hidden - fields always editable
 
-        _btnSave.Visible = true;  // Always visible so user can make changes and save
-        _btnSave.Enabled = _isCreatingNew || _isDirty;
-        _btnSave.Text = mode == PlayerMode.Create ? "Create Player" : "Save Player";
+        _btnSave.Visible = _isCreatingNew;
+        _btnSave.Text = "Create Player";
 
         UpdateButtonVisibility();
 
@@ -759,33 +733,31 @@ public class PlayerPanel : UserControl
     {
         if (_isLoadingData || _isSearching || _btnSave == null) return;
         _isDirty = true;
-        _btnSave.Enabled = true;
         UpdateButtonVisibility();
+        if (!_isCreatingNew) { _autoSaveTimer.Stop(); _autoSaveTimer.Start(); }
     }
 
     private void ClearDirty()
     {
         if (_btnSave == null) return;
         _isDirty = false;
-        _btnSave.Enabled = false;
+        _autoSaveTimer.Stop();
         UpdateButtonVisibility();
     }
 
     private void UpdateButtonVisibility()
     {
-        if (_isDirty || _isCreatingNew)
+        if (_isCreatingNew)
         {
-            _btnNew.Visible = false;
+            _btnNew.Visible    = false;
             _btnCancel.Visible = true;
             _btnDelete.Visible = false;
-            _btnSave.Enabled = true;
         }
         else
         {
-            _btnNew.Visible = true;
+            _btnNew.Visible    = true;
             _btnCancel.Visible = false;
             _btnDelete.Visible = _selectedPlayerId.HasValue;
-            _btnSave.Enabled = false;
         }
     }
 
@@ -816,6 +788,8 @@ public class PlayerPanel : UserControl
 
     private void CancelEdit()
     {
+        _autoSaveTimer.Stop();
+        _isDirty = false;
         if (_selectedPlayerId.HasValue)
             LoadPlayerForView(_selectedPlayerId.Value);
         else
@@ -940,15 +914,8 @@ public class PlayerPanel : UserControl
 
         try
         {
-            using var db = new BocceDbContext();
-            var team = db.Teams.AsNoTracking().FirstOrDefault(t => t.Id == selectedTeam.TeamId);
-            if (team == null)
-                return;
-
             if (FindParentMainForm() is MainForm mainForm)
-            {
-                mainForm.NavigateToDivision(team.DivisionId);
-            }
+                mainForm.NavigateToTeam(selectedTeam.TeamId);
         }
         catch (Exception ex)
         {
@@ -968,15 +935,14 @@ public class PlayerPanel : UserControl
         return null;
     }
 
-    private void SavePlayer()
+    private void SavePlayer(bool silent = false)
     {
-        System.Diagnostics.Debug.WriteLine("SavePlayer called");
         string firstName = _txtFirstName.Text.Trim();
         string lastName = _txtLastName.Text.Trim();
 
         if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName))
         {
-            MessageBox.Show("First Name and Last Name are required.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            if (!silent) MessageBox.Show("First Name and Last Name are required.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
@@ -1010,11 +976,7 @@ public class PlayerPanel : UserControl
             else if (_mode == PlayerMode.View && _selectedPlayerId.HasValue)
             {
                 var player = db.Players.FirstOrDefault(p => p.Id == _selectedPlayerId.Value);
-                if (player == null)
-                {
-                    MessageBox.Show("Player no longer exists.", "Players", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
+                if (player == null) return;
 
                 player.FirstName = firstName;
                 player.LastName = lastName;
@@ -1031,28 +993,32 @@ public class PlayerPanel : UserControl
                 return;
             }
 
-            try
+            _isSavingAndReloading = true;
+            try { LoadPlayerLookup(_selectedPlayerId); }
+            finally { _isSavingAndReloading = false; }
+
+            if (silent)
             {
-                _isSavingAndReloading = true;
-                LoadPlayerLookup(_selectedPlayerId);
+                ClearDirty();
+                AppLogger.Debug("Autosaved player {Id}", _selectedPlayerId);
+            }
+            else
+            {
                 if (_selectedPlayerId.HasValue)
                     LoadPlayerForView(_selectedPlayerId.Value);
+                MessageBox.Show("Player saved.", "Players", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                SetMode(PlayerMode.View);
             }
-            finally
-            {
-                _isSavingAndReloading = false;
-            }
-
-            MessageBox.Show("Player saved.", "Players", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            SetMode(PlayerMode.View);
         }
         catch (Exception ex)
         {
-            string fullError = ex.Message;
-            if (ex.InnerException != null)
-                fullError += $"\n\nInner: {ex.InnerException.Message}";
-            System.Diagnostics.Debug.WriteLine($"SavePlayer exception: {fullError}\n{ex.StackTrace}");
-            MessageBox.Show($"Unable to save player.\n\n{fullError}", "Players", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            if (!silent)
+            {
+                string fullError = ex.Message;
+                if (ex.InnerException != null) fullError += $"\n\nInner: {ex.InnerException.Message}";
+                MessageBox.Show($"Unable to save player.\n\n{fullError}", "Players", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            else AppLogger.Error(ex, "Autosave failed for player {Id}", _selectedPlayerId);
         }
     }
 

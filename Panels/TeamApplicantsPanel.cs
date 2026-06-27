@@ -15,6 +15,7 @@ public class TeamApplicantsPanel : UserControl
     private bool _isLoadingData = false;
     private bool _isDirty = false;
     private bool _isCreatingNew = false;
+    private readonly System.Windows.Forms.Timer _autoSaveTimer = new() { Interval = 1500 };
 
     private sealed class ApplicantListItem
     {
@@ -79,6 +80,7 @@ public class TeamApplicantsPanel : UserControl
         BackColor = AppTheme.ContentBackground;
         Dock = DockStyle.Fill;
         BuildUi();
+        _autoSaveTimer.Tick += (_, _) => { _autoSaveTimer.Stop(); if (_isDirty && !_isCreatingNew) SaveApplicant(silent: true); };
         AppParameterService.DefaultsChanged += OnDefaultsChanged;
         LoadContext();
     }
@@ -387,9 +389,9 @@ public class TeamApplicantsPanel : UserControl
 
         _btnSave = new Button
         {
-            Text = "Save", Location = new Point(12, 8), Size = new Size(90, 30),
+            Text = "Create Group", Location = new Point(12, 8), Size = new Size(110, 30),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
-            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Visible = false
         };
         _btnSave.Click += (_, _) => SaveApplicant();
 
@@ -494,7 +496,11 @@ public class TeamApplicantsPanel : UserControl
             ClearEditor();
             return;
         }
-        if (_isDirty && !ConfirmDiscard()) { _lstApplicants.SelectedIndex = -1; return; }
+        if (_isDirty && !_isCreatingNew)
+        {
+            _autoSaveTimer.Stop();
+            SaveApplicant(silent: true);
+        }
 
         _selectedApplicantId = item.Id;
         LoadApplicant(item.Id);
@@ -541,7 +547,6 @@ public class TeamApplicantsPanel : UserControl
             bool isPending = a.Status == "Pending";
             _btnPlaceGroup.Enabled = isPending;
             _btnDelete.Enabled     = true;
-            _btnSave.Enabled       = false;
             _btnCancel.Visible     = false;
             _isCreatingNew         = false;
             ClearDirty();
@@ -591,7 +596,6 @@ public class TeamApplicantsPanel : UserControl
             _lblCreated.Text       = "";
             _members.Clear();
             _membersGrid.Rows.Clear();
-            _btnSave.Enabled       = false;
             _btnCancel.Visible     = false;
             _btnDelete.Enabled     = false;
             _btnPlaceGroup.Enabled = false;
@@ -611,20 +615,26 @@ public class TeamApplicantsPanel : UserControl
     private void SetDirty()
     {
         _isDirty = true;
-        _btnSave.Enabled   = true;
-        _btnCancel.Visible = true;
+        _btnSave.Visible   = _isCreatingNew;
+        _btnCancel.Visible = _isCreatingNew;
+        if (!_isCreatingNew) { _autoSaveTimer.Stop(); _autoSaveTimer.Start(); }
     }
 
     private void ClearDirty()
     {
         _isDirty = false;
-        _btnSave.Enabled = false;
+        _autoSaveTimer.Stop();
+        _btnSave.Visible = false;
     }
 
     // ── Add / Save / Cancel / Delete ───────────────────────────────────────────
     private void StartAddApplicant()
     {
-        if (_isDirty && !ConfirmDiscard()) return;
+        if (_isDirty && !_isCreatingNew)
+        {
+            _autoSaveTimer.Stop();
+            SaveApplicant(silent: true);
+        }
         if (!_leagueId.HasValue || !_seasonId.HasValue)
         {
             MessageBox.Show("Select a league and season first.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -635,18 +645,17 @@ public class TeamApplicantsPanel : UserControl
         _isLoadingData = false;
         ClearEditor();
         _isCreatingNew = true;
+        _btnSave.Visible = true;
         _btnCancel.Visible = true;
         _txtGroupName.Focus();
-        SetDirty();
     }
 
-    private void SaveApplicant()
+    private void SaveApplicant(bool silent = false)
     {
         string name = _txtGroupName.Text.Trim();
         if (string.IsNullOrEmpty(name))
         {
-            MessageBox.Show("Group Name is required.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            _txtGroupName.Focus();
+            if (!silent) { MessageBox.Show("Group Name is required.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning); _txtGroupName.Focus(); }
             return;
         }
 
@@ -716,9 +725,9 @@ public class TeamApplicantsPanel : UserControl
                 }
             }
 
-            _isCreatingNew     = false;
-            _btnCancel.Visible = false;
-            _btnDelete.Enabled = true;
+            _isCreatingNew         = false;
+            _btnCancel.Visible     = false;
+            _btnDelete.Enabled     = true;
             _btnPlaceGroup.Enabled = true;
             ClearDirty();
 
@@ -727,12 +736,14 @@ public class TeamApplicantsPanel : UserControl
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Could not save:\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            if (!silent) MessageBox.Show($"Could not save:\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            else AppLogger.Error(ex, "Autosave failed for applicant {Id}", _selectedApplicantId);
         }
     }
 
     private void CancelEdit()
     {
+        _autoSaveTimer.Stop();
         _isCreatingNew = false;
         _isDirty = false;
         _btnCancel.Visible = false;

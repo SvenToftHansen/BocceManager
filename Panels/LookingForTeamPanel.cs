@@ -414,7 +414,7 @@ public class LookingForTeamPanel : UserControl
                 Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary
             };
             cb.CheckedChanged += (_, _) =>
-                BeginInvoke(() => { if (!_isLoadingData && _selectedLftId.HasValue) SaveEntry(); });
+                { if (!_isLoadingData && _selectedLftId.HasValue) SaveEntry(); };
             pnl.Controls.Add(cb);
             y += 22;
         }

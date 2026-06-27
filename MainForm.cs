@@ -434,6 +434,13 @@ public partial class MainForm : Form
             dp.SelectDivision(divisionId.Value);
     }
 
+    public void NavigateToTeam(int teamId)
+    {
+        Navigate(NavSection.Teams);
+        if (_currentPanel is DivisionPanel dp)
+            dp.SelectTeam(teamId);
+    }
+
     public void NavigateToSeasons(int? seasonId = null)
     {
         Navigate(NavSection.Seasons);

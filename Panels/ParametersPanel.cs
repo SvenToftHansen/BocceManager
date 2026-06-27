@@ -15,11 +15,13 @@ public class ParametersPanel : UserControl
     // File param (auto-save on browse)
     private TextBox _txtClubRulesDoc = null!;
 
-    // Text params (saved via Save button)
+    // Text params (autosaved on change)
     private TextBox _txtClubName      = null!;
     private TextBox _txtCaptainName   = null!;
     private TextBox _txtCaptainEmail  = null!;
     private TextBox _txtInitiationFeeAmount = null!;
+
+    private readonly System.Windows.Forms.Timer _autoSaveTimer = new() { Interval = 1500 };
 
     public ParametersPanel()
     {
@@ -37,26 +39,7 @@ public class ParametersPanel : UserControl
             BackColor   = AppTheme.ContentBackground,
             Padding     = new Padding(0)
         };
-
-        var toolbar = MakeToolbar();
-
-        var outer = new TableLayoutPanel
-        {
-            Dock            = DockStyle.Fill,
-            ColumnCount     = 1,
-            RowCount        = 2,
-            Padding         = Padding.Empty,
-            Margin          = Padding.Empty,
-            CellBorderStyle = TableLayoutPanelCellBorderStyle.None
-        };
-        outer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
-        scroll.Dock  = DockStyle.Fill;
-        toolbar.Dock = DockStyle.Fill;
-        outer.Controls.Add(scroll,   0, 0);
-        outer.Controls.Add(toolbar,  0, 1);
-        Controls.Add(outer);
+        Controls.Add(scroll);
 
         // Populate scroll area rows
         int y = 16;
@@ -81,10 +64,22 @@ public class ParametersPanel : UserControl
         y += 12;
 
         y = AddSectionHeader(scroll, "FEES", y);
-        y = AddTextRow(scroll, "Initiation Fee Amount", "InitiationFeeAmount", ref _txtInitiationFeeAmount, y);
+        _ = AddTextRow(scroll, "Initiation Fee Amount", "InitiationFeeAmount", ref _txtInitiationFeeAmount, y);
 
-        // Load text param values
         LoadTextParams();
+
+        // Wire autosave timer
+        _autoSaveTimer.Tick += (_, _) => { _autoSaveTimer.Stop(); SaveTextParams(); };
+        _txtClubName.TextChanged             += (_, _) => ScheduleAutoSave();
+        _txtCaptainName.TextChanged          += (_, _) => ScheduleAutoSave();
+        _txtCaptainEmail.TextChanged         += (_, _) => ScheduleAutoSave();
+        _txtInitiationFeeAmount.TextChanged  += (_, _) => ScheduleAutoSave();
+    }
+
+    private void ScheduleAutoSave()
+    {
+        _autoSaveTimer.Stop();
+        _autoSaveTimer.Start();
     }
 
     // -- Section header --
@@ -351,42 +346,11 @@ public class ParametersPanel : UserControl
             AppParameterService.SetAppParameter(db, "LeagueCaptainName",  _txtCaptainName.Text.Trim());
             AppParameterService.SetAppParameter(db, "LeagueCaptainEmail", _txtCaptainEmail.Text.Trim());
             AppParameterService.SetAppParameter(db, "InitiationFeeAmount", _txtInitiationFeeAmount.Text.Trim());
+            AppLogger.Debug("Parameters autosaved");
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Save failed: " + ex.Message,
-                "Parameters", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return;
+            AppLogger.Error(ex, "Failed to autosave parameters");
         }
-        MessageBox.Show("Settings saved.",
-            "Parameters", MessageBoxButtons.OK, MessageBoxIcon.Information);
-    }
-
-    // -- Toolbar --
-
-    private Panel MakeToolbar()
-    {
-        var panel = new Panel
-        {
-            Height    = 46,
-            BackColor = AppTheme.Surface,
-            Padding   = new Padding(12, 8, 12, 8)
-        };
-
-        var btnSave = new Button
-        {
-            Text      = "Save Settings",
-            Location  = new Point(12, 8),
-            Size      = new Size(130, 30),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = AppTheme.Accent,
-            ForeColor = Color.White,
-            Font      = AppTheme.FontButton,
-            Cursor    = Cursors.Hand,
-            FlatAppearance = { BorderSize = 0 }
-        };
-        btnSave.Click += (_, _) => SaveTextParams();
-        panel.Controls.Add(btnSave);
-        return panel;
     }
 }

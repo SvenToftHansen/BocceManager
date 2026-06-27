@@ -14,6 +14,7 @@ public class LeaguePanel : UserControl
     private bool _isLoadingData = false;
     private bool _isDirty = false;
     private bool _isCreatingNew = false;
+    private readonly System.Windows.Forms.Timer _autoSaveTimer = new() { Interval = 1500 };
 
     // Left panel
     private SearchBoxControl _txtSearch  = null!;
@@ -45,6 +46,7 @@ public class LeaguePanel : UserControl
         BackColor = AppTheme.ContentBackground;
         Dock = DockStyle.Fill;
         BuildUI();
+        _autoSaveTimer.Tick += (_, _) => { _autoSaveTimer.Stop(); if (_isDirty && !_isCreatingNew) SaveLeague(silent: true); };
         AppParameterService.DefaultsChanged += OnDefaultsChanged;
         LoadLeagueList();
     }
@@ -110,7 +112,7 @@ public class LeaguePanel : UserControl
         panel.BackColor = AppTheme.Surface;
         panel.Padding = new Padding(8, 8, 8, 8);
 
-        _txtSearch = new SearchBoxControl
+        _txtSearch = new SearchBoxControl("Search leagues...")
         {
             Dock = DockStyle.Top,
             Height = 28,
@@ -307,10 +309,10 @@ public class LeaguePanel : UserControl
 
         _btnSave = new Button
         {
-            Text = "Save Changes", Location = new Point(160, 10), Size = new Size(140, 32),
+            Text = "Create League", Location = new Point(160, 10), Size = new Size(140, 32),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
-            Enabled = false
+            Visible = false
         };
         _btnSave.Click += (_, _) => SaveLeague();
 
@@ -322,7 +324,7 @@ public class LeaguePanel : UserControl
             FlatAppearance = { BorderSize = 1, BorderColor = AppTheme.Separator },
             Visible = false
         };
-        _btnCancel.Click += (_, _) => CancelAddLeague();
+        _btnCancel.Click += (_, _) => { if (_isCreatingNew) CancelAddLeague(); else CancelEdit(); };
 
         _btnDelete = new Button
         {
@@ -502,32 +504,10 @@ public class LeaguePanel : UserControl
     {
         if (_isLoadingData) return;
 
-        // Check for unsaved changes
-        if (_isDirty)
+        if (_isDirty && !_isCreatingNew)
         {
-            var result = MessageBox.Show(
-                "You have unsaved changes. Do you want to discard them?",
-                "Unsaved Changes",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning);
-
-            if (result == DialogResult.No)
-            {
-                // Restore previous selection
-                _isLoadingData = true;
-                try
-                {
-                    if (_previousLeagueId.HasValue)
-                        _lstLeagues.SelectedItem = _lstLeagues.Items.Cast<ListItem>().FirstOrDefault(x => x.Id == _previousLeagueId.Value);
-                    else
-                        _lstLeagues.SelectedIndex = -1;
-                }
-                finally
-                {
-                    _isLoadingData = false;
-                }
-                return;
-            }
+            _autoSaveTimer.Stop();
+            SaveLeague(silent: true);
         }
 
         if (_lstLeagues.SelectedItem is ListItem li)
@@ -568,10 +548,8 @@ public class LeaguePanel : UserControl
 
         LoadSeasons(leagueId);
         UpdateDeleteButtonState();
-        ClearDirty();
         _isCreatingNew = false;
-        _btnCancel.Visible = false;
-        _btnDelete.Visible = true;
+        ClearDirty();
     }
 
     private void ClearEditorForm()
@@ -625,23 +603,34 @@ public class LeaguePanel : UserControl
 
     private void AddLeague()
     {
-        _isCreatingNew = true;
         _lstLeagues.SelectedIndexChanged -= OnListLeagueSelected;
         _lstLeagues.ClearSelected();
         _lstLeagues.SelectedIndexChanged += OnListLeagueSelected;
         ClearEditorForm();
-        _btnCancel.Visible = true;
-        _btnDelete.Visible = false;
+        _isCreatingNew = true;  // Set after ClearEditorForm (which resets it)
+        UpdateButtonVisibility();
         _txtName.Focus();
     }
 
     private void CancelAddLeague()
     {
+        _autoSaveTimer.Stop();
         _isCreatingNew = false;
         _btnCancel.Visible = false;
         _btnDelete.Visible = _selectedLeagueId.HasValue;
         ClearEditorForm();
         LoadLeagueList();
+    }
+
+    private void CancelEdit()
+    {
+        _autoSaveTimer.Stop();
+        _isDirty = false;
+        if (_selectedLeagueId.HasValue)
+            LoadLeague(_selectedLeagueId.Value);
+        else
+            ClearEditorForm();
+        UpdateButtonVisibility();
     }
 
     private void UpdateDeleteButtonState()
@@ -653,44 +642,43 @@ public class LeaguePanel : UserControl
     {
         if (_isLoadingData || _btnSave == null) return;
         _isDirty = true;
-        _btnSave.Enabled = true;
         UpdateButtonVisibility();
+        if (!_isCreatingNew) { _autoSaveTimer.Stop(); _autoSaveTimer.Start(); }
     }
 
     private void ClearDirty()
     {
         if (_btnSave == null) return;
         _isDirty = false;
-        _btnSave.Enabled = false;
+        _autoSaveTimer.Stop();
         UpdateButtonVisibility();
     }
 
     private void UpdateButtonVisibility()
     {
-        if (_isDirty || _isCreatingNew)
+        _btnSave.Visible = _isCreatingNew;
+        if (_isCreatingNew)
         {
-            _btnAdd.Visible = false;
+            _btnAdd.Visible    = false;
             _btnCancel.Visible = true;
             _btnDelete.Visible = false;
         }
         else
         {
-            _btnAdd.Visible = true;
+            _btnAdd.Visible    = true;
             _btnCancel.Visible = false;
-            _btnDelete.Visible = true;
+            _btnDelete.Visible = _selectedLeagueId.HasValue;
         }
     }
 
     // ── Save ──────────────────────────────────────────────────────────────────
 
-    private void SaveLeague()
+    private void SaveLeague(bool silent = false)
     {
         var name = _txtName.Text.Trim();
         if (string.IsNullOrEmpty(name))
         {
-            MessageBox.Show("League name is required.", "Golden Vista Bocce League Master",
-                MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            _txtName.Focus();
+            if (!silent) { MessageBox.Show("League name is required.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning); _txtName.Focus(); }
             return;
         }
 
@@ -703,20 +691,14 @@ public class LeaguePanel : UserControl
 
             if (isDuplicate)
             {
-                MessageBox.Show($"A league named \"{name}\" already exists.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-
-                if (_selectedLeagueId.HasValue)
-                {
-                    // For editing: restore original values
-                    LoadLeague(_selectedLeagueId.Value);
-                }
-                // For new: do nothing, stays in edit mode
+                if (!silent) MessageBox.Show($"A league named \"{name}\" already exists.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                if (_selectedLeagueId.HasValue) LoadLeague(_selectedLeagueId.Value);
                 return;
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Validation failed:\n\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            if (!silent) MessageBox.Show($"Validation failed:\n\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
 
@@ -769,8 +751,8 @@ public class LeaguePanel : UserControl
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Save failed:\n\n{ex.Message}", "Golden Vista Bocce League Master",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            if (!silent) MessageBox.Show($"Save failed:\n\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            else AppLogger.Error(ex, "Autosave failed for league {Id}", _selectedLeagueId);
             return;
         }
 
@@ -782,15 +764,10 @@ public class LeaguePanel : UserControl
         }
         catch { }
 
-        MessageBox.Show("League saved.", "Golden Vista Bocce League Master",
-            MessageBoxButtons.OK, MessageBoxIcon.Information);
-
-        ClearDirty();
         _isCreatingNew = false;
-        _btnCancel.Visible = false;
-        _btnDelete.Visible = true;
+        ClearDirty();
 
-        if (!isNew && (oldMin != newMin || oldMax != newMax))
+        if (!silent && !isNew && (oldMin != newMin || oldMax != newMax))
             OfferPropagate(savedId, oldMin, oldMax, newMin, newMax);
 
         LoadLeagueList();

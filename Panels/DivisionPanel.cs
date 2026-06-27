@@ -12,6 +12,7 @@ public class DivisionPanel : UserControl
     private bool _isLoadingData = false;
     private bool _isDirty = false;
     private bool _isCreatingNew = false;
+    private readonly System.Windows.Forms.Timer _autoSaveTimer = new() { Interval = 1500 };
 
     // â"€â"€ State â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     private int? _selectedLeagueId;
@@ -74,6 +75,7 @@ public class DivisionPanel : UserControl
         BackColor = AppTheme.ContentBackground;
         Dock = DockStyle.Fill;
         BuildUI();
+        _autoSaveTimer.Tick += (_, _) => { _autoSaveTimer.Stop(); if (_isDirty && !_isCreatingNew) SaveDivision(silent: true); };
         AppParameterService.DefaultsChanged += OnDefaultsChanged;
         LoadContext();
     }
@@ -111,6 +113,32 @@ public class DivisionPanel : UserControl
             _selectedSeasonId = d.SeasonId;
             LoadDivisionList();
             SelectInList(divisionId);
+        }
+        catch { }
+    }
+
+    public void SelectTeam(int teamId)
+    {
+        try
+        {
+            using var db = new BocceDbContext();
+            var team = db.Teams.Find(teamId);
+            if (team == null) return;
+
+            SelectDivision(team.DivisionId);
+
+            for (int i = 0; i < _teamsGrid.Rows.Count; i++)
+            {
+                var cell = _teamsGrid.Rows[i].Cells["TmId"].Value;
+                if (cell != null && Convert.ToInt32(cell) == teamId)
+                {
+                    _teamsGrid.ClearSelection();
+                    _teamsGrid.Rows[i].Selected = true;
+                    _teamsGrid.CurrentCell = _teamsGrid.Rows[i].Cells["TmDisplay"];
+                    _teamsGrid.FirstDisplayedScrollingRowIndex = i;
+                    break;
+                }
+            }
         }
         catch { }
     }
@@ -173,7 +201,7 @@ public class DivisionPanel : UserControl
             TextAlign = ContentAlignment.MiddleLeft
         };
 
-        _txtSearch = new SearchBoxControl
+        _txtSearch = new SearchBoxControl("Search divisions...")
         {
             Dock = DockStyle.Top,
             Height = 28
@@ -522,10 +550,10 @@ public class DivisionPanel : UserControl
 
         _btnSave = new Button
         {
-            Text = "Save", Dock = DockStyle.Fill, Margin = new Padding(3, 0, 0, 3),
+            Text = "Create Division", Dock = DockStyle.Fill, Margin = new Padding(3, 0, 0, 3),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 },
-            Enabled = false, Visible = !_teamsOnlyMode
+            Visible = false
         };
         _btnSave.Click += (_, _) => SaveDivision();
 
@@ -546,7 +574,7 @@ public class DivisionPanel : UserControl
             FlatAppearance = { BorderSize = 1, BorderColor = AppTheme.Separator },
             Visible = false
         };
-        _btnCancel.Click += (_, _) => CancelAddDivision();
+        _btnCancel.Click += (_, _) => { if (_isCreatingNew) CancelAddDivision(); else CancelEditDivision(); };
 
         tbl.Controls.Add(_btnAdd,    0, 0);
         tbl.Controls.Add(_btnSave,   1, 0);
@@ -589,31 +617,32 @@ public class DivisionPanel : UserControl
     {
         if (_isLoadingData || _btnSave == null) return;
         _isDirty = true;
-        _btnSave.Enabled = true;
         UpdateButtonVisibility();
+        if (!_isCreatingNew) { _autoSaveTimer.Stop(); _autoSaveTimer.Start(); }
     }
 
     private void ClearDirty()
     {
         if (_btnSave == null) return;
         _isDirty = false;
-        _btnSave.Enabled = false;
+        _autoSaveTimer.Stop();
         UpdateButtonVisibility();
     }
 
     private void UpdateButtonVisibility()
     {
-        if (_isDirty || _isCreatingNew)
+        _btnSave.Visible = _isCreatingNew && !_teamsOnlyMode;
+        if (_isCreatingNew)
         {
-            _btnAdd.Visible = !_teamsOnlyMode && false;
+            _btnAdd.Visible    = false;
             _btnCancel.Visible = true;
-            _btnDelete.Visible = !_teamsOnlyMode && false;
+            _btnDelete.Visible = false;
         }
         else
         {
-            _btnAdd.Visible = !_teamsOnlyMode && !_seasonIsLocked;
+            _btnAdd.Visible    = !_teamsOnlyMode && !_seasonIsLocked;
             _btnCancel.Visible = false;
-            _btnDelete.Visible = !_teamsOnlyMode;
+            _btnDelete.Visible = !_teamsOnlyMode && _selectedDivisionId.HasValue;
         }
     }
 
@@ -679,32 +708,10 @@ public class DivisionPanel : UserControl
     {
         if (_isLoadingData) return;
 
-        // Check for unsaved changes
-        if (_isDirty)
+        if (_isDirty && !_isCreatingNew)
         {
-            var result = MessageBox.Show(
-                "You have unsaved changes. Do you want to discard them?",
-                "Unsaved Changes",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning);
-
-            if (result == DialogResult.No)
-            {
-                // Restore previous selection
-                _isLoadingData = true;
-                try
-                {
-                    if (_previousDivisionId.HasValue)
-                        _lstDivisions.SelectedItem = _lstDivisions.Items.Cast<ListItem>().FirstOrDefault(x => x.Id == _previousDivisionId.Value);
-                    else
-                        _lstDivisions.SelectedIndex = -1;
-                }
-                finally
-                {
-                    _isLoadingData = false;
-                }
-                return;
-            }
+            _autoSaveTimer.Stop();
+            SaveDivision(silent: true);
         }
 
         if (_lstDivisions.SelectedItem is ListItem li)
@@ -819,9 +826,7 @@ public class DivisionPanel : UserControl
         LoadTeams(divisionId);
         ClearPlayersPanel();
         _isCreatingNew = false;
-        _btnCancel.Visible = false;
-        _btnDelete.Visible = true;
-        _btnDelete.Enabled     = !_seasonIsLocked;
+        _btnDelete.Enabled = !_seasonIsLocked;
         if (_numPlayersMin != null) { _numPlayersMin.Enabled = !_seasonIsLocked; _numPlayersMax.Enabled = !_seasonIsLocked; }
         ClearDirty();
     }
@@ -894,23 +899,32 @@ public class DivisionPanel : UserControl
             MessageBox.Show("Select a season first.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
-        _isCreatingNew = true;
         _isLoadingData = true;
         _lstDivisions.SelectedIndex = -1;
         _isLoadingData = false;
         ClearEditor();
-        _btnCancel.Visible = true;
-        _btnDelete.Visible = false;
+        _isCreatingNew = true;  // Set after ClearEditor (which resets it)
+        UpdateButtonVisibility();
         _cmbDay.Focus();
     }
 
     private void CancelAddDivision()
     {
+        _autoSaveTimer.Stop();
         _isCreatingNew = false;
-        _btnCancel.Visible = false;
-        _btnDelete.Visible = _selectedDivisionId.HasValue;
         ClearEditor();
         LoadDivisionList();
+    }
+
+    private void CancelEditDivision()
+    {
+        _autoSaveTimer.Stop();
+        _isDirty = false;
+        if (_selectedDivisionId.HasValue)
+            LoadDivision(_selectedDivisionId.Value);
+        else
+            ClearEditor();
+        UpdateButtonVisibility();
     }
 
     // â"€â"€ Edit Mode â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -918,18 +932,10 @@ public class DivisionPanel : UserControl
 
     // â"€â"€ Save â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-    private void SaveDivision()
+    private void SaveDivision(bool silent = false)
     {
-        if (_seasonIsLocked)
-        {
-            MessageBox.Show("Season is locked. Divisions cannot be modified.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-        if (!_selectedSeasonId.HasValue)
-        {
-            MessageBox.Show("Select a season first.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
+        if (_seasonIsLocked) return;
+        if (!_selectedSeasonId.HasValue) return;
 
         // Get selected day and time
         string dayName = _cmbDay.SelectedItem is SlotItem ds && ds.Id > 0 ? ds.Display : null;
@@ -938,7 +944,7 @@ public class DivisionPanel : UserControl
         // For new divisions, day and time are required
         if (!_selectedDivisionId.HasValue && (string.IsNullOrEmpty(dayName) || string.IsNullOrEmpty(timeName)))
         {
-            MessageBox.Show("Select a Day and Time for the division.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            if (!silent) MessageBox.Show("Select a Day and Time for the division.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
@@ -959,7 +965,7 @@ public class DivisionPanel : UserControl
 
         if (string.IsNullOrEmpty(name))
         {
-            MessageBox.Show("Division name is required.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            if (!silent) MessageBox.Show("Division name is required.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
@@ -973,20 +979,14 @@ public class DivisionPanel : UserControl
 
             if (isDuplicate)
             {
-                MessageBox.Show($"A division named \"{name}\" already exists in this season.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-
-                if (_selectedDivisionId.HasValue)
-                {
-                    // For editing: restore original values
-                    LoadDivision(_selectedDivisionId.Value);
-                }
-                // For new: do nothing, stays in edit mode
+                if (!silent) MessageBox.Show($"A division named \"{name}\" already exists in this season.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                if (_selectedDivisionId.HasValue) LoadDivision(_selectedDivisionId.Value);
                 return;
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Validation failed:\n\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            if (!silent) MessageBox.Show($"Validation failed:\n\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
 
@@ -1020,17 +1020,15 @@ public class DivisionPanel : UserControl
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Save failed:\n\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            if (!silent) MessageBox.Show($"Save failed:\n\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            else AppLogger.Error(ex, "Autosave failed for division {Id}", _selectedDivisionId);
             return;
         }
 
         _selectedDivisionId = savedId;
         _btnDelete.Enabled  = true;
         _btnAddTeam.Enabled = true;
-        MessageBox.Show("Division saved.", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
         _isCreatingNew = false;
-        _btnCancel.Visible = false;
-        _btnDelete.Visible = true;
         ClearDirty();
         LoadDivisionList();
         SelectInList(savedId);

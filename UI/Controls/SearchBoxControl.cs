@@ -36,7 +36,8 @@ public class SearchBoxControl : UserControl
         if (placeholder != null)
             _placeholder = placeholder;
         Height = 28;
-        BackColor = AppTheme.ContentBackground;
+        BackColor = Color.Black;
+        Padding = new Padding(1);
         BuildUI();
     }
 
