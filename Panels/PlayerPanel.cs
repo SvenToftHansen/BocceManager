@@ -368,7 +368,6 @@ public class PlayerPanel : UserControl
             BackColor = AppTheme.ContentBackground,
             ForeColor = AppTheme.TextPrimary,
             Font = AppTheme.FontSmall,
-            BorderStyle = BorderStyle.FixedSingle,
             IntegralHeight = false
         };
         _lstTeams.DoubleClick += (_, _) => NavigateToSelectedTeam();
@@ -419,7 +418,6 @@ public class PlayerPanel : UserControl
             BackColor = AppTheme.ContentBackground,
             ForeColor = AppTheme.TextPrimary,
             Font = AppTheme.FontSmall,
-            BorderStyle = BorderStyle.FixedSingle,
             AutoSize = false,
             Visible = false
         };
@@ -432,7 +430,6 @@ public class PlayerPanel : UserControl
             BackColor = AppTheme.ContentBackground,
             ForeColor = AppTheme.TextPrimary,
             Font = AppTheme.FontSmall,
-            BorderStyle = BorderStyle.FixedSingle,
             AutoSize = false,
             Visible = false
         };
@@ -840,6 +837,8 @@ public class PlayerPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
+            int? currentSeasonId = AppParameterService.GetDefaultSeasonId(db);
+
             var teams = db.TeamPlayers
                 .Where(tp => tp.PlayerId == playerId)
                 .Include(tp => tp.Team)
@@ -847,6 +846,12 @@ public class PlayerPanel : UserControl
                 .ThenInclude(d => d.Season)
                 .AsNoTracking()
                 .ToList();
+
+            // Filter to current season only
+            if (currentSeasonId.HasValue)
+            {
+                teams = teams.Where(tp => tp.Team.Division.Season.Id == currentSeasonId.Value).ToList();
+            }
 
             _lstTeams.Items.Clear();
             if (teams.Count == 0)
@@ -861,7 +866,7 @@ public class PlayerPanel : UserControl
 
             foreach (var tp in teams)
             {
-                var displayText = $"{tp.Team.Division.Season.Name} - {tp.Team.Division.Name} - {tp.Team.EffectiveDisplayName}";
+                var displayText = $"{tp.Team.Division.Name} - {tp.Team.EffectiveDisplayName}";
                 _lstTeams.Items.Add(new TeamDisplay { TeamId = tp.Team.Id, DisplayText = displayText });
             }
         }
@@ -876,8 +881,9 @@ public class PlayerPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
+            int? currentSeasonId = AppParameterService.GetDefaultSeasonId(db);
 
-            // Get Looking for Team entries
+            // Get Looking for Team entries (filtered to current season)
             var lftEntries = db.LookingForTeams
                 .Where(l => l.PlayerId == playerId)
                 .Include(l => l.Season)
@@ -885,7 +891,12 @@ public class PlayerPanel : UserControl
                 .AsNoTracking()
                 .ToList();
 
-            // Get Spare List entries
+            if (currentSeasonId.HasValue)
+            {
+                lftEntries = lftEntries.Where(l => l.SeasonId == currentSeasonId.Value).ToList();
+            }
+
+            // Get Spare List entries (no season filter, but showing league name)
             var spareEntries = db.SpareLists
                 .Where(s => s.PlayerId == playerId && s.IsActive)
                 .Include(s => s.League)
@@ -896,7 +907,7 @@ public class PlayerPanel : UserControl
             if (lftEntries.Count > 0)
             {
                 _lblLookingForTeamsContent.Visible = true;
-                var lftText = string.Join("\n", lftEntries.Select(l => $"{l.League.Name} - {l.Season?.Name ?? "(no season)"}"));
+                var lftText = string.Join("\n", lftEntries.Select(l => l.League.Name));
                 _lblLookingForTeamsContent.Text = lftText;
             }
             else

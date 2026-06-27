@@ -23,8 +23,8 @@ public class LookingForTeamPanel : UserControl
     private Label          _lblPlacedAs   = null!;
     private Label          _lblPrefTimes  = null!;
     private Label          _hintTimes     = null!;
-    private CheckedListBox _clbPrefDays   = null!;
-    private CheckedListBox _clbPrefTimes  = null!;
+    private Panel _pnlPrefDays  = null!;
+    private Panel _pnlPrefTimes = null!;
     private TextBox        _txtNotes      = null!;
     private DataGridView   _grpGrid       = null!;
     private Button         _btnAddMember  = null!;
@@ -329,29 +329,17 @@ public class LookingForTeamPanel : UserControl
             AutoSize = true, Font = AppTheme.FontDefaultBold, ForeColor = AppTheme.TextPrimary };
         prefY += 20;
 
-        _clbPrefDays = new CheckedListBox
+        _pnlPrefDays = new Panel
         {
             Location = new Point(0, prefY), Height = prefH,
-            CheckOnClick = true,
-            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
-            BorderStyle = BorderStyle.FixedSingle
+            BackColor = AppTheme.Surface, BorderStyle = BorderStyle.FixedSingle
         };
-        _clbPrefDays.DrawMode = DrawMode.OwnerDrawFixed;
-        _clbPrefDays.DrawItem += ClbDrawItem;
-        _clbPrefDays.ItemCheck += (_, _) =>
-            BeginInvoke(() => { if (!_isLoadingData && _selectedLftId.HasValue) SaveEntry(); });
 
-        _clbPrefTimes = new CheckedListBox
+        _pnlPrefTimes = new Panel
         {
             Location = new Point(0, prefY), Height = prefH,
-            CheckOnClick = true,
-            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
-            BorderStyle = BorderStyle.FixedSingle
+            BackColor = AppTheme.Surface, BorderStyle = BorderStyle.FixedSingle
         };
-        _clbPrefTimes.DrawMode = DrawMode.OwnerDrawFixed;
-        _clbPrefTimes.DrawItem += ClbDrawItem;
-        _clbPrefTimes.ItemCheck += (_, _) =>
-            BeginInvoke(() => { if (!_isLoadingData && _selectedLftId.HasValue) SaveEntry(); });
 
         int hintY = prefY + prefH + 2;
         var hintDays = new Label { Text = "No selection = no day preference (any day is fine)",
@@ -374,7 +362,7 @@ public class LookingForTeamPanel : UserControl
         _txtNotes.Leave += (_, _) => { if (!_isLoadingData && _selectedLftId.HasValue) SaveEntry(); };
 
         scrollPane.Controls.AddRange([_grpGrid, _lblPlacedAs, lblDays, _lblPrefTimes,
-                                       _clbPrefDays, _clbPrefTimes, hintDays, _hintTimes,
+                                       _pnlPrefDays, _pnlPrefTimes, hintDays, _hintTimes,
                                        lblNotes, _txtNotes]);
 
         // Resize width-dependent controls when scrollPane resizes
@@ -394,44 +382,42 @@ public class LookingForTeamPanel : UserControl
         if (w <= gap * 2) return;
         int halfW = (w - gap) / 2;
         _grpGrid.Width = w;
-        _clbPrefDays.Width = halfW;
+        _pnlPrefDays.Width = halfW;
         _lblPrefTimes.Location = new Point(halfW + gap, _lblPrefTimes.Location.Y);
-        _clbPrefTimes.Location = new Point(halfW + gap, _clbPrefTimes.Location.Y);
-        _clbPrefTimes.Width = w - halfW - gap;
+        _pnlPrefTimes.Location = new Point(halfW + gap, _pnlPrefTimes.Location.Y);
+        _pnlPrefTimes.Width = w - halfW - gap;
         _hintTimes.Location = new Point(halfW + gap, _hintTimes.Location.Y);
         _txtNotes.Width = w;
     }
 
     // ── Data loading ───────────────────────────────────────────────────────────
-    private static void ClbDrawItem(object? sender, DrawItemEventArgs e)
-    {
-        if (sender is not CheckedListBox clb || e.Index < 0) return;
-        e.Graphics.FillRectangle(new SolidBrush(clb.BackColor), e.Bounds);
-        bool isChecked = clb.GetItemChecked(e.Index);
-        var cbState = isChecked
-            ? System.Windows.Forms.VisualStyles.CheckBoxState.CheckedNormal
-            : System.Windows.Forms.VisualStyles.CheckBoxState.UncheckedNormal;
-        var cbSize  = CheckBoxRenderer.GetGlyphSize(e.Graphics, cbState);
-        var cbPoint = new Point(e.Bounds.Left + 2, e.Bounds.Top + (e.Bounds.Height - cbSize.Height) / 2);
-        CheckBoxRenderer.DrawCheckBox(e.Graphics, cbPoint, cbState);
-        using var brush = new SolidBrush(clb.ForeColor);
-        var textRect = new RectangleF(e.Bounds.Left + cbSize.Width + 4, e.Bounds.Top,
-            e.Bounds.Width - cbSize.Width - 4, e.Bounds.Height);
-        e.Graphics.DrawString(clb.Items[e.Index].ToString(), clb.Font, brush, textRect,
-            new StringFormat { LineAlignment = StringAlignment.Center });
-    }
-
     private void LoadDayTimeData()
     {
         var (days, times) = GetFilteredDayTimeData();
+        PopulateCheckPanel(_pnlPrefDays,
+            days.Select(d => (d.DayName, (object)new DayItem(d.Id, d.DayName, d.DayAbbr))));
+        PopulateCheckPanel(_pnlPrefTimes,
+            times.Select(t => (t.Timeslot12h ?? "", (object)new TimeItem(t.Id, t.Timeslot12h, t.Timeslot24h))));
+    }
 
-        _clbPrefDays.Items.Clear();
-        foreach (var d in days)
-            _clbPrefDays.Items.Add(new DayItem(d.Id, d.DayName, d.DayAbbr));
-
-        _clbPrefTimes.Items.Clear();
-        foreach (var t in times)
-            _clbPrefTimes.Items.Add(new TimeItem(t.Id, t.Timeslot12h, t.Timeslot24h));
+    private void PopulateCheckPanel(Panel pnl, IEnumerable<(string text, object tag)> items)
+    {
+        pnl.Controls.Clear();
+        int y = 2;
+        foreach (var (text, tag) in items)
+        {
+            var cb = new CheckBox
+            {
+                Text = text, Tag = tag, Left = 4, Top = y,
+                Width = Math.Max(pnl.Width - 8, 10), Height = 22,
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top,
+                Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary
+            };
+            cb.CheckedChanged += (_, _) =>
+                BeginInvoke(() => { if (!_isLoadingData && _selectedLftId.HasValue) SaveEntry(); });
+            pnl.Controls.Add(cb);
+            y += 22;
+        }
     }
 
     /// <summary>
@@ -624,18 +610,14 @@ public class LookingForTeamPanel : UserControl
             }
 
             var checkedDayIds = e.PreferredDays.Select(d => d.DaySlotId).ToHashSet();
-            for (int i = 0; i < _clbPrefDays.Items.Count; i++)
-            {
-                bool check = _clbPrefDays.Items[i] is DayItem d && d.Id.HasValue && checkedDayIds.Contains(d.Id.Value);
-                _clbPrefDays.SetItemChecked(i, check);
-            }
+            foreach (Control c in _pnlPrefDays.Controls)
+                if (c is CheckBox cb && cb.Tag is DayItem d && d.Id.HasValue)
+                    cb.Checked = checkedDayIds.Contains(d.Id.Value);
 
             var checkedTimeIds = e.PreferredTimes.Select(t => t.TimeSlotId).ToHashSet();
-            for (int i = 0; i < _clbPrefTimes.Items.Count; i++)
-            {
-                bool check = _clbPrefTimes.Items[i] is TimeItem t && t.Id.HasValue && checkedTimeIds.Contains(t.Id.Value);
-                _clbPrefTimes.SetItemChecked(i, check);
-            }
+            foreach (Control c in _pnlPrefTimes.Controls)
+                if (c is CheckBox cb && cb.Tag is TimeItem t && t.Id.HasValue)
+                    cb.Checked = checkedTimeIds.Contains(t.Id.Value);
 
             _txtNotes.Text = e.Notes ?? "";
 
@@ -684,10 +666,8 @@ public class LookingForTeamPanel : UserControl
             _selectedLftId       = null;
             _selectedGroupId     = null;
             _lblPlacedAs.Visible = false;
-            for (int i = 0; i < _clbPrefDays.Items.Count; i++)
-                _clbPrefDays.SetItemChecked(i, false);
-            for (int i = 0; i < _clbPrefTimes.Items.Count; i++)
-                _clbPrefTimes.SetItemChecked(i, false);
+            foreach (Control c in _pnlPrefDays.Controls)  if (c is CheckBox cb) cb.Checked = false;
+            foreach (Control c in _pnlPrefTimes.Controls) if (c is CheckBox cb) cb.Checked = false;
             _txtNotes.Text        = "";
             _grpGrid.Rows.Clear();
             _btnRemove.Enabled    = false;
@@ -1020,16 +1000,14 @@ public class LookingForTeamPanel : UserControl
     {
         if (!_selectedLftId.HasValue) return;
 
-        var checkedDayIds = _clbPrefDays.CheckedItems
-            .OfType<DayItem>()
-            .Where(d => d.Id.HasValue)
-            .Select(d => d.Id!.Value)
+        var checkedDayIds = _pnlPrefDays.Controls.OfType<CheckBox>()
+            .Where(cb => cb.Checked && cb.Tag is DayItem d && d.Id.HasValue)
+            .Select(cb => ((DayItem)cb.Tag!).Id!.Value)
             .ToHashSet();
 
-        var checkedTimeIds = _clbPrefTimes.CheckedItems
-            .OfType<TimeItem>()
-            .Where(t => t.Id.HasValue)
-            .Select(t => t.Id!.Value)
+        var checkedTimeIds = _pnlPrefTimes.Controls.OfType<CheckBox>()
+            .Where(cb => cb.Checked && cb.Tag is TimeItem t && t.Id.HasValue)
+            .Select(cb => ((TimeItem)cb.Tag!).Id!.Value)
             .ToHashSet();
 
         try
@@ -1970,7 +1948,7 @@ public class LookingForTeamPanel : UserControl
             Location = new Point(fx, y), Size = new Size(fw, 100), CheckOnClick = true,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, BorderStyle = BorderStyle.FixedSingle
         };
-        foreach (var d in _clbPrefDays.Items.Cast<object>()) clbDays.Items.Add(d);
+        foreach (var cb in _pnlPrefDays.Controls.OfType<CheckBox>()) clbDays.Items.Add(cb.Tag!);
         pnl.Controls.Add(clbDays);
         y += 110;
 
@@ -1980,7 +1958,7 @@ public class LookingForTeamPanel : UserControl
             Location = new Point(fx, y), Size = new Size(fw, 100), CheckOnClick = true,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, BorderStyle = BorderStyle.FixedSingle
         };
-        foreach (var t in _clbPrefTimes.Items.Cast<object>()) clbTimes.Items.Add(t);
+        foreach (var cb in _pnlPrefTimes.Controls.OfType<CheckBox>()) clbTimes.Items.Add(cb.Tag!);
         pnl.Controls.Add(clbTimes);
         y += 110;
 
