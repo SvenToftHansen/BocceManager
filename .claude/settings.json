@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(\"Done\")",
+      "PowerShell(Start-Sleep -Seconds 3; $proc = Get-Process BocceManager -ErrorAction SilentlyContinue; if \\($proc\\) { \"App running \\(PID: $\\($proc.Id\\)\\)\" } else { \"Still starting...\" })",
+      "Read(//c/Users/svenh/AppData/Local/**)",
+      "PowerShell(\"App stopped\")",
+      "PowerShell(\"Stopped\")"
+    ]
+  }
+}

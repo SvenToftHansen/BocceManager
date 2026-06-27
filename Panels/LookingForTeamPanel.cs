@@ -22,6 +22,7 @@ public class LookingForTeamPanel : UserControl
     // ── Right — detail ─────────────────────────────────────────────────────────
     private Label          _lblPlacedAs   = null!;
     private Label          _lblPrefTimes  = null!;
+    private Label          _hintTimes     = null!;
     private CheckedListBox _clbPrefDays   = null!;
     private CheckedListBox _clbPrefTimes  = null!;
     private TextBox        _txtNotes      = null!;
@@ -127,7 +128,7 @@ public class LookingForTeamPanel : UserControl
 
     private Control BuildLeftToolbar()
     {
-        var toolbar = new Panel { Dock = DockStyle.Bottom, Height = 46, BackColor = AppTheme.Surface };
+        var toolbar = new Panel { Dock = DockStyle.Bottom, Height = 80, BackColor = AppTheme.Surface };
 
         _btnAddPlayer = new Button
         {
@@ -147,13 +148,13 @@ public class LookingForTeamPanel : UserControl
 
         var modeLbl = new Label
         {
-            Text = "Mode:", Location = new Point(291, 14), AutoSize = true,
+            Text = "Mode:", Location = new Point(12, 52), AutoSize = true,
             Font = AppTheme.FontDefault, ForeColor = AppTheme.TextSecondary
         };
 
         _cmbDisplayMode = new ComboBox
         {
-            Location = new Point(337, 11), Size = new Size(200, 26),
+            Location = new Point(58, 46), Size = new Size(200, 26),
             DropDownStyle = ComboBoxStyle.DropDownList,
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary
         };
@@ -168,17 +169,17 @@ public class LookingForTeamPanel : UserControl
     private void SafeApplySplit()
     {
         if (_mainSplit.Width <= 1) return;
-        const int leftMin = 350, rightMin = 250;
+        const int leftMin = 200, rightMin = 350;
         int total = Math.Max(0, _mainSplit.Width - 1);
         int lMin = leftMin, rMin = rightMin;
         if (lMin + rMin > total)
         {
-            lMin = (int)Math.Floor(total * 0.60);
+            lMin = (int)Math.Floor(total * 0.35);
             rMin = total - lMin;
         }
         _mainSplit.Panel1MinSize = lMin;
         _mainSplit.Panel2MinSize = rMin;
-        int target   = (int)(_mainSplit.Width * 0.60);
+        int target   = (int)(_mainSplit.Width * 0.35);
         int maxLeft  = _mainSplit.Width - rMin;
         int clamped  = Math.Max(lMin, Math.Min(target, maxLeft));
         if (clamped > 0) _mainSplit.SplitterDistance = clamped;
@@ -209,10 +210,10 @@ public class LookingForTeamPanel : UserControl
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GId",    Visible = false });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GPid",   Visible = false });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GGrpId", Visible = false });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GName",  HeaderText = "Name",  FillWeight = 35 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GPhone", HeaderText = "Phone", FillWeight = 20 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GEmail", HeaderText = "Email", FillWeight = 30 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GGrp",   HeaderText = "Group", FillWeight = 15 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GName",  HeaderText = "Name",  FillWeight = 44 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GGrp",   HeaderText = "Group", FillWeight = 38 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GCount", HeaderText = "Players", FillWeight = 18,
+            DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleCenter } });
         _grid.SelectionChanged += OnGridSelectionChanged;
 
         // Add grid first, then label — WinForms docks Top after Fill in reverse z-order
@@ -227,41 +228,42 @@ public class LookingForTeamPanel : UserControl
 
     private Control BuildDetailPanel()
     {
-        // Heights: header=22, 5 rows @ 18px each, 1px border = 22+90+1 = 113 → round to 115
-        const int grpGridH = 115;
+        // Heights: header=22, 6 rows @ 28px each, 1px border = 22+168+1 = 191
+        const int grpGridH = 191;
         // Preferred days/times: enough for 7 items (CheckedListBox default ~20px/item)
         const int prefH    = 158;
-        const int notesH   = 60;
+        // Notes: 4 lines tall (~18px/line + border)
+        const int notesH   = 80;
         const int gap      = 4;
 
         var outer = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground };
 
-        // ── Bottom button bar (same style as left toolbar) ─────────────────────
-        var btnBar = new Panel { Dock = DockStyle.Bottom, Height = 46, BackColor = AppTheme.Surface };
+        // ── Bottom button bar — two rows, same 80px height as left toolbar ──────
+        var btnBar = new Panel { Dock = DockStyle.Bottom, Height = 80, BackColor = AppTheme.Surface };
         _btnAddMember = new Button
         {
-            Text = "+ Add Member", Left = 12, Top = 8, Width = 110, Height = 30,
+            Text = "+ Add Member", Left = 12, Top = 8, Width = 130, Height = 30,
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
         };
         _btnAddMember.Click += (_, _) => AddMember();
         _btnRemMember = new Button
         {
-            Text = "Remove Member", Left = 130, Top = 8, Width = 120, Height = 30,
+            Text = "Remove Member", Left = 150, Top = 8, Width = 130, Height = 30,
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
         };
         _btnRemMember.Click += (_, _) => RemoveMember();
         _btnRenameGrp = new Button
         {
-            Text = "Rename Group", Left = 258, Top = 8, Width = 110, Height = 30,
+            Text = "Rename Group", Left = 12, Top = 46, Width = 130, Height = 30,
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
         };
         _btnRenameGrp.Click += (_, _) => RenameGroup();
         _btnDeleteGrp = new Button
         {
-            Text = "Delete Group", Left = 376, Top = 8, Width = 110, Height = 30,
+            Text = "Delete Group", Left = 150, Top = 46, Width = 130, Height = 30,
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
         };
@@ -287,7 +289,7 @@ public class LookingForTeamPanel : UserControl
             AllowUserToAddRows = false, RowHeadersVisible = false, AllowUserToResizeRows = false,
             BorderStyle = BorderStyle.FixedSingle,
             BackgroundColor = AppTheme.ContentBackground,
-            Font = AppTheme.FontDefault, RowTemplate = { Height = 18 },
+            Font = AppTheme.FontDefault, RowTemplate = { Height = 28 },
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
             EnableHeadersVisualStyles = false,
             ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
@@ -298,10 +300,19 @@ public class LookingForTeamPanel : UserControl
             }
         };
         _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GLftId", Visible = false });
-        _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GName",  HeaderText = "Member", FillWeight = 50 });
-        _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GPhone", HeaderText = "Phone",  FillWeight = 25 });
-        _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GEmail", HeaderText = "Email",  FillWeight = 25 });
+        _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GMark",  HeaderText = "", FillWeight = 8,
+            DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleCenter } });
+        _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GName",  HeaderText = "Member", FillWeight = 42 });
+        _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GLot",   HeaderText = "Lot",    FillWeight = 15,
+            DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleCenter } });
+        _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GPhone", HeaderText = "Phone",  FillWeight = 20 });
+        _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GEmail", HeaderText = "Email",  FillWeight = 15 });
         _grpGrid.SelectionChanged += (_, _) => _btnRemMember.Enabled = _grpGrid.SelectedRows.Count > 0;
+        _grpGrid.CellFormatting += (_, e) =>
+        {
+            if (e.ColumnIndex == _grpGrid.Columns["GMark"].Index && e.Value?.ToString()?.Contains('★') == true)
+                e.CellStyle.ForeColor = Color.Goldenrod;
+        };
 
         // Placed-as info below grid (hidden until player is placed)
         _lblPlacedAs = new Label
@@ -325,6 +336,8 @@ public class LookingForTeamPanel : UserControl
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
             BorderStyle = BorderStyle.FixedSingle
         };
+        _clbPrefDays.DrawMode = DrawMode.OwnerDrawFixed;
+        _clbPrefDays.DrawItem += ClbDrawItem;
         _clbPrefDays.ItemCheck += (_, _) =>
             BeginInvoke(() => { if (!_isLoadingData && _selectedLftId.HasValue) SaveEntry(); });
 
@@ -335,10 +348,18 @@ public class LookingForTeamPanel : UserControl
             Font = AppTheme.FontDefault, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
             BorderStyle = BorderStyle.FixedSingle
         };
+        _clbPrefTimes.DrawMode = DrawMode.OwnerDrawFixed;
+        _clbPrefTimes.DrawItem += ClbDrawItem;
         _clbPrefTimes.ItemCheck += (_, _) =>
             BeginInvoke(() => { if (!_isLoadingData && _selectedLftId.HasValue) SaveEntry(); });
 
-        int notesY = prefY + prefH + 8;
+        int hintY = prefY + prefH + 2;
+        var hintDays = new Label { Text = "No selection = no day preference (any day is fine)",
+            Location = new Point(0, hintY), AutoSize = true, Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted };
+        _hintTimes = new Label { Text = "No selection = no time preference (any time is fine)",
+            Location = new Point(0, hintY), AutoSize = true, Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted };
+
+        int notesY = hintY + 18 + 4;
         var lblNotes = new Label { Text = "Notes", Location = new Point(0, notesY),
             AutoSize = true, Font = AppTheme.FontDefaultBold, ForeColor = AppTheme.TextPrimary };
         notesY += 20;
@@ -353,7 +374,8 @@ public class LookingForTeamPanel : UserControl
         _txtNotes.Leave += (_, _) => { if (!_isLoadingData && _selectedLftId.HasValue) SaveEntry(); };
 
         scrollPane.Controls.AddRange([_grpGrid, _lblPlacedAs, lblDays, _lblPrefTimes,
-                                       _clbPrefDays, _clbPrefTimes, lblNotes, _txtNotes]);
+                                       _clbPrefDays, _clbPrefTimes, hintDays, _hintTimes,
+                                       lblNotes, _txtNotes]);
 
         // Resize width-dependent controls when scrollPane resizes
         void DoLayout() => LayoutDetailControls(scrollPane.ClientSize.Width, gap);
@@ -376,10 +398,29 @@ public class LookingForTeamPanel : UserControl
         _lblPrefTimes.Location = new Point(halfW + gap, _lblPrefTimes.Location.Y);
         _clbPrefTimes.Location = new Point(halfW + gap, _clbPrefTimes.Location.Y);
         _clbPrefTimes.Width = w - halfW - gap;
+        _hintTimes.Location = new Point(halfW + gap, _hintTimes.Location.Y);
         _txtNotes.Width = w;
     }
 
     // ── Data loading ───────────────────────────────────────────────────────────
+    private static void ClbDrawItem(object? sender, DrawItemEventArgs e)
+    {
+        if (sender is not CheckedListBox clb || e.Index < 0) return;
+        e.Graphics.FillRectangle(new SolidBrush(clb.BackColor), e.Bounds);
+        bool isChecked = clb.GetItemChecked(e.Index);
+        var cbState = isChecked
+            ? System.Windows.Forms.VisualStyles.CheckBoxState.CheckedNormal
+            : System.Windows.Forms.VisualStyles.CheckBoxState.UncheckedNormal;
+        var cbSize  = CheckBoxRenderer.GetGlyphSize(e.Graphics, cbState);
+        var cbPoint = new Point(e.Bounds.Left + 2, e.Bounds.Top + (e.Bounds.Height - cbSize.Height) / 2);
+        CheckBoxRenderer.DrawCheckBox(e.Graphics, cbPoint, cbState);
+        using var brush = new SolidBrush(clb.ForeColor);
+        var textRect = new RectangleF(e.Bounds.Left + cbSize.Width + 4, e.Bounds.Top,
+            e.Bounds.Width - cbSize.Width - 4, e.Bounds.Height);
+        e.Graphics.DrawString(clb.Items[e.Index].ToString(), clb.Font, brush, textRect,
+            new StringFormat { LineAlignment = StringAlignment.Center });
+    }
+
     private void LoadDayTimeData()
     {
         var (days, times) = GetFilteredDayTimeData();
@@ -482,6 +523,12 @@ public class LookingForTeamPanel : UserControl
                     .Where(g => g.SeasonId == _seasonId.Value)
                     .ToDictionary(g => g.Id, g => g);
 
+                var groupCounts = db.LookingForTeams
+                    .Where(l => l.SeasonId == _seasonId.Value && l.LookingForTeamGroupId != null)
+                    .GroupBy(l => l.LookingForTeamGroupId!.Value)
+                    .Select(g => new { GroupId = g.Key, Count = g.Count() })
+                    .ToDictionary(x => x.GroupId, x => x.Count);
+
                 var sorted = list
                     .OrderBy(l => l.LookingForTeamGroupId.HasValue && groupDict.ContainsKey(l.LookingForTeamGroupId.Value)
                         ? $"{groupDict[l.LookingForTeamGroupId.Value].Name}_{l.LookingForTeamGroupId.Value}"
@@ -495,15 +542,16 @@ public class LookingForTeamPanel : UserControl
                     string name = $"{e.Player.LastName}, {e.Player.FirstName}".Trim().TrimStart(',').Trim();
                     string grpLabel = "(no group)";
                     bool isLeader = false;
+                    int memberCount = 1;
                     if (e.LookingForTeamGroupId.HasValue && groupDict.ContainsKey(e.LookingForTeamGroupId.Value))
                     {
                         var grp = groupDict[e.LookingForTeamGroupId.Value];
                         grpLabel = grp.Name ?? "";
                         isLeader = grp.GroupLeaderId == e.Id;
+                        if (groupCounts.TryGetValue(e.LookingForTeamGroupId.Value, out int cnt)) memberCount = cnt;
                     }
                     if (!showGroups && isLeader) name = "◆ " + name;
-                    _grid.Rows.Add(e.Id, e.PlayerId, e.LookingForTeamGroupId,
-                        name, e.Player.Phone ?? "", e.Player.Email ?? "", grpLabel);
+                    _grid.Rows.Add(e.Id, e.PlayerId, e.LookingForTeamGroupId, name, grpLabel, memberCount);
                 }
             }
             catch { }
@@ -608,6 +656,7 @@ public class LookingForTeamPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
+            int? leaderLftId = db.LookingForTeamGroups.Find(groupId.Value)?.GroupLeaderId;
             var members = db.LookingForTeams
                 .Include(l => l.Player)
                 .Where(l => l.LookingForTeamGroupId == groupId.Value)
@@ -616,8 +665,12 @@ public class LookingForTeamPanel : UserControl
             foreach (var m in members)
             {
                 string name = $"{m.Player.LastName}, {m.Player.FirstName}".Trim().TrimStart(',').Trim();
-                string marker = m.Id == currentLftId ? " ◆" : "";
-                _grpGrid.Rows.Add(m.Id, name + marker, m.Player.Phone ?? "", m.Player.Email ?? "");
+                bool isLeader   = m.Id == leaderLftId;
+                bool isSelected = m.Id == currentLftId;
+                string mark = isLeader && isSelected ? "◆★" : isLeader ? "◆" : isSelected ? "★" : "";
+                int rowIdx = _grpGrid.Rows.Add(m.Id, mark, name, m.Player.LotNumber ?? "", m.Player.Phone ?? "", m.Player.Email ?? "");
+                if (isSelected)
+                    _grpGrid.Rows[rowIdx].DefaultCellStyle.BackColor = Color.LightYellow;
             }
         }
         catch { }
@@ -800,7 +853,7 @@ public class LookingForTeamPanel : UserControl
 
         // Count existing groups in this season whose name starts with the same last name
         var existing = db.LookingForTeamGroups
-            .Where(g => g.SeasonId == _seasonId!.Value && g.Name != null && g.Name.StartsWith(baseName + " ("))
+            .Where(g => g.SeasonId == _seasonId!.Value && g.Name != null && g.Name.StartsWith(baseName + "."))
             .ToList();
         int disambiguator = existing.Count;
 
@@ -808,7 +861,7 @@ public class LookingForTeamPanel : UserControl
         {
             LeagueId  = _leagueId!.Value,
             SeasonId  = _seasonId!.Value,
-            Name      = $"{baseName} ({memberCount}.{disambiguator})",
+            Name      = $"{baseName}.{disambiguator}",
             CreatedAt = DateTime.UtcNow
         };
         db.LookingForTeamGroups.Add(grp);
@@ -816,24 +869,7 @@ public class LookingForTeamPanel : UserControl
         return grp;
     }
 
-    private void UpdateGroupName(BocceDbContext db, int groupId)
-    {
-        var grp = db.LookingForTeamGroups.Find(groupId);
-        if (grp == null) return;
-        int count = db.LookingForTeams.Count(l => l.LookingForTeamGroupId == groupId);
-        if (grp.Name == null) return;
-
-        // Replace the count portion: "Smith (3.0)" → "Smith (4.0)"
-        int parenOpen = grp.Name.LastIndexOf('(');
-        int dotPos    = grp.Name.LastIndexOf('.');
-        int parenClose = grp.Name.LastIndexOf(')');
-        if (parenOpen >= 0 && dotPos > parenOpen && parenClose > dotPos)
-        {
-            string suffix = grp.Name[(dotPos)..parenClose]; // ".0"
-            string basePart = grp.Name[..parenOpen].TrimEnd();
-            grp.Name = $"{basePart} ({count}{suffix})";
-        }
-    }
+    private void UpdateGroupName(BocceDbContext db, int groupId) { }
 
     private void RemoveFromLft()
     {
@@ -931,12 +967,11 @@ public class LookingForTeamPanel : UserControl
                                         "Rename Group", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                                 {
                                     string baseName  = newLeaderLft.Player.LastName;
-                                    int memberCount  = otherMembers.Count;
                                     int disambig = db.LookingForTeamGroups
                                         .Where(g => g.SeasonId == _seasonId!.Value && g.Id != group.Id
-                                                    && g.Name != null && g.Name.StartsWith(baseName + " ("))
+                                                    && g.Name != null && g.Name.StartsWith(baseName + "."))
                                         .Count();
-                                    group.Name = $"{baseName} ({memberCount}.{disambig})";
+                                    group.Name = $"{baseName}.{disambig}";
                                 }
                             }
                         }
@@ -1185,35 +1220,33 @@ public class LookingForTeamPanel : UserControl
     private void RenameGroup()
     {
         if (!_selectedGroupId.HasValue) return;
+        if (_grpGrid.SelectedRows.Count == 0)
+        {
+            MessageBox.Show("Select a member in the Group Members list to rename the group after.",
+                "No Member Selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        int selectedLftId = Convert.ToInt32(_grpGrid.SelectedRows[0].Cells["GLftId"].Value);
 
         try
         {
             using var db = new BocceDbContext();
-            var members = db.LookingForTeams
+            var selectedMember = db.LookingForTeams
                 .Include(l => l.Player)
-                .Where(l => l.LookingForTeamGroupId == _selectedGroupId.Value)
-                .OrderBy(l => l.Player.LastName).ThenBy(l => l.Player.FirstName)
-                .ToList();
-
-            if (members.Count == 0) return;
-
-            int? selectedMemberId = PromptSelectGroupMember("Rename group to member:", members);
-            if (!selectedMemberId.HasValue) return;
-
-            var selectedMember = members.FirstOrDefault(m => m.Id == selectedMemberId.Value);
+                .FirstOrDefault(l => l.Id == selectedLftId);
             if (selectedMember == null) return;
 
             var group = db.LookingForTeamGroups.Find(_selectedGroupId.Value);
             if (group != null)
             {
                 string baseName   = selectedMember.Player.LastName;
-                int memberCount   = members.Count;
-                // Disambiguator: count other groups with the same base name (excluding this one)
                 int disambiguator = db.LookingForTeamGroups
                     .Where(g => g.SeasonId == _seasonId!.Value && g.Id != group.Id
-                                && g.Name != null && g.Name.StartsWith(baseName + " ("))
+                                && g.Name != null && g.Name.StartsWith(baseName + "."))
                     .Count();
-                group.Name = $"{baseName} ({memberCount}.{disambiguator})";
+                group.Name = $"{baseName}.{disambiguator}";
+                group.GroupLeaderId = selectedMember.Id;
                 db.SaveChanges();
                 AppLogger.Info("Renamed group {GroupId} to {Name}", _selectedGroupId.Value, group.Name);
             }

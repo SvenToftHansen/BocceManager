@@ -76,10 +76,10 @@ public class PlayerPanel : UserControl
     private Label _lblModeHint = null!;
     private Label _lblLeagueContext = null!;
 
-    private CheckedListBox _lstLookingForTeams = null!;
-    private CheckedListBox _lstSpareList = null!;
-    private List<(int LeagueId, int SeasonId)> _lookingForTeamItems = [];
-    private List<int> _spareListItems = [];
+    private Label _lblLookingForTeamsContent = null!;
+    private Label _lblSpareListContent = null!;
+    private ListBox _lstTeams = null!;
+    private Label _lblTeamsContent = null!;
 
     private Button _btnNew = null!;
     private Button _btnEdit = null!;
@@ -349,7 +349,44 @@ public class PlayerPanel : UserControl
         };
         y += 40;
 
-        // Column headers for League Status section
+        // Teams section
+        var lblTeamsHeader = new Label
+        {
+            Text = "Teams",
+            Font = AppTheme.FontSmallBold,
+            ForeColor = AppTheme.TextPrimary,
+            AutoSize = true,
+            Location = new Point(labelX, y)
+        };
+        scroll.Controls.Add(lblTeamsHeader);
+        y += 20;
+
+        _lstTeams = new ListBox
+        {
+            Location = new Point(labelX, y),
+            Size = new Size(inputW, 80),
+            BackColor = AppTheme.ContentBackground,
+            ForeColor = AppTheme.TextPrimary,
+            Font = AppTheme.FontSmall,
+            BorderStyle = BorderStyle.FixedSingle,
+            IntegralHeight = false
+        };
+        _lstTeams.DoubleClick += (_, _) => NavigateToSelectedTeam();
+        scroll.Controls.Add(_lstTeams);
+
+        _lblTeamsContent = new Label
+        {
+            Location = new Point(labelX, y + 82),
+            AutoSize = true,
+            Font = AppTheme.FontSmall,
+            ForeColor = AppTheme.TextMuted,
+            Text = "Double-click to open team editor"
+        };
+        scroll.Controls.Add(_lblTeamsContent);
+
+        y += 105;
+
+        // League Status section (read-only, shown only if data exists)
         const int col1X = 24;
         const int col2X = 330;
 
@@ -375,58 +412,33 @@ public class PlayerPanel : UserControl
 
         y += 20;
 
-        // Divider lines
-        var divider1 = new Label
-        {
-            Text = "============",
-            Font = AppTheme.FontSmall,
-            ForeColor = AppTheme.TextMuted,
-            AutoSize = true,
-            Location = new Point(col1X, y)
-        };
-        scroll.Controls.Add(divider1);
-
-        var divider2 = new Label
-        {
-            Text = "=======",
-            Font = AppTheme.FontSmall,
-            ForeColor = AppTheme.TextMuted,
-            AutoSize = true,
-            Location = new Point(col2X, y)
-        };
-        scroll.Controls.Add(divider2);
-
-        y += 18;
-
-        // Looking for Teams listbox with checkboxes
-        _lstLookingForTeams = new CheckedListBox
+        _lblLookingForTeamsContent = new Label
         {
             Location = new Point(col1X, y),
-            Size = new Size(280, 100),
+            Size = new Size(280, 80),
             BackColor = AppTheme.ContentBackground,
             ForeColor = AppTheme.TextPrimary,
             Font = AppTheme.FontSmall,
-            CheckOnClick = true,
+            BorderStyle = BorderStyle.FixedSingle,
+            AutoSize = false,
             Visible = false
         };
-        _lstLookingForTeams.ItemCheck += (_, _) => MarkDirty();
-        scroll.Controls.Add(_lstLookingForTeams);
+        scroll.Controls.Add(_lblLookingForTeamsContent);
 
-        // Spare List listbox with checkboxes
-        _lstSpareList = new CheckedListBox
+        _lblSpareListContent = new Label
         {
             Location = new Point(col2X, y),
-            Size = new Size(280, 100),
+            Size = new Size(280, 80),
             BackColor = AppTheme.ContentBackground,
             ForeColor = AppTheme.TextPrimary,
             Font = AppTheme.FontSmall,
-            CheckOnClick = true,
+            BorderStyle = BorderStyle.FixedSingle,
+            AutoSize = false,
             Visible = false
         };
-        _lstSpareList.ItemCheck += (_, _) => MarkDirty();
-        scroll.Controls.Add(_lstSpareList);
+        scroll.Controls.Add(_lblSpareListContent);
 
-        y += 110;
+        y += 90;
 
         _lblLeagueContext = new Label
         {
@@ -447,7 +459,9 @@ public class PlayerPanel : UserControl
             lblPartner, _cmbPartner,
             lblActive, _chkIsActive,
             lblCreated, _lblCreatedAt,
-            _lblLeagueContext
+            _lblTeamsContent,
+            _lblLookingForTeamsContent,
+            _lblSpareListContent
         ]);
 
         root.Controls.Add(scroll);
@@ -630,7 +644,8 @@ public class PlayerPanel : UserControl
             _lblCreatedAt.Text = p.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
 
             PopulatePartnerLookup(p.Id, p.PartnerPlayerId);
-            RefreshLeagueContextAndStatus(p.Id);
+            LoadPlayerTeams(p.Id);
+            LoadPlayerLeagueStatus(p.Id);
         }
         finally
         {
@@ -684,8 +699,6 @@ public class PlayerPanel : UserControl
             _selectedPlayerId = null;
             ClearEditor();
             PopulatePartnerLookup(null, null);
-            RefreshLeagueContextAndStatus(null);
-            BuildLeagueSelectionListboxes();
         }
         finally
         {
@@ -703,7 +716,9 @@ public class PlayerPanel : UserControl
         _txtLotNumber.Text = "";
         _chkIsActive.Checked = true;
         _lblCreatedAt.Text = "(new)";
-        ClearLeagueSelections();
+        _lstTeams.Items.Clear();
+        _lblLookingForTeamsContent.Visible = false;
+        _lblSpareListContent.Visible = false;
     }
 
     private void SetMode(PlayerMode mode)
@@ -721,15 +736,6 @@ public class PlayerPanel : UserControl
 
         _chkIsActive.Enabled = true;
         _cmbPartner.Enabled = true;
-
-        // Build and populate league selection listboxes
-        BuildLeagueSelectionListboxes();
-        _lstLookingForTeams.Visible = true;
-        _lstSpareList.Visible = true;
-
-        // Populate with current player's data if viewing/editing existing player
-        if (_selectedPlayerId.HasValue)
-            PopulateLeagueSelectionFromPlayer(_selectedPlayerId.Value);
 
         _btnEdit.Visible = false;  // Edit button hidden - fields always editable
 
@@ -822,115 +828,133 @@ public class PlayerPanel : UserControl
         }
     }
 
-    private List<(int LeagueId, int SeasonId)> GetCheckedLookingForTeamEntries()
+    private sealed class TeamDisplay
     {
-        var result = new List<(int, int)>();
-        for (int i = 0; i < _lstLookingForTeams.Items.Count; i++)
+        public int TeamId { get; set; }
+        public string DisplayText { get; set; } = "";
+        public override string ToString() => DisplayText;
+    }
+
+    private void LoadPlayerTeams(int playerId)
+    {
+        try
         {
-            if (_lstLookingForTeams.GetItemChecked(i) && i < _lookingForTeamItems.Count)
-                result.Add(_lookingForTeamItems[i]);
-        }
-        return result;
-    }
+            using var db = new BocceDbContext();
+            var teams = db.TeamPlayers
+                .Where(tp => tp.PlayerId == playerId)
+                .Include(tp => tp.Team)
+                .ThenInclude(t => t.Division)
+                .ThenInclude(d => d.Season)
+                .AsNoTracking()
+                .ToList();
 
-    private List<int> GetCheckedSpareLeagues()
-    {
-        var result = new List<int>();
-        for (int i = 0; i < _lstSpareList.Items.Count; i++)
+            _lstTeams.Items.Clear();
+            if (teams.Count == 0)
+            {
+                _lstTeams.Visible = false;
+                _lblTeamsContent.Visible = false;
+                return;
+            }
+
+            _lstTeams.Visible = true;
+            _lblTeamsContent.Visible = true;
+
+            foreach (var tp in teams)
+            {
+                var displayText = $"{tp.Team.Division.Season.Name} - {tp.Team.Division.Name} - {tp.Team.EffectiveDisplayName}";
+                _lstTeams.Items.Add(new TeamDisplay { TeamId = tp.Team.Id, DisplayText = displayText });
+            }
+        }
+        catch (Exception ex)
         {
-            if (_lstSpareList.GetItemChecked(i) && i < _spareListItems.Count)
-                result.Add(_spareListItems[i]);
+            System.Diagnostics.Debug.WriteLine($"Error loading player teams: {ex.Message}");
         }
-        return result;
     }
 
-    private void ClearLeagueSelections()
+    private void LoadPlayerLeagueStatus(int playerId)
     {
-        _lookingForTeamItems.Clear();
-        _spareListItems.Clear();
-        _lstLookingForTeams.Items.Clear();
-        _lstSpareList.Items.Clear();
-    }
-
-    private void BuildLeagueSelectionListboxes()
-    {
-        ClearLeagueSelections();
-
         try
         {
             using var db = new BocceDbContext();
 
-            // Build Looking for Team listbox (League/Season pairs - current and next season)
-            var leagues = db.Leagues.OrderBy(l => l.Name).ToList();
+            // Get Looking for Team entries
+            var lftEntries = db.LookingForTeams
+                .Where(l => l.PlayerId == playerId)
+                .Include(l => l.Season)
+                .Include(l => l.League)
+                .AsNoTracking()
+                .ToList();
 
-            foreach (var league in leagues)
+            // Get Spare List entries
+            var spareEntries = db.SpareLists
+                .Where(s => s.PlayerId == playerId && s.IsActive)
+                .Include(s => s.League)
+                .AsNoTracking()
+                .ToList();
+
+            // Display LFT if any entries
+            if (lftEntries.Count > 0)
             {
-                var seasons = db.Seasons.Where(s => s.LeagueId == league.Id && !s.IsLocked)
-                    .OrderByDescending(s => s.IsCurrent)
-                    .ThenByDescending(s => s.StartDate)
-                    .Take(2)  // Current + next (locked seasons excluded)
-                    .ToList();
-
-                foreach (var season in seasons)
-                {
-                    var displayText = $"{league.Name} - {season.Name}" + (season.IsCurrent ? " ★" : "");
-                    _lstLookingForTeams.Items.Add((league.Id, season.Id), false);
-                    int index = _lstLookingForTeams.Items.Count - 1;
-                    _lstLookingForTeams.Items[index] = displayText;
-                    _lookingForTeamItems.Add((league.Id, season.Id));
-                }
+                _lblLookingForTeamsContent.Visible = true;
+                var lftText = string.Join("\n", lftEntries.Select(l => $"{l.League.Name} - {l.Season?.Name ?? "(no season)"}"));
+                _lblLookingForTeamsContent.Text = lftText;
+            }
+            else
+            {
+                _lblLookingForTeamsContent.Visible = false;
             }
 
-            // Build Spare List listbox (Leagues)
-            foreach (var league in leagues)
+            // Display Spare List if any entries
+            if (spareEntries.Count > 0)
             {
-                _lstSpareList.Items.Add(league.Name, false);
-                _spareListItems.Add(league.Id);
+                _lblSpareListContent.Visible = true;
+                var spareText = string.Join("\n", spareEntries.Select(s => s.League.Name));
+                _lblSpareListContent.Text = spareText;
+            }
+            else
+            {
+                _lblSpareListContent.Visible = false;
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error loading player league status: {ex.Message}");
+        }
     }
 
-    private void PopulateLeagueSelectionFromPlayer(int playerId)
+    private void NavigateToSelectedTeam()
     {
-        if (_lookingForTeamItems.Count == 0 && _spareListItems.Count == 0)
+        if (_lstTeams.SelectedItem is not TeamDisplay selectedTeam || !_selectedPlayerId.HasValue)
             return;
 
         try
         {
             using var db = new BocceDbContext();
+            var team = db.Teams.AsNoTracking().FirstOrDefault(t => t.Id == selectedTeam.TeamId);
+            if (team == null)
+                return;
 
-            // Get player's current LookingForTeam entries
-            var playerLft = db.LookingForTeams
-                .Where(l => l.PlayerId == playerId)
-                .Select(l => new { l.LeagueId, l.SeasonId })
-                .ToList();
-
-            // Get player's current SpareList entries
-            var playerSpare = db.SpareLists
-                .Where(s => s.PlayerId == playerId && s.IsActive)
-                .Select(s => s.LeagueId)
-                .ToList();
-
-            // Check Looking for Team items
-            for (int i = 0; i < _lookingForTeamItems.Count; i++)
+            if (FindParentMainForm() is MainForm mainForm)
             {
-                var (leagueId, seasonId) = _lookingForTeamItems[i];
-                if (playerLft.Any(l => l.LeagueId == leagueId && l.SeasonId == seasonId))
-                    _lstLookingForTeams.SetItemChecked(i, true);
-            }
-
-            // Check Spare List items
-            for (int i = 0; i < _spareListItems.Count; i++)
-            {
-                if (playerSpare.Contains(_spareListItems[i]))
-                    _lstSpareList.SetItemChecked(i, true);
+                mainForm.NavigateToDivision(team.DivisionId);
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error populating league selections: {ex.Message}");
+            MessageBox.Show($"Unable to navigate to team: {ex.Message}", "Navigation Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private MainForm? FindParentMainForm()
+    {
+        var control = Parent;
+        while (control != null)
+        {
+            if (control is MainForm mainForm)
+                return mainForm;
+            control = control.Parent;
+        }
+        return null;
     }
 
     private void SavePlayer()
@@ -969,8 +993,6 @@ public class PlayerPanel : UserControl
                 FeeService.EnsureInitiationFee(db, player.Id);
 
                 UpdatePartnerLink(db, player, selectedPartnerId);
-                ApplyLeagueListStatus(db, player, GetCheckedLookingForTeamEntries(), GetCheckedSpareLeagues());
-
                 db.SaveChanges();
                 _selectedPlayerId = player.Id;
             }
@@ -991,7 +1013,6 @@ public class PlayerPanel : UserControl
                 player.IsActive = _chkIsActive.Checked;
 
                 UpdatePartnerLink(db, player, selectedPartnerId);
-                ApplyLeagueListStatus(db, player, GetCheckedLookingForTeamEntries(), GetCheckedSpareLeagues());
                 db.SaveChanges();
             }
             else
@@ -1024,58 +1045,6 @@ public class PlayerPanel : UserControl
         }
     }
 
-    private void ApplyLeagueListStatus(BocceDbContext db, Player player, List<(int LeagueId, int SeasonId)> lookingForTeamEntries, List<int> spareLeagueIds)
-    {
-        // Build a map of existing LFT entries; split locked vs unlocked seasons
-        var existingLft = db.LookingForTeams
-            .Include(l => l.Season)
-            .Where(l => l.PlayerId == player.Id)
-            .ToList();
-
-        var preserveTeamIds = existingLft.ToDictionary(l => (l.LeagueId, l.SeasonId), l => l.TeamId);
-
-        // Only delete LFTs for unlocked seasons — locked-season entries are preserved as-is
-        var toDelete = existingLft.Where(l => l.Season == null || !l.Season.IsLocked).ToList();
-        foreach (var lft in toDelete)
-            db.LookingForTeams.Remove(lft);
-
-        db.SaveChanges(); // Commit deletions before adding new entries
-
-        // Add new LFT entries, skipping any locked-season entries that were preserved
-        var preservedLockedKeys = existingLft
-            .Where(l => l.Season?.IsLocked == true)
-            .Select(l => (l.LeagueId, l.SeasonId))
-            .ToHashSet();
-
-        foreach (var (leagueId, seasonId) in lookingForTeamEntries)
-        {
-            if (preservedLockedKeys.Contains((leagueId, seasonId))) continue;
-            int? preservedTeamId = preserveTeamIds.TryGetValue((leagueId, seasonId), out var teamId) ? teamId : null;
-            db.LookingForTeams.Add(new LookingForTeam
-            {
-                LeagueId = leagueId,
-                PlayerId = player.Id,
-                SeasonId = seasonId,
-                TeamId   = preservedTeamId
-            });
-        }
-
-        // Remove all existing spare lists for this player
-        var existingSpares = db.SpareLists.Where(s => s.PlayerId == player.Id).ToList();
-        foreach (var spare in existingSpares)
-            db.SpareLists.Remove(spare);
-
-        // Add new spare list entries
-        foreach (var leagueId in spareLeagueIds)
-        {
-            db.SpareLists.Add(new SpareList
-            {
-                LeagueId = leagueId,
-                PlayerId = player.Id,
-                IsActive = true
-            });
-        }
-    }
 
     private static void UpdatePartnerLink(BocceDbContext db, Player player, int? newPartnerId)
     {
