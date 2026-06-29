@@ -269,36 +269,31 @@ public class SeasonPanel : UserControl
         _txtName.TextChanged += OnSeasonNameTextChanged;
         Add(_txtName); y += 44;
 
-        Add(Lbl("Start Date", lx, y));
-        _dtpStartDate = new DateTimePicker { Location = new Point(ix, y), Width = 180, Format = DateTimePickerFormat.Short, Font = AppTheme.FontDefault };
-        _dtpStartDate.ValueChanged += OnSeasonStartDateChanged;
-        Add(_dtpStartDate); y += 44;
-
-        Add(Lbl("Weeks in Season", lx, y));
-        _numWeeks = Num(ix, y, 0, 99);
-        _numWeeks.ValueChanged += (_, _) => MarkDirty();
-        Add(_numWeeks, Hint("Required before divisions can be auto-built", ix + 100, y + 4)); y += 44;
-
-        // ── Status ────────────────────────────────────────────────────────
+        // ── Lock State ────────────────────────────────────────────────────
         Add(Sep(lx, y, iw + ix - lx)); y += 10;
-        Add(SecHdr("Status", lx, y)); y += 34;
+        Add(SecHdr("Lock State", lx, y)); y += 34;
 
         Add(Lbl("Is Current Season", lx, y));
         _chkIsCurrent = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary };
-        _chkIsCurrent.CheckedChanged += (_, _) => MarkDirty();
+        _chkIsCurrent.CheckedChanged += (_, _) =>
+        {
+            if (!_isLoadingData && _chkIsCurrent.Checked) _chkIsLocked.Checked = false;
+            MarkDirty();
+        };
         Add(_chkIsCurrent, Hint("Only one season per league can be current (★)", ix + 26, y + 4)); y += 38;
 
         Add(Lbl("Is Locked", lx, y));
         _chkIsLocked = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary };
-        _chkIsLocked.CheckedChanged += (_, _) => { MarkDirty(); ApplyEditorLockState(_chkIsLocked.Checked); };
-        Add(_chkIsLocked, Hint("When locked: all editing is disabled; uncheck to unlock", ix + 26, y + 4)); y += 38;
+        _chkIsLocked.CheckedChanged += (_, _) =>
+        {
+            if (!_isLoadingData && _chkIsLocked.Checked) _chkIsCurrent.Checked = false;
+            MarkDirty();
+            ApplyEditorLockState(_chkIsLocked.Checked);
+        };
+        Add(_chkIsLocked, Hint("When locked: Parameters / Divisions / Slots tabs are hidden", ix + 26, y + 4)); y += 44;
 
-        Add(Lbl("Status", lx, y));
-        _cmbStatus = new ComboBox { Location = new Point(ix, y), Width = 200, DropDownStyle = ComboBoxStyle.DropDownList, Font = AppTheme.FontDefault };
-        _cmbStatus.Items.AddRange(["Setup", "League Play", "Playoff Play", "Completed"]);
-        _cmbStatus.SelectedIndexChanged += (_, _) => MarkDirty();
-        Add(_cmbStatus, Hint("Controls which operations are allowed", ix + 210, y + 4)); y += 44;
-
+        // ── Created ───────────────────────────────────────────────────────
+        Add(Sep(lx, y, iw + ix - lx)); y += 10;
         Add(Lbl("Created", lx, y));
         _lblCreatedAt = new Label { Location = new Point(ix, y + 3), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextSecondary };
         Add(_lblCreatedAt); y += 44;
@@ -319,6 +314,32 @@ public class SeasonPanel : UserControl
         int y = 20;
         var cc = new List<Control>();
         void Add(params Control[] items) => cc.AddRange(items);
+
+        // ── Season Dates & Status ─────────────────────────────────────────
+        Add(SecHdr("Season Dates & Status", lx, y)); y += 34;
+
+        Add(Lbl("Status", lx, y));
+        _cmbStatus = new ComboBox { Location = new Point(ix, y), Width = 200, DropDownStyle = ComboBoxStyle.DropDownList, Font = AppTheme.FontDefault };
+        _cmbStatus.Items.AddRange(["Setup", "League Play", "Playoff Play", "Completed"]);
+        _cmbStatus.SelectedIndexChanged += (_, _) => MarkDirty();
+        Add(_cmbStatus, Hint("Controls which operations are allowed", ix + 210, y + 4)); y += 44;
+
+        Add(Lbl("League Start Date", lx, y));
+        _dtpStartDate = new DateTimePicker { Location = new Point(ix, y), Width = 180, Format = DateTimePickerFormat.Short, Font = AppTheme.FontDefault };
+        _dtpStartDate.ValueChanged += OnSeasonStartDateChanged;
+        Add(_dtpStartDate); y += 44;
+
+        Add(Lbl("Playoff Start Date", lx, y));
+        _dtpPlayoffStart = new DateTimePicker { Location = new Point(ix, y), Width = 200, Format = DateTimePickerFormat.Short, Font = AppTheme.FontDefault, ShowCheckBox = true, Checked = false };
+        _dtpPlayoffStart.ValueChanged += (_, _) => MarkDirty();
+        Add(_dtpPlayoffStart, Hint("Optional — uncheck if not yet known", ix + 212, y + 4)); y += 44;
+
+        Add(Lbl("Weeks in Season", lx, y));
+        _numWeeks = Num(ix, y, 0, 99);
+        _numWeeks.ValueChanged += (_, _) => MarkDirty();
+        Add(_numWeeks, Hint("Required before divisions can be auto-built", ix + 100, y + 4)); y += 44;
+
+        Add(Sep(lx, y, iw + ix - lx)); y += 10;
 
         // ── Fees ──────────────────────────────────────────────────────────
         Add(SecHdr("Fees", lx, y)); y += 34;
@@ -413,11 +434,6 @@ public class SeasonPanel : UserControl
         _numTeamsPlayoffs = Num(ix, y, 0, 99, 0);
         _numTeamsPlayoffs.ValueChanged += (_, _) => MarkDirty();
         Add(_numTeamsPlayoffs, Hint("0 = no playoffs", ix + 100, y + 4)); y += 38;
-
-        Add(Lbl("Playoff Start Date", lx, y));
-        _dtpPlayoffStart = new DateTimePicker { Location = new Point(ix, y), Width = 200, Format = DateTimePickerFormat.Short, Font = AppTheme.FontDefault, ShowCheckBox = true, Checked = false };
-        _dtpPlayoffStart.ValueChanged += (_, _) => MarkDirty();
-        Add(_dtpPlayoffStart, Hint("Optional - uncheck if not yet known", ix + 212, y + 4)); y += 44;
 
         Add(Lbl("First Place Guaranteed", lx, y));
         _chkFirstPlace = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary, Checked = true };
@@ -820,11 +836,10 @@ public class SeasonPanel : UserControl
 
     private void ApplyEditorLockState(bool isLocked)
     {
-        _txtName.Enabled             = !isLocked;
+        // Name, IsCurrent, IsLocked are always enabled regardless of lock state
         _dtpStartDate.Enabled        = !isLocked;
         _numWeeks.Enabled            = !isLocked;
         _dtpPlayoffStart.Enabled     = !isLocked;
-        _chkIsCurrent.Enabled        = !isLocked;
         _cmbStatus.Enabled           = !isLocked;
         _txtSeasonFeeAmount.Enabled  = !isLocked;
         _numMaxTeamsDiv.Enabled      = !isLocked;
@@ -844,8 +859,24 @@ public class SeasonPanel : UserControl
         _daysList.Enabled            = !isLocked;
         _timesList.Enabled           = !isLocked;
         _btnBuild.Enabled            = !isLocked;
-        // _chkIsLocked is always enabled — it's the only way to unlock
-        // _btnSave enable/disable is handled by MarkDirty/ClearDirty exclusively
+
+        // Hide Parameters/Divisions/Slots tabs when locked; restore when unlocked
+        if (_tabs != null && _tabParameters != null)
+        {
+            if (isLocked)
+            {
+                if (_tabs.TabPages.Contains(_tabParameters)) _tabs.TabPages.Remove(_tabParameters);
+                if (_tabs.TabPages.Contains(_tabDivisions))  _tabs.TabPages.Remove(_tabDivisions);
+                if (_tabs.TabPages.Contains(_tabSlots))      _tabs.TabPages.Remove(_tabSlots);
+            }
+            else
+            {
+                if (!_tabs.TabPages.Contains(_tabParameters)) _tabs.TabPages.Add(_tabParameters);
+                if (!_tabs.TabPages.Contains(_tabDivisions))  _tabs.TabPages.Add(_tabDivisions);
+                if (!_tabs.TabPages.Contains(_tabSlots))      _tabs.TabPages.Add(_tabSlots);
+            }
+        }
+
         Refresh();
     }
 

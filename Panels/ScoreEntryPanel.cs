@@ -17,7 +17,6 @@ public class ScoreEntryPanel : UserControl
 
     // ── Controls ───────────────────────────────────────────────────────────────
     private ComboBox _cmbWeek        = null!;
-    private Button   _btnSave        = null!;
     private Button   _btnClearAll    = null!;
     private Button   _btnPrint       = null!;
     private Button   _btnPrintSeason = null!;
@@ -30,7 +29,6 @@ public class ScoreEntryPanel : UserControl
     // Parameters tab controls
     private CheckBox _chkAutoJump      = null!;
     private CheckBox _chkSpecialChars  = null!;
-    private CheckBox _chkAutoSave      = null!;
     private CheckBox _chkSwapCourts    = null!;
     private TextBox  _txtForfeitKey    = null!;
     private TextBox  _txtDblForfeitKey = null!;
@@ -42,7 +40,6 @@ public class ScoreEntryPanel : UserControl
     // Speed Entry settings (loaded from AppParameters on each context load)
     private bool   _autoJumpEnabled     = true;
     private bool   _specialCharsEnabled = true;
-    private bool   _autoSaveEnabled     = false;
     private string _keyForfeit          = ".";
     private string _keyDblForfeit     = "X";
     private string _key10             = "/";
@@ -70,6 +67,11 @@ public class ScoreEntryPanel : UserControl
         string T1Letter, string T2Letter);
 
     private record PrintHeader(string ClubName, string LeagueName, string SeasonName);
+
+    private record WeekItem(int Week, string Display)
+    {
+        public override string ToString() => Display;
+    }
 
     private record WeekGridData(
         List<MatchInfo> Matches,
@@ -178,6 +180,7 @@ public class ScoreEntryPanel : UserControl
             e.Graphics.DrawLine(pen, 0, toolbar.Height - 1, toolbar.Width, toolbar.Height - 1);
         };
 
+        // ── Top row: week selector + action buttons ──────────────────────────
         toolbar.Controls.Add(new Label
         {
             Text = "Week:", Font = AppTheme.FontDefaultBold,
@@ -188,45 +191,41 @@ public class ScoreEntryPanel : UserControl
         _cmbWeek = new ComboBox
         {
             DropDownStyle = ComboBoxStyle.DropDownList,
-            Font = AppTheme.FontDefault, Width = 80, Location = new Point(62, 13)
+            Font = AppTheme.FontDefault, Width = 120, Location = new Point(62, 13)
         };
         toolbar.Controls.Add(_cmbWeek);
 
-        _btnSave = MakeBtn("Save Scores", AppTheme.ButtonSuccess, 155, 100);
-        _btnSave.Click += OnSave;
-        toolbar.Controls.Add(_btnSave);
-
-        _btnClearAll = MakeBtn("Clear All", Color.FromArgb(180, 100, 30), 260, 85);
+        _btnClearAll = MakeBtn("Clear All", Color.FromArgb(180, 100, 30), 188, 85);
         _btnClearAll.Click += OnClearAll;
         toolbar.Controls.Add(_btnClearAll);
 
-        _btnPrint = MakeBtn("Print Week", Color.FromArgb(60, 100, 160), 352, 95);
+        _btnPrint = MakeBtn("Print Week", Color.FromArgb(60, 100, 160), 279, 95);
         _btnPrint.Click += OnPrint;
         toolbar.Controls.Add(_btnPrint);
 
-        _btnPrintSeason = MakeBtn("Print Season", Color.FromArgb(60, 100, 160), 452, 110);
+        _btnPrintSeason = MakeBtn("Print Season", Color.FromArgb(60, 100, 160), 380, 110);
         _btnPrintSeason.Click += OnPrintSeason;
         toolbar.Controls.Add(_btnPrintSeason);
 
-        // Small hint line under the Print buttons showing active settings at a glance
+        // Settings summary — top line on right side of buttons
         _lblHint = new Label
         {
             Text      = "",
             Font      = new Font("Segoe UI", 6.5f, FontStyle.Regular),
             ForeColor = AppTheme.TextMuted,
-            Location  = new Point(352, 40),
-            Size      = new Size(400, 10)
+            Location  = new Point(500, 9),
+            Size      = new Size(380, 14)
         };
         toolbar.Controls.Add(_lblHint);
 
-        // Shortcut-key legend (only shown when shortcuts are on)
+        // Shortcut-key legend — bottom line on right side of buttons
         _lblLegend = new Label
         {
             Text      = "",
-            Font      = new Font("Segoe UI", 7.5f, FontStyle.Regular),
+            Font      = new Font("Segoe UI", 7f, FontStyle.Regular),
             ForeColor = AppTheme.TextMuted,
-            Location  = new Point(570, 14),
-            Size      = new Size(500, 22)
+            Location  = new Point(500, 28),
+            Size      = new Size(500, 14)
         };
         toolbar.Controls.Add(_lblLegend);
 
@@ -234,7 +233,7 @@ public class ScoreEntryPanel : UserControl
         {
             Text = "", Font = AppTheme.FontDefault,
             ForeColor = AppTheme.TextSecondary,
-            AutoSize = true, Location = new Point(1080, 16)
+            AutoSize = true, Location = new Point(900, 16)
         };
         toolbar.Controls.Add(_lblStatus);
 
@@ -277,8 +276,15 @@ public class ScoreEntryPanel : UserControl
                 if (season != null)
                 {
                     _seasonIsLocked = season.IsLocked;
-                    int maxW = Math.Max(1, season.WeeksInSeason);
-                    for (int w = 1; w <= maxW; w++) _cmbWeek.Items.Add(w);
+                    int maxW     = Math.Max(1, season.WeeksInSeason);
+                    var statuses = QueryWeekStatuses(db, _seasonId.Value);
+                    for (int w = 1; w <= maxW; w++)
+                    {
+                        string display = statuses.TryGetValue(w, out var st) && st.total > 0
+                            ? WeekLabel(w, st.entered, st.total)
+                            : $"{w}";
+                        _cmbWeek.Items.Add(new WeekItem(w, display));
+                    }
                     if (_seasonIsLocked) SetStatus("Season is locked — scores cannot be edited.");
                 }
                 else SetStatus("Season not found.");
@@ -287,7 +293,6 @@ public class ScoreEntryPanel : UserControl
         }
         catch (Exception ex) { SetStatus($"Error: {ex.Message}"); }
 
-        _btnSave.Enabled     = !_seasonIsLocked;
         _btnClearAll.Enabled = !_seasonIsLocked;
 
         _cmbWeek.SelectedIndexChanged += OnWeekChanged;
@@ -296,7 +301,7 @@ public class ScoreEntryPanel : UserControl
 
     private void OnWeekChanged(object? sender, EventArgs e)
     {
-        if (_cmbWeek.SelectedItem is int w) { _selectedWeek = w; BuildGrid(); }
+        if (_cmbWeek.SelectedItem is WeekItem wi) { _selectedWeek = wi.Week; BuildGrid(); }
     }
 
     private void LoadSpeedEntrySettings()
@@ -306,7 +311,7 @@ public class ScoreEntryPanel : UserControl
             using var db = new BocceDbContext();
             _autoJumpEnabled     = AppParameterService.GetAppParameter(db, "SpeedEntry.Enabled")             != "false";
             _specialCharsEnabled = AppParameterService.GetAppParameter(db, "SpeedEntry.SpecialChars.Enabled") != "false";
-            _autoSaveEnabled     = AppParameterService.GetAppParameter(db, "SpeedEntry.AutoSave.Enabled")     == "true";
+            _swapCourts          = AppParameterService.GetAppParameter(db, "SpeedEntry.SwapCourts")           == "true";
             _keyForfeit    = AppParameterService.GetAppParameter(db, "SpeedEntry.ForfeitKey")       ?? ".";
             _keyDblForfeit = AppParameterService.GetAppParameter(db, "SpeedEntry.DoubleForfeitKey") ?? "X";
             _key10         = AppParameterService.GetAppParameter(db, "SpeedEntry.Key10")            ?? "/";
@@ -320,19 +325,13 @@ public class ScoreEntryPanel : UserControl
     private void UpdateSpeedEntryButtons()
     {
         // Hide Save Scores when auto-save handles it; show it otherwise
-        _btnSave.Visible = !_autoSaveEnabled;
 
         // Shortcut legend — only meaningful when shortcuts are on
         _lblLegend.Text = _specialCharsEnabled
             ? $"{_keyForfeit}=forfeit  {_keyDblForfeit}=both forfeit  {_key10}=10  {_key11}=11  {_key12}=12  Space=clear"
             : "";
 
-        // Compact hint under the Print buttons
-        string jump    = _autoJumpEnabled    ? "Jump:ON"    : "Jump:OFF";
-        string keys    = _specialCharsEnabled ? "Shortcuts:ON" : "Shortcuts:OFF";
-        string save    = _autoSaveEnabled    ? "AutoSave:ON" : "AutoSave:OFF";
-        string courts  = _swapCourts         ? "Courts:Swapped" : "Courts:Normal";
-        _lblHint.Text  = $"{jump}  {keys}  {save}  {courts}";
+        _lblHint.Text = "";
     }
 
     private static bool MatchesKey(char typed, string configured)
@@ -355,42 +354,11 @@ public class ScoreEntryPanel : UserControl
         outer.Controls.Add(Lbl(
             "Auto-jump: digits advance to the next field automatically.\r\n" +
             "Shortcuts: single keystrokes enter two-digit scores and forfeits.\r\n" +
-            "Auto-save: saves a match automatically when all 4 scores are filled.",
+            "All settings save automatically.",
             20, y, AppTheme.TextSecondary, AppTheme.FontDefault, 560, 52));
         y += 64;
 
-        _chkAutoJump = new CheckBox
-        {
-            Text = "Auto-jump enabled  (digits advance to the next field; with shortcuts off, '1' waits for 10/11)",
-            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary,
-            AutoSize = true, Location = new Point(20, y)
-        };
-        outer.Controls.Add(_chkAutoJump);
-        y += 28;
-
-        _chkSpecialChars = new CheckBox
-        {
-            Text = "Shortcut keys enabled  (single characters enter forfeits and two-digit scores)",
-            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary,
-            AutoSize = true, Location = new Point(20, y)
-        };
-        outer.Controls.Add(_chkSpecialChars);
-        y += 28;
-
-        _chkAutoSave = new CheckBox
-        {
-            Text = "Auto-save enabled  (saves a match when all 4 scores are entered)",
-            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary,
-            AutoSize = true, Location = new Point(20, y)
-        };
-        outer.Controls.Add(_chkAutoSave);
-        y += 28;
-
-        // Swap Courts applies immediately — no Save button needed
-        outer.Controls.Add(Lbl("─────────────────────────────────", 20, y, AppTheme.TextMuted,
-            AppTheme.FontDefault, 340, 18));
-        y += 22;
-
+        // ── Swap Courts — first (applies immediately) ─────────────────────────
         _chkSwapCourts = new CheckBox
         {
             Text = "Swap court order  (reverses left-to-right column order in the grid)",
@@ -400,11 +368,48 @@ public class ScoreEntryPanel : UserControl
         _chkSwapCourts.CheckedChanged += (_, _) =>
         {
             _swapCourts = _chkSwapCourts.Checked;
+            SaveParameterSettings();
             BuildGrid();
             UpdateSpeedEntryButtons();
         };
         outer.Controls.Add(_chkSwapCourts);
+        y += 32;
+
+        // ── Auto-jump ─────────────────────────────────────────────────────────
+        _chkAutoJump = new CheckBox
+        {
+            Text = "Auto-jump enabled  (digits advance to the next field; with shortcuts off, '1' waits for 10/11)",
+            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary,
+            AutoSize = true, Location = new Point(20, y)
+        };
+        _chkAutoJump.CheckedChanged += (_, _) =>
+        {
+            _autoJumpEnabled = _chkAutoJump.Checked;
+            SaveParameterSettings();
+            UpdateSpeedEntryButtons();
+        };
+        outer.Controls.Add(_chkAutoJump);
         y += 36;
+
+        // ── Shortcut Keys ─────────────────────────────────────────────────────
+        outer.Controls.Add(Lbl("─────────────────────────────────", 20, y, AppTheme.TextMuted,
+            AppTheme.FontDefault, 340, 18));
+        y += 22;
+
+        _chkSpecialChars = new CheckBox
+        {
+            Text = "Shortcut keys enabled  (single characters enter forfeits and two-digit scores)",
+            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary,
+            AutoSize = true, Location = new Point(20, y)
+        };
+        _chkSpecialChars.CheckedChanged += (_, _) =>
+        {
+            _specialCharsEnabled = _chkSpecialChars.Checked;
+            SaveParameterSettings();
+            UpdateSpeedEntryButtons();
+        };
+        outer.Controls.Add(_chkSpecialChars);
+        y += 32;
 
         TextBox KeyRow(string label)
         {
@@ -417,6 +422,7 @@ public class ScoreEntryPanel : UserControl
                 TextAlign = HorizontalAlignment.Center,
                 Location  = new Point(20 + LblW + 8, y)
             };
+            tb.Leave += (_, _) => SaveParameterSettings();
             outer.Controls.Add(tb);
             y += Pad + 8;
             return tb;
@@ -428,23 +434,7 @@ public class ScoreEntryPanel : UserControl
         _txtKey11         = KeyRow("Key for score 11:");
         _txtKey12         = KeyRow("Key for score 12:");
 
-        y += 12;
-
-        var btnSave = new Button
-        {
-            Text      = "Save Settings",
-            Font      = AppTheme.FontDefault,
-            BackColor = AppTheme.ButtonSuccess,
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat,
-            Size      = new Size(130, 30),
-            Location  = new Point(20, y),
-            FlatAppearance = { BorderSize = 0 }
-        };
-        btnSave.Click += (_, _) => SaveParameterSettings();
-        outer.Controls.Add(btnSave);
-
-        y += 40;
+        y += 8;
         _lblParamStatus = new Label
         {
             Text      = "",
@@ -460,7 +450,6 @@ public class ScoreEntryPanel : UserControl
     {
         _chkAutoJump.Checked      = _autoJumpEnabled;
         _chkSpecialChars.Checked  = _specialCharsEnabled;
-        _chkAutoSave.Checked      = _autoSaveEnabled;
         _chkSwapCourts.Checked    = _swapCourts;
         _txtForfeitKey.Text       = _keyForfeit;
         _txtDblForfeitKey.Text    = _keyDblForfeit;
@@ -472,18 +461,20 @@ public class ScoreEntryPanel : UserControl
 
     private void SaveParameterSettings()
     {
-        string forfeit    = _txtForfeitKey.Text.Trim();
-        string dblForfeit = _txtDblForfeitKey.Text.Trim();
-        string k10        = _txtKey10.Text.Trim();
-        string k11        = _txtKey11.Text.Trim();
-        string k12        = _txtKey12.Text.Trim();
+        string forfeit    = _txtForfeitKey?.Text.Trim()    ?? "";
+        string dblForfeit = _txtDblForfeitKey?.Text.Trim() ?? "";
+        string k10        = _txtKey10?.Text.Trim()         ?? "";
+        string k11        = _txtKey11?.Text.Trim()         ?? "";
+        string k12        = _txtKey12?.Text.Trim()         ?? "";
 
-        if (forfeit.Length != 1 || dblForfeit.Length != 1
-            || k10.Length != 1 || k11.Length != 1 || k12.Length != 1)
+        // Key fields may be empty if called before the tab is first opened
+        bool keysValid = forfeit.Length == 1 && dblForfeit.Length == 1
+                      && k10.Length == 1 && k11.Length == 1 && k12.Length == 1;
+
+        if (_lblParamStatus != null)
         {
-            _lblParamStatus.Text = "Each key must be exactly one character.";
+            _lblParamStatus.Text      = keysValid ? "" : "Each shortcut key must be exactly one character.";
             _lblParamStatus.ForeColor = Color.Firebrick;
-            return;
         }
 
         try
@@ -493,21 +484,28 @@ public class ScoreEntryPanel : UserControl
                 _chkAutoJump.Checked ? "true" : "false");
             AppParameterService.SetAppParameter(db, "SpeedEntry.SpecialChars.Enabled",
                 _chkSpecialChars.Checked ? "true" : "false");
-            AppParameterService.SetAppParameter(db, "SpeedEntry.AutoSave.Enabled",
-                _chkAutoSave.Checked ? "true" : "false");
-            AppParameterService.SetAppParameter(db, "SpeedEntry.ForfeitKey",       forfeit);
-            AppParameterService.SetAppParameter(db, "SpeedEntry.DoubleForfeitKey", dblForfeit);
-            AppParameterService.SetAppParameter(db, "SpeedEntry.Key10",            k10);
-            AppParameterService.SetAppParameter(db, "SpeedEntry.Key11",            k11);
-            AppParameterService.SetAppParameter(db, "SpeedEntry.Key12",            k12);
-            LoadSpeedEntrySettings();
-            _lblParamStatus.Text      = "Settings saved.";
-            _lblParamStatus.ForeColor = AppTheme.TextSecondary;
+            AppParameterService.SetAppParameter(db, "SpeedEntry.SwapCourts",
+                _chkSwapCourts.Checked ? "true" : "false");
+            if (keysValid)
+            {
+                AppParameterService.SetAppParameter(db, "SpeedEntry.ForfeitKey",       forfeit);
+                AppParameterService.SetAppParameter(db, "SpeedEntry.DoubleForfeitKey", dblForfeit);
+                AppParameterService.SetAppParameter(db, "SpeedEntry.Key10",            k10);
+                AppParameterService.SetAppParameter(db, "SpeedEntry.Key11",            k11);
+                AppParameterService.SetAppParameter(db, "SpeedEntry.Key12",            k12);
+                _keyForfeit    = forfeit;
+                _keyDblForfeit = dblForfeit;
+                _key10 = k10; _key11 = k11; _key12 = k12;
+                UpdateSpeedEntryButtons();
+            }
         }
         catch (Exception ex)
         {
-            _lblParamStatus.Text      = $"Error: {ex.Message}";
-            _lblParamStatus.ForeColor = Color.Firebrick;
+            if (_lblParamStatus != null)
+            {
+                _lblParamStatus.Text      = $"Error: {ex.Message}";
+                _lblParamStatus.ForeColor = Color.Firebrick;
+            }
         }
     }
 
@@ -825,7 +823,7 @@ public class ScoreEntryPanel : UserControl
         b1.Leave += (_, _) =>
         {
             if (int.TryParse(b1.Text.Trim(), out int v)
-                && v is >= 1 and <= 11
+                && v is >= 0 and <= 11
                 && string.IsNullOrWhiteSpace(b2.Text))
             {
                 b2.Text = "12";
@@ -888,7 +886,22 @@ public class ScoreEntryPanel : UserControl
             .Insert(current.SelectionStart, e.KeyChar.ToString());
 
         if (!int.TryParse(proposed, out int v) || v < 0 || v > 12)
+        {
             e.Handled = true;
+            return;
+        }
+
+        // If proposed == current text (e.g. typing '0' on a box already showing "0"),
+        // TextChanged won't fire so AutoAdvance never runs.  Force the advance here
+        // using the same single-digit rule as AutoAdvance.
+        if (proposed == current.Text && proposed.Length == 1
+            && (_specialCharsEnabled || proposed[0] != '1') && _autoJumpEnabled)
+        {
+            e.Handled = true;
+            int idx = _boxOrder.IndexOf(current);
+            if (idx >= 0 && idx + 1 < _boxOrder.Count)
+                BeginInvoke(() => _boxOrder[idx + 1].Focus());
+        }
     }
 
     private void NavigateBox(TextBox tb, KeyEventArgs e)
@@ -965,21 +978,93 @@ public class ScoreEntryPanel : UserControl
             SetStatus($"Saved {ids.Count} match{(ids.Count == 1 ? "" : "es")}.");
         }
         catch (Exception ex) { SetStatus($"Save error: {ex.Message}"); }
+        RefreshCurrentWeekLabel();
     }
 
     private static int? ParseScore(TextBox tb) =>
         string.IsNullOrWhiteSpace(tb.Text) ? null :
         int.TryParse(tb.Text.Trim(), out int v) ? v : (int?)null;
 
+    // ── Week status helpers ────────────────────────────────────────────────────
+
+    private static string WeekLabel(int w, int entered, int total)
+    {
+        if (entered == 0)      return $"{w}  ·  empty";
+        if (entered == total)  return $"{w}  ·  complete";
+        return $"{w}  ·  {entered}/{total}";
+    }
+
+    private static Dictionary<int, (int entered, int total)> QueryWeekStatuses(BocceDbContext db, int seasonId)
+    {
+        return db.ScheduleDivisions
+            .Where(sd => sd.Division.SeasonId == seasonId)
+            .GroupBy(sd => sd.TemplateWeekNumber)
+            .Select(g => new
+            {
+                Week    = g.Key,
+                Total   = g.Count() * 4,
+                Entered = g.Sum(sd =>
+                    (sd.Team1Score1.HasValue ? 1 : 0) +
+                    (sd.Team2Score1.HasValue ? 1 : 0) +
+                    (sd.Team1Score2.HasValue ? 1 : 0) +
+                    (sd.Team2Score2.HasValue ? 1 : 0))
+            })
+            .ToDictionary(x => x.Week, x => (x.Entered, x.Total));
+    }
+
+    private void RefreshCurrentWeekLabel()
+    {
+        int idx = _cmbWeek.SelectedIndex;
+        if (idx < 0 || !_seasonId.HasValue) return;
+        try
+        {
+            using var db = new BocceDbContext();
+            var sds = db.ScheduleDivisions
+                .Where(sd => sd.Division.SeasonId == _seasonId.Value
+                          && sd.TemplateWeekNumber == _selectedWeek)
+                .Select(sd => new
+                {
+                    sd.Team1Score1, sd.Team2Score1,
+                    sd.Team1Score2, sd.Team2Score2
+                }).ToList();
+            if (sds.Count == 0) return;
+            int total   = sds.Count * 4;
+            int entered = sds.Sum(sd =>
+                (sd.Team1Score1.HasValue ? 1 : 0) +
+                (sd.Team2Score1.HasValue ? 1 : 0) +
+                (sd.Team1Score2.HasValue ? 1 : 0) +
+                (sd.Team2Score2.HasValue ? 1 : 0));
+            string label = WeekLabel(_selectedWeek, entered, total);
+            _cmbWeek.SelectedIndexChanged -= OnWeekChanged;
+            _cmbWeek.Items[idx] = new WeekItem(_selectedWeek, label);
+            _cmbWeek.SelectedIndex = idx;
+            _cmbWeek.SelectedIndexChanged += OnWeekChanged;
+        }
+        catch { /* non-critical; label stays stale */ }
+    }
+
     private void CheckAutoSave(TextBox tb)
     {
-        if (!_autoSaveEnabled || _seasonIsLocked) return;
+        if (_seasonIsLocked) return;
         if (!_boxToSdId.TryGetValue(tb, out int sdId)) return;
+
+        // A box just wiped — write nulls back to the DB immediately.
+        if (string.IsNullOrWhiteSpace(tb.Text)) { SaveSingleMatch(sdId); return; }
+
         if (!_boxes.TryGetValue((sdId, 1, 1), out var bx11) || string.IsNullOrWhiteSpace(bx11.Text)) return;
         if (!_boxes.TryGetValue((sdId, 1, 2), out var bx12) || string.IsNullOrWhiteSpace(bx12.Text)) return;
         if (!_boxes.TryGetValue((sdId, 2, 1), out var bx21) || string.IsNullOrWhiteSpace(bx21.Text)) return;
         if (!_boxes.TryGetValue((sdId, 2, 2), out var bx22) || string.IsNullOrWhiteSpace(bx22.Text)) return;
+        if (!IsValidPair(bx11, bx12) || !IsValidPair(bx21, bx22)) return;
         SaveSingleMatch(sdId);
+    }
+
+    private static bool IsValidPair(TextBox b1, TextBox b2)
+    {
+        if (!int.TryParse(b1.Text.Trim(), out int a) || !int.TryParse(b2.Text.Trim(), out int b)) return false;
+        if (a == -1 || b == -1) return (a == -1 && b is 0 or -1) || (b == -1 && a is 0 or -1);
+        if (a == 12 && b == 12) return false;
+        return a == 12 || b == 12;
     }
 
     private void SaveSingleMatch(int sdId)
@@ -994,9 +1079,9 @@ public class ScoreEntryPanel : UserControl
             if (_boxes.TryGetValue((sdId, 2, 1), out bx))     sd.Team1Score2 = ParseScore(bx);
             if (_boxes.TryGetValue((sdId, 2, 2), out bx))     sd.Team2Score2 = ParseScore(bx);
             db.SaveChanges();
-            SetStatus("Auto-saved.");
         }
         catch (Exception ex) { SetStatus($"Auto-save error: {ex.Message}"); }
+        RefreshCurrentWeekLabel();
     }
 
     // ── Clear All ─────────────────────────────────────────────────────────────
