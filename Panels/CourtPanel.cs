@@ -439,6 +439,7 @@ public class CourtPanel : UserControl
 
     private void SwapCourtSortOrder(int direction)
     {
+        if (!_selectedCourtId.HasValue) return;
         try
         {
             using var db = new BocceDbContext();

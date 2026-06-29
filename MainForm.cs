@@ -30,6 +30,7 @@ public partial class MainForm : Form
     {
         InitializeComponent();
         BuildNavigation();
+        if (_navGroups.Count > 0) ToggleGroup(0);  // open LEAGUE group on startup
         SetupTopBarInteraction();
         AppParameterService.DefaultsChanged += OnDefaultsChanged;
         FormClosed += OnMainFormClosed;

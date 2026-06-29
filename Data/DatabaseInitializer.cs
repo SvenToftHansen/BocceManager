@@ -305,6 +305,22 @@ public static class DatabaseInitializer
             if (!existingKeys.Contains(key))
                 db.AppParameters.Add(new AppParameter { Key = key, Value = "", Description = desc });
 
+        // Speed Entry settings — keyed shortcuts for fast score entry
+        (string Key, string Value, string Desc)[] speedEntry =
+        [
+            ("SpeedEntry.Enabled",              "true",  "Auto-jump: digits auto-advance to next field (true/false)"),
+            ("SpeedEntry.SpecialChars.Enabled", "true",  "Shortcut keys enabled for 10/11/12 and forfeits (true/false)"),
+            ("SpeedEntry.AutoSave.Enabled",     "false", "Auto-save match when all 4 scores are entered (true/false)"),
+            ("SpeedEntry.ForfeitKey",           ".",     "Speed Entry: key for single forfeit (-1)"),
+            ("SpeedEntry.DoubleForfeitKey",     "X",     "Speed Entry: key for double forfeit (both -1)"),
+            ("SpeedEntry.Key10",                "/",     "Speed Entry: key for score 10"),
+            ("SpeedEntry.Key11",                "*",     "Speed Entry: key for score 11"),
+            ("SpeedEntry.Key12",                "-",     "Speed Entry: key for score 12"),
+        ];
+        foreach (var (key, value, desc) in speedEntry)
+            if (!existingKeys.Contains(key))
+                db.AppParameters.Add(new AppParameter { Key = key, Value = value, Description = desc });
+
         // Initialize reports if empty
         if (!db.Reports.Any())
         {

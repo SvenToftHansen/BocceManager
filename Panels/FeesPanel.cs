@@ -550,7 +550,7 @@ public class FeesPanel : UserControl
     {
         var ids = _initGrid.SelectedRows.Cast<DataGridViewRow>()
             .Where(r => r.Cells["InitId"].Value is int)
-            .Select(r => (int)r.Cells["InitId"].Value)
+            .Select(r => (int)r.Cells["InitId"].Value!)
             .ToList();
         if (ids.Count == 0) return;
 
@@ -585,7 +585,7 @@ public class FeesPanel : UserControl
         if (_seasonIsLocked) return;
         var ids = _seasonGrid.SelectedRows.Cast<DataGridViewRow>()
             .Where(r => r.Cells["SeasonFeeId"].Value is int)
-            .Select(r => (int)r.Cells["SeasonFeeId"].Value)
+            .Select(r => (int)r.Cells["SeasonFeeId"].Value!)
             .ToList();
         if (ids.Count == 0) return;
 

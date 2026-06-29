@@ -356,7 +356,7 @@ public class UtilitiesPanel : UserControl
         var file = PickBackupFile("Select Backup to Restore");
         if (file == null) return;
 
-        BackupSummary summary = null;
+        BackupSummary? summary = null;
         try { summary = BackupService.PreviewBackup(file); } catch { }
 
         var confirmMsg = new StringBuilder();
@@ -442,7 +442,7 @@ public class UtilitiesPanel : UserControl
 
     // ── HELPERS ─────────────────────────────────────────────────────────────
 
-    private string PickBackupFile(string title)
+    private string? PickBackupFile(string title)
     {
         var backupFolder = BackupService.GetBackupFolderPath();
         if (!Directory.Exists(backupFolder) || !Directory.GetFiles(backupFolder, "*.sql").Any())

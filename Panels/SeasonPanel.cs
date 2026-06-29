@@ -76,6 +76,12 @@ public class SeasonPanel : UserControl
     private CheckedListBox _timesList = null!;
     private Button         _btnBuild  = null!;
 
+    // Tab references for lock-state show/hide
+    private TabControl _tabs          = null!;
+    private TabPage    _tabParameters = null!;
+    private TabPage    _tabDivisions  = null!;
+    private TabPage    _tabSlots      = null!;
+
     // All seasons for search filtering
     private List<(int Id, string Display)> _allSeasons = [];
 
@@ -210,7 +216,7 @@ public class SeasonPanel : UserControl
     private void BuildRightPanel(SplitterPanel panel)
     {
         var toolbar = BuildSaveToolbar();
-        var tabs = BuildTabs();
+        _tabs = BuildTabs();
 
         var layout = new TableLayoutPanel
         {
@@ -221,9 +227,9 @@ public class SeasonPanel : UserControl
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, toolbar.Height));
-        tabs.Dock = DockStyle.Fill;
+        _tabs.Dock = DockStyle.Fill;
         toolbar.Dock = DockStyle.Fill;
-        layout.Controls.Add(tabs, 0, 0);
+        layout.Controls.Add(_tabs, 0, 0);
         layout.Controls.Add(toolbar, 0, 1);
 
         panel.Controls.Add(layout);
@@ -236,9 +242,12 @@ public class SeasonPanel : UserControl
             Dock = DockStyle.Fill, Font = AppTheme.FontDefault, Padding = new Point(16, 6)
         };
         tabs.TabPages.Add(BuildEditorTab());
-        tabs.TabPages.Add(BuildParametersTab());
-        tabs.TabPages.Add(BuildDivisionsTab());
-        tabs.TabPages.Add(BuildSlotsTab());
+        _tabParameters = BuildParametersTab();
+        _tabDivisions  = BuildDivisionsTab();
+        _tabSlots      = BuildSlotsTab();
+        tabs.TabPages.Add(_tabParameters);
+        tabs.TabPages.Add(_tabDivisions);
+        tabs.TabPages.Add(_tabSlots);
         return tabs;
     }
 
@@ -837,6 +846,7 @@ public class SeasonPanel : UserControl
         _btnBuild.Enabled            = !isLocked;
         // _chkIsLocked is always enabled — it's the only way to unlock
         // _btnSave enable/disable is handled by MarkDirty/ClearDirty exclusively
+        Refresh();
     }
 
     private void ClearEditor()

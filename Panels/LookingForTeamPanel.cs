@@ -14,6 +14,7 @@ public class LookingForTeamPanel : UserControl
     private int? _selectedLftId;
     private int? _selectedGroupId;
     private bool _isLoadingData;
+    private bool _seasonIsLocked;
 
     // ── Left — grid ────────────────────────────────────────────────────────────
     private DataGridView _grid          = null!;
@@ -65,18 +66,36 @@ public class LookingForTeamPanel : UserControl
             using var db = new BocceDbContext();
             _leagueId = AppParameterService.GetDefaultLeagueId(db);
             _seasonId = AppParameterService.GetDefaultSeasonId(db);
+            _seasonIsLocked = _seasonId.HasValue && (db.Seasons.Find(_seasonId.Value)?.IsLocked ?? false);
         }
         catch
         {
             _leagueId = null;
             _seasonId = null;
+            _seasonIsLocked = false;
         }
         finally
         {
             LoadDayTimeData();
             LoadGrid();
+            ApplyLockState();
             _isLoadingData = false;
         }
+    }
+
+    private void ApplyLockState()
+    {
+        _btnAddPlayer.Enabled = !_seasonIsLocked;
+        _txtNotes.ReadOnly    = _seasonIsLocked;
+        foreach (Control c in _pnlPrefDays.Controls)  if (c is CheckBox cb) cb.Enabled = !_seasonIsLocked;
+        foreach (Control c in _pnlPrefTimes.Controls) if (c is CheckBox cb) cb.Enabled = !_seasonIsLocked;
+        if (!_seasonIsLocked) return;
+        _btnRemove.Enabled    = false;
+        _btnAddMember.Enabled = false;
+        _btnRemMember.Enabled = false;
+        _btnRenameGrp.Enabled = false;
+        _btnDeleteGrp.Enabled = false;
+        Invalidate(true);
     }
 
     // ── UI Construction ────────────────────────────────────────────────────────
@@ -307,7 +326,7 @@ public class LookingForTeamPanel : UserControl
             DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleCenter } });
         _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GPhone", HeaderText = "Phone",  FillWeight = 20 });
         _grpGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "GEmail", HeaderText = "Email",  FillWeight = 15 });
-        _grpGrid.SelectionChanged += (_, _) => _btnRemMember.Enabled = _grpGrid.SelectedRows.Count > 0;
+        _grpGrid.SelectionChanged += (_, _) => _btnRemMember.Enabled = !_seasonIsLocked && _grpGrid.SelectedRows.Count > 0;
         _grpGrid.CellFormatting += (_, e) =>
         {
             if (e.ColumnIndex == _grpGrid.Columns["GMark"].Index && e.Value?.ToString()?.Contains('★') == true)
@@ -397,7 +416,7 @@ public class LookingForTeamPanel : UserControl
         PopulateCheckPanel(_pnlPrefDays,
             days.Select(d => (d.DayName, (object)new DayItem(d.Id, d.DayName, d.DayAbbr))));
         PopulateCheckPanel(_pnlPrefTimes,
-            times.Select(t => (t.Timeslot12h ?? "", (object)new TimeItem(t.Id, t.Timeslot12h, t.Timeslot24h))));
+            times.Select(t => (t.Timeslot12h ?? "", (object)new TimeItem(t.Id, t.Timeslot12h ?? "", t.Timeslot24h))));
     }
 
     private void PopulateCheckPanel(Panel pnl, IEnumerable<(string text, object tag)> items)
@@ -537,7 +556,9 @@ public class LookingForTeamPanel : UserControl
                         if (groupCounts.TryGetValue(e.LookingForTeamGroupId.Value, out int cnt)) memberCount = cnt;
                     }
                     if (!showGroups && isLeader) name = "◆ " + name;
+#pragma warning disable CS8604
                     _grid.Rows.Add(e.Id, e.PlayerId, e.LookingForTeamGroupId, name, grpLabel, memberCount);
+#pragma warning restore CS8604
                 }
             }
             catch { }
@@ -621,10 +642,10 @@ public class LookingForTeamPanel : UserControl
 
             _txtNotes.Text = e.Notes ?? "";
 
-            _btnRemove.Enabled    = true;
-            _btnAddMember.Enabled = _selectedGroupId.HasValue;
-            _btnRenameGrp.Enabled = _selectedGroupId.HasValue;
-            _btnDeleteGrp.Enabled = _selectedGroupId.HasValue;
+            _btnRemove.Enabled    = !_seasonIsLocked;
+            _btnAddMember.Enabled = _selectedGroupId.HasValue && !_seasonIsLocked;
+            _btnRenameGrp.Enabled = _selectedGroupId.HasValue && !_seasonIsLocked;
+            _btnDeleteGrp.Enabled = _selectedGroupId.HasValue && !_seasonIsLocked;
 
             LoadGroupMembers(lftId, e.LookingForTeamGroupId);
         }
@@ -684,6 +705,7 @@ public class LookingForTeamPanel : UserControl
     // ── Actions ────────────────────────────────────────────────────────────────
     private void AddPlayerToLft()
     {
+        if (_seasonIsLocked) return;
         if (!_leagueId.HasValue || !_seasonId.HasValue)
         {
             MessageBox.Show("Select a league and season first.", "Looking For Team",
@@ -853,6 +875,7 @@ public class LookingForTeamPanel : UserControl
 
     private void RemoveFromLft()
     {
+        if (_seasonIsLocked) return;
         if (!_selectedLftId.HasValue) return;
 
         bool isGroupMode = _cmbDisplayMode.SelectedIndex == 0;
@@ -998,6 +1021,7 @@ public class LookingForTeamPanel : UserControl
 
     private void SaveEntry()
     {
+        if (_seasonIsLocked) return;
         if (!_selectedLftId.HasValue) return;
 
         var checkedDayIds = _pnlPrefDays.Controls.OfType<CheckBox>()
@@ -1047,6 +1071,7 @@ public class LookingForTeamPanel : UserControl
     // ── Group management ───────────────────────────────────────────────────────
     private void AddMember()
     {
+        if (_seasonIsLocked) return;
         if (!_selectedLftId.HasValue || !_leagueId.HasValue || !_seasonId.HasValue) return;
 
         HashSet<int> alreadyInLft = [];
@@ -1112,6 +1137,7 @@ public class LookingForTeamPanel : UserControl
 
     private void RemoveMember()
     {
+        if (_seasonIsLocked) return;
         if (_grpGrid.SelectedRows.Count == 0) return;
         int memberLftId   = Convert.ToInt32(_grpGrid.SelectedRows[0].Cells["GLftId"].Value);
         string memberName = _grpGrid.SelectedRows[0].Cells["GName"].Value?.ToString() ?? "member";
@@ -1197,6 +1223,7 @@ public class LookingForTeamPanel : UserControl
 
     private void RenameGroup()
     {
+        if (_seasonIsLocked) return;
         if (!_selectedGroupId.HasValue) return;
         if (_grpGrid.SelectedRows.Count == 0)
         {
@@ -1242,6 +1269,7 @@ public class LookingForTeamPanel : UserControl
 
     private void DeleteGroup()
     {
+        if (_seasonIsLocked) return;
         if (!_selectedGroupId.HasValue) return;
 
         if (MessageBox.Show("Delete this entire group? Each member will remain in LFT in their own group of 1.",

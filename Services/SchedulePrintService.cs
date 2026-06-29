@@ -117,8 +117,6 @@ public static class SchedulePrintService
         int   secIdx  = 0;
         int   rowIdx  = 0;
         int   pageNum = 0;
-        float tableW  = PrintWeekW + PrintCourts * PrintCourtW;
-
         var doc = new PrintDocument();
         doc.QueryPageSettings += (_, qe) =>
         {

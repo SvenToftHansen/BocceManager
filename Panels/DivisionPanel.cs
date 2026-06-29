@@ -938,8 +938,8 @@ public class DivisionPanel : UserControl
         if (!_selectedSeasonId.HasValue) return;
 
         // Get selected day and time
-        string dayName = _cmbDay.SelectedItem is SlotItem ds && ds.Id > 0 ? ds.Display : null;
-        string timeName = _cmbTime.SelectedItem is SlotItem ts && ts.Id > 0 ? ts.Display : null;
+        string? dayName = _cmbDay.SelectedItem is SlotItem ds && ds.Id > 0 ? ds.Display : null;
+        string? timeName = _cmbTime.SelectedItem is SlotItem ts && ts.Id > 0 ? ts.Display : null;
 
         // For new divisions, day and time are required
         if (!_selectedDivisionId.HasValue && (string.IsNullOrEmpty(dayName) || string.IsNullOrEmpty(timeName)))
@@ -1292,11 +1292,11 @@ public class DivisionPanel : UserControl
             if (div == null) return (0, 0);
 
             int min = (div.PlayersPerTeamMinimum ?? 0) > 0
-                ? div.PlayersPerTeamMinimum.Value
+                ? div.PlayersPerTeamMinimum.GetValueOrDefault()
                 : (div.Season?.PlayersPerTeamMinimum ?? 0);
 
             int max = (div.PlayersPerTeamMaximum ?? 0) > 0
-                ? div.PlayersPerTeamMaximum.Value
+                ? div.PlayersPerTeamMaximum.GetValueOrDefault()
                 : (div.Season?.PlayersPerTeamMaximum ?? 0);
 
             return (min, max);

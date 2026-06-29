@@ -31,7 +31,7 @@ public class ImportPostgresData
 
         // Try alternative paths
         var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-        var altPath = Path.Combine(Path.GetDirectoryName(baseDir), "..", "..", "..", "..", "dump_inserts.sql");
+        var altPath = Path.Combine(Path.GetDirectoryName(baseDir) ?? baseDir, "..", "..", "..", "..", "dump_inserts.sql");
         altPath = Path.GetFullPath(altPath);
 
         return altPath;
@@ -161,11 +161,11 @@ public class ImportPostgresData
                     continue;
 
                 int postgresId = int.Parse(fields[0].Trim());
-                string firstName = UnquoteSql(fields[2].Trim());
-                string lastName = UnquoteSql(fields[3].Trim());
-                string email = UnquoteSql(fields[4].Trim());
-                string phone = UnquoteSql(fields[5].Trim());
-                string lotNumber = UnquoteSql(fields[6].Trim());
+                string? firstName = UnquoteSql(fields[2].Trim());
+                string? lastName = UnquoteSql(fields[3].Trim());
+                string? email = UnquoteSql(fields[4].Trim());
+                string? phone = UnquoteSql(fields[5].Trim());
+                string? lotNumber = UnquoteSql(fields[6].Trim());
 
                 // Skip if already exists
                 if (_db.Players.Any(p => p.FirstName == firstName && p.LastName == lastName))
@@ -173,8 +173,8 @@ public class ImportPostgresData
 
                 var player = new Player
                 {
-                    FirstName = firstName,
-                    LastName = lastName,
+                    FirstName = firstName ?? "",
+                    LastName = lastName ?? "",
                     Email = string.IsNullOrWhiteSpace(email) ? null : email,
                     Phone = string.IsNullOrWhiteSpace(phone) ? null : phone,
                     LotNumber = string.IsNullOrWhiteSpace(lotNumber) ? null : lotNumber,
@@ -366,7 +366,7 @@ public class ImportPostgresData
     /// Removes SQL quotes and handles NULL values.
     /// Also unescapes SQL-escaped quotes ('').
     /// </summary>
-    private string UnquoteSql(string value)
+    private string? UnquoteSql(string value)
     {
         if (value == null || value == "NULL")
             return null;

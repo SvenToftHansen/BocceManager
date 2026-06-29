@@ -279,7 +279,7 @@ public static class BackupService
 
     private static string Quote(string s) => "\"" + s.Replace("\"", "\\\"") + "\"";
 
-    private static string ExtractTableNameFromCopy(string copyLine)
+    private static string? ExtractTableNameFromCopy(string copyLine)
     {
         // COPY public."TableName" (...) FROM stdin;
         var start = copyLine.IndexOf('"');
@@ -341,7 +341,7 @@ public static class BackupService
         };
 
         // Scan the SQL file, counting COPY or INSERT rows per table
-        string currentTable = null;
+        string? currentTable = null;
         bool inCopyBlock = false;
 
         foreach (var line in File.ReadLines(backupFilePath))
@@ -383,7 +383,7 @@ public static class BackupService
         return summary;
     }
 
-    private static string ExtractTableName(string copyLine)
+    private static string? ExtractTableName(string copyLine)
     {
         // COPY public."TableName" (...) FROM stdin;
         var start = copyLine.IndexOf('"');
