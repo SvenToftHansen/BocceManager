@@ -26,6 +26,11 @@ public class Season
     // games_mode | match_score_mode | match_play
     public string ScoringMode { get; set; } = "games_mode";
 
+    // Plus/Minus applied to a team that forfeits (one-sided or double forfeit)
+    public int ForfeitPlusMinus { get; set; } = -6;
+    // Plus/Minus applied to the opponent of a one-sided forfeit
+    public int ForfeitOpponentPlusMinus { get; set; } = 1;
+
     public int TeamsInPlayoffs { get; set; } = 0;
     public bool FirstPlaceGuaranteed { get; set; } = true;
     // ladder | round_robin

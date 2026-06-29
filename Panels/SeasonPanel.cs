@@ -53,6 +53,8 @@ public class SeasonPanel : UserControl
     private ThemedNumericUpDown _numPtsNoShow      = null!;
     private ThemedNumericUpDown _numPtsToWin       = null!;
     private ComboBox      _cmbScoringMode    = null!;
+    private ThemedNumericUpDown _numForfeitPM         = null!;
+    private ThemedNumericUpDown _numForfeitOpponentPM = null!;
 
     // ── Editor – fees ─────────────────────────────────────────────────────────
     private TextBox _txtSeasonFeeAmount = null!;
@@ -425,6 +427,16 @@ public class SeasonPanel : UserControl
             Location = new Point(lx, y), Size = new Size(iw + ix - lx - 10, 28),
             Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted
         }); y += 32;
+
+        Add(Lbl("Forfeit Plus/Minus", lx, y));
+        _numForfeitPM = Num(ix, y, -99, 99, -6);
+        _numForfeitPM.ValueChanged += (_, _) => MarkDirty();
+        Add(_numForfeitPM, Hint("Applied to a team that forfeits", ix + 100, y + 4)); y += 38;
+
+        Add(Lbl("Forfeit Opponent Plus/Minus", lx, y));
+        _numForfeitOpponentPM = Num(ix, y, -99, 99, 1);
+        _numForfeitOpponentPM.ValueChanged += (_, _) => MarkDirty();
+        Add(_numForfeitOpponentPM, Hint("Applied to the opponent of a one-sided forfeit; both teams get Forfeit Plus/Minus on a double forfeit", ix + 100, y + 4)); y += 38;
 
         // ── Playoff Settings ──────────────────────────────────────────────
         Add(Sep(lx, y, iw + ix - lx)); y += 10;
@@ -814,6 +826,8 @@ public class SeasonPanel : UserControl
             _numPtsNoShow.Value      = s.PointsForNoShow;
             _numPtsToWin.Value       = s.PointsToWinGame;
             SelStr(_cmbScoringMode, s.ScoringMode);
+            _numForfeitPM.Value         = s.ForfeitPlusMinus;
+            _numForfeitOpponentPM.Value = s.ForfeitOpponentPlusMinus;
 
             _numTeamsPlayoffs.Value      = s.TeamsInPlayoffs;
             _chkFirstPlace.Checked       = s.FirstPlaceGuaranteed;
@@ -852,6 +866,8 @@ public class SeasonPanel : UserControl
         _numPtsNoShow.Enabled        = !isLocked;
         _numPtsToWin.Enabled         = !isLocked;
         _cmbScoringMode.Enabled      = !isLocked;
+        _numForfeitPM.Enabled         = !isLocked;
+        _numForfeitOpponentPM.Enabled = !isLocked;
         _numTeamsPlayoffs.Enabled    = !isLocked;
         _chkFirstPlace.Enabled       = !isLocked;
         _cmbPlayoffType.Enabled      = !isLocked;
@@ -902,6 +918,7 @@ public class SeasonPanel : UserControl
         _numPtsWin.Value = 2; _numPtsTie.Value = 1; _numPtsLoss.Value = 0;
         _numPtsNoShow.Value = -1; _numPtsToWin.Value = 12;
         if (_cmbScoringMode.Items.Count > 0) _cmbScoringMode.SelectedIndex = 0;
+        _numForfeitPM.Value = -6; _numForfeitOpponentPM.Value = 1;
 
         _numTeamsPlayoffs.Value = 0; _chkFirstPlace.Checked = true;
         if (_cmbPlayoffType.Items.Count > 0) _cmbPlayoffType.SelectedIndex = 0;
@@ -1141,6 +1158,8 @@ public class SeasonPanel : UserControl
         _numPtsNoShow.Value    = source.PointsForNoShow;
         _numPtsToWin.Value     = source.PointsToWinGame;
         SelStr(_cmbScoringMode, source.ScoringMode);
+        _numForfeitPM.Value         = source.ForfeitPlusMinus;
+        _numForfeitOpponentPM.Value = source.ForfeitOpponentPlusMinus;
 
         _numTeamsPlayoffs.Value      = source.TeamsInPlayoffs;
         _chkFirstPlace.Checked       = source.FirstPlaceGuaranteed;
@@ -1373,6 +1392,8 @@ public class SeasonPanel : UserControl
         s.PointsToWinGame  = (int)_numPtsToWin.Value;
         s.GamesPerMatch    = 2;
         s.ScoringMode      = StrVal(_cmbScoringMode)   ?? "games_mode";
+        s.ForfeitPlusMinus         = (int)_numForfeitPM.Value;
+        s.ForfeitOpponentPlusMinus = (int)_numForfeitOpponentPM.Value;
         s.TeamsInPlayoffs  = (int)_numTeamsPlayoffs.Value;
         s.FirstPlaceGuaranteed  = _chkFirstPlace.Checked;
         s.PlayoffType      = StrVal(_cmbPlayoffType)   ?? "ladder";
