@@ -1,10 +1,15 @@
 namespace BocceManager.Data.Entities;
 
 // Read-only view entity — aggregated from the Scoring view.
-// Sort: StandingsPoints DESC → PlusMinus DESC → Wins DESC (DivisionRank reflects this).
+// Sort key: StandingsPoints DESC → PlusMinus DESC → Wins DESC.
+// DivisionRank: DENSE_RANK within division (tied teams share a rank — for display).
+// DivisionSeed: ROW_NUMBER within division (always unique — for bracket assignment).
+// SeasonSeed:   rank across all divisions; respects Season.FirstPlaceGuaranteed.
 public class StandingView
 {
     public int DivisionRank { get; set; }
+    public int DivisionSeed { get; set; }
+    public int SeasonSeed { get; set; }
     public int TeamId { get; set; }
     public string TeamName { get; set; } = "";
     public int DivisionId { get; set; }
