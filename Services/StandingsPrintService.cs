@@ -16,42 +16,43 @@ public static class StandingsPrintService
     private const float DivHdrH   = 20f;
     private const float ColHdrH   = 20f;
     private const float RowH      = 18f;
-    private const float BlockGapH = 6f;
-    private const float ColGapW   = 10f;
+    private const float CellGapH  = 6f;    // vertical gap between division tables within a column
+    private const float ColGapW   = 10f;   // horizontal gap between timeslot columns
     private const float FooterH   = 16f;
     private const float PadX      = 4f;
 
     // ── Data model ────────────────────────────────────────────────────────────
 
-    private record DivBlock(string DivName, string DayName, List<StandingView> Rows);
+    private record DivBlock(string DivName, List<StandingView> Rows);
 
     private record Layout(
         string DocHeader,
-        List<(int Id, string Label, int Sort)> TimeCols,
-        List<(int Id, string Name, int Nbr)>   DayRows,
-        Dictionary<(int DayId, int TimeId), DivBlock> Cells,
-        // Seed page: short div name "Mon, 9:00 AM" used on Page 2
+        List<(int Id, string Label, int Sort)>  TimeCols,
+        // Per timeslot column: ordered list of divisions (day order, packed — no gaps)
+        List<List<DivBlock>> ColumnDivs,
+        // Season seed
         List<(StandingView Row, string ShortDivName)> SeedRows,
-        int   TeamsInPlayoffs,
-        bool  IsGamesMode,
-        bool  H2hUsed,
-        string[] StatHeaders,     // division grid stat columns (includes "Seed" first)
+        int  TeamsInPlayoffs,
+        bool IsGamesMode,
+        bool H2hUsed,
+        string[] StatHeaders,
         float[]  StatWidths,
-        float[]  TimeColTeamW,   // per timeslot column
-        float    SeedTeamW,
-        float    SeedDivW);      // measured from SHORT division names
+        float[]  TimeColTeamW);   // per timeslot column
 
     // ── Entry point ───────────────────────────────────────────────────────────
 
-    public static void ShowPrintPreview(Control parent, int seasonId)
+    public static void ShowPrintPreview(Control parent, int seasonId,
+        StandingsPrintMode mode = StandingsPrintMode.AllDivisions,
+        IEnumerable<int>? divisionFilter = null)
     {
-        var doc = BuildDocument(seasonId);
+        var doc = BuildDocument(seasonId, mode, divisionFilter);
         PrintPreviewService.ShowPrintPreview(parent, doc);
     }
 
     // ── Data loading ──────────────────────────────────────────────────────────
 
-    private static PrintDocument BuildDocument(int seasonId)
+    private static PrintDocument BuildDocument(int seasonId,
+        StandingsPrintMode mode, IEnumerable<int>? divisionFilter)
     {
         using var db = new BocceDbContext();
         var season = db.Seasons.Include(s => s.League).First(s => s.Id == seasonId);
@@ -80,25 +81,22 @@ public static class StandingsPrintService
             .Distinct().OrderBy(t => t.Item3)
             .Select(t => (Id: t.Item1, Label: t.Item2, Sort: t.Item3)).ToList();
 
-        var dayRows = divisions
-            .Where(d => d.DaySlotId.HasValue && d.DaySlot != null)
-            .Select(d => (d.DaySlotId!.Value, d.DaySlot!.DayName, d.DaySlot!.DayNbr))
-            .Distinct().OrderBy(d => d.Item3)
-            .Select(d => (Id: d.Item1, Name: d.Item2, Nbr: d.Item3)).ToList();
+        var filterSet = divisionFilter?.ToHashSet();
 
-        var cells = new Dictionary<(int, int), DivBlock>();
-        foreach (var div in divisions.Where(d => d.DaySlotId.HasValue && d.TimeSlotId.HasValue))
-        {
-            var key = (div.DaySlotId!.Value, div.TimeSlotId!.Value);
-            if (!cells.ContainsKey(key))
-                cells[key] = new DivBlock(div.Name, div.DaySlot!.DayName,
-                    allRows.Where(r => r.DivisionId == div.Id).ToList());
-        }
+        // Per-timeslot column: packed ordered list of visible divisions
+        var columnDivs = timeCols.Select(tc =>
+            divisions
+                .Where(d => d.TimeSlotId == tc.Id && d.DaySlotId.HasValue && d.DaySlot != null)
+                .Where(d => filterSet == null || filterSet.Contains(d.Id))
+                .OrderBy(d => d.DaySlot!.DayNbr)
+                .Select(d => new DivBlock(d.Name, allRows.Where(r => r.DivisionId == d.Id).ToList()))
+                .ToList()
+        ).ToList();
 
-        // Short division name: "Mon, 9:00 AM"
+        // Short division name "Mon 9:00 AM" for seed page (no comma)
         var shortNames = divisions.ToDictionary(d => d.Id,
             d => d.DaySlot != null && d.TimeSlot != null
-                ? $"{ToTitle(d.DaySlot.DayAbbr)}, {d.TimeSlot.Timeslot12h}"
+                ? $"{ToTitle(d.DaySlot.DayAbbr)} {d.TimeSlot.Timeslot12h}"
                 : d.Name);
 
         var seedRows = allRows.OrderBy(r => r.SeasonSeed)
@@ -108,8 +106,6 @@ public static class StandingsPrintService
         string[] statHdrs = BuildStatHeaders(isGamesMode, h2hUsed);
 
         float[] statWidths, tcTeamW;
-        float seedTeamW, seedDivW;
-
         using (var bmp = new Bitmap(1, 1))
         using (var g   = Graphics.FromImage(bmp))
         {
@@ -124,41 +120,32 @@ public static class StandingsPrintService
                     float hw = W(h, hf);
                     float dw = h switch
                     {
-                        "Seed"                                 => W("99",   df),
+                        "Seed" => W("99", df),
                         _ when h.Contains('+') || h.Contains('-') => W("+999", df),
-                        _                                      => W("999",  df)
+                        _ => W("999", df)
                     };
                     return MathF.Max(hw, dw);
                 }).ToArray();
 
-                tcTeamW = timeCols.Select((tc, _) =>
+                tcTeamW = timeCols.Select((tc, ci) =>
                 {
-                    float max = dayRows
-                        .Select(dr => cells.TryGetValue((dr.Id, tc.Id), out var blk) ? blk : null)
-                        .Where(b => b != null)
-                        .SelectMany(b => b!.Rows.Select(r => W(r.TeamName, df)))
+                    var divs = ci < columnDivs.Count ? columnDivs[ci] : [];
+                    float max = divs
+                        .SelectMany(d => d.Rows.Select(r => W(r.TeamName, df)))
                         .DefaultIfEmpty(0f).Max();
                     return MathF.Max(W("Team", hf), max);
                 }).ToArray();
-
-                seedTeamW = MathF.Max(W("Team", hf),
-                    seedRows.Select(sr => W(sr.Row.TeamName, df)).DefaultIfEmpty(0f).Max());
-
-                // Division column on Page 2 sized to short names
-                seedDivW = MathF.Max(W("Division", hf),
-                    seedRows.Select(sr => W(sr.Short, df)).DefaultIfEmpty(0f).Max());
             }
             finally { hf.Dispose(); df.Dispose(); }
         }
 
-        var lay = new Layout(docHdr, timeCols, dayRows, cells, seedRows,
-            season.TeamsInPlayoffs, isGamesMode, h2hUsed,
-            statHdrs, statWidths, tcTeamW, seedTeamW, seedDivW);
+        var lay = new Layout(docHdr, timeCols, columnDivs, seedRows,
+            season.TeamsInPlayoffs, isGamesMode, h2hUsed, statHdrs, statWidths, tcTeamW);
 
-        return CreatePrintDoc(lay);
+        return CreatePrintDoc(lay, mode);
     }
 
-    // "Seed" is added as the FIRST stat column so readers can see overall playoff position
+    // "Seed" (SeasonSeed) appears first so readers see overall playoff position at a glance
     private static string[] BuildStatHeaders(bool isGamesMode, bool h2hUsed)
     {
         var h = new List<string> { "Seed", isGamesMode ? "GP" : "MP", "W" };
@@ -170,10 +157,12 @@ public static class StandingsPrintService
 
     // ── Print document ────────────────────────────────────────────────────────
 
-    private static PrintDocument CreatePrintDoc(Layout lay)
+    private static PrintDocument CreatePrintDoc(Layout lay, StandingsPrintMode mode)
     {
         int  pageNum  = 0;
-        int  dayIdx   = 0;
+        // Each timeslot column independently tracks how far through its division list it is
+        int  slotIdx  = 0;   // shared "slot" index — all columns advance together
+        int  maxSlots = lay.ColumnDivs.Select(c => c.Count).DefaultIfEmpty(0).Max();
         bool seedDone = false;
 
         var doc = new PrintDocument { DocumentName = "Standings" };
@@ -182,7 +171,12 @@ public static class StandingsPrintService
             qe.PageSettings.Landscape = true;
             qe.PageSettings.Margins   = new Margins((int)Margin, (int)Margin, (int)Margin, (int)Margin);
         };
-        doc.BeginPrint += (_, _) => { pageNum = 0; dayIdx = 0; seedDone = false; };
+        doc.BeginPrint += (_, _) =>
+        {
+            pageNum  = 0;
+            slotIdx  = 0;
+            seedDone = false;
+        };
 
         doc.PrintPage += (_, pe) =>
         {
@@ -203,9 +197,12 @@ public static class StandingsPrintService
             using var csf    = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
             using var lsf    = new StringFormat { LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter };
 
-            if (!seedDone && dayIdx < lay.DayRows.Count)
+            bool printDivs = mode != StandingsPrintMode.SeasonSeed;
+            bool printSeed = mode != StandingsPrintMode.AllDivisions;
+
+            if (printDivs && slotIdx < maxSlots)
             {
-                // ── Division grid pages ────────────────────────────────────────
+                // ── Division grid pages (packed, no day-aligned gaps) ──────────
                 float y = b.Top;
 
                 if (pageNum == 1)
@@ -221,18 +218,23 @@ public static class StandingsPrintService
                 y += SlotHdrH;
 
                 pe.HasMorePages = false;
-                while (dayIdx < lay.DayRows.Count)
+                while (slotIdx < maxSlots)
                 {
-                    float blockH = ComputeBlockH(lay, dayIdx);
-                    if (y + blockH > yMax) { pe.HasMorePages = true; goto PageDone; }
-                    DrawDayBlock(g, colXs, colWs, y, lay, dayIdx, hf, df, hdrBr, dimBr, linePen, divPen, lsf, csf);
-                    y += blockH + BlockGapH;
-                    dayIdx++;
+                    // Height of this slot = max div table height across all columns at this slot index
+                    float slotH = lay.ColumnDivs
+                        .Select(col => slotIdx < col.Count ? DivHdrH + ColHdrH + col[slotIdx].Rows.Count * RowH : 0f)
+                        .DefaultIfEmpty(0f).Max();
+
+                    if (y + slotH > yMax) { pe.HasMorePages = true; goto PageDone; }
+
+                    DrawSlot(g, colXs, colWs, y, lay, slotIdx, hf, df, hdrBr, dimBr, linePen, divPen, lsf, csf);
+                    y += slotH + CellGapH;
+                    slotIdx++;
                 }
 
-                if (!seedDone) pe.HasMorePages = true;
+                if (printSeed && !seedDone) pe.HasMorePages = true;
             }
-            else if (!seedDone)
+            else if (printSeed && !seedDone)
             {
                 // ── Season seed page ──────────────────────────────────────────
                 DrawSeedPage(g, b, lay, hf, df, bigF, darkBr, hdrBr, dimBr, linePen, csf, lsf);
@@ -283,34 +285,17 @@ public static class StandingsPrintService
         }
     }
 
-    private static float ComputeBlockH(Layout lay, int dayIdx)
-    {
-        int maxN = lay.TimeCols
-            .Select(tc => lay.Cells.TryGetValue((lay.DayRows[dayIdx].Id, tc.Id), out var blk) ? blk.Rows.Count : 0)
-            .DefaultIfEmpty(0).Max();
-        return DivHdrH + ColHdrH + maxN * RowH;
-    }
-
-    private static void DrawDayBlock(Graphics g, float[] xs, float[] ws, float y, Layout lay,
-        int dayIdx, Font hf, Font df, SolidBrush hdrBr, SolidBrush dimBr,
+    // Draw one "slot" — the next division from each timeslot column, side by side
+    private static void DrawSlot(Graphics g, float[] xs, float[] ws, float y, Layout lay,
+        int slotIdx, Font hf, Font df, SolidBrush hdrBr, SolidBrush dimBr,
         Pen linePen, Pen divPen, StringFormat lsf, StringFormat csf)
     {
-        var   day    = lay.DayRows[dayIdx];
-        float blockH = ComputeBlockH(lay, dayIdx);
-
         for (int ci = 0; ci < lay.TimeCols.Count; ci++)
         {
-            var tc = lay.TimeCols[ci];
-            if (lay.Cells.TryGetValue((day.Id, tc.Id), out var blk))
-                DrawDivTable(g, xs[ci], y, ws[ci], lay.TimeColTeamW[ci], blk, lay,
-                    hf, df, hdrBr, dimBr, linePen, lsf, csf);
-            else
-                g.DrawRectangle(divPen, xs[ci], y, ws[ci] - 1, blockH - 1);
+            if (slotIdx >= lay.ColumnDivs[ci].Count) continue;
+            DrawDivTable(g, xs[ci], y, ws[ci], lay.TimeColTeamW[ci],
+                lay.ColumnDivs[ci][slotIdx], lay, hf, df, hdrBr, dimBr, linePen, lsf, csf);
         }
-
-        float lineY = y + blockH + BlockGapH / 2f;
-        float right = xs[lay.TimeCols.Count - 1] + ws[lay.TimeCols.Count - 1];
-        g.DrawLine(divPen, xs[0], lineY, right, lineY);
     }
 
     private static void DrawDivTable(Graphics g, float x, float y, float colW, float teamW,
@@ -321,17 +306,15 @@ public static class StandingsPrintService
         float yStart = y;
         float[] sw   = lay.StatWidths;
 
-        // Division header
         using var divHdrBr = new SolidBrush(Color.FromArgb(100, 130, 170));
         g.FillRectangle(divHdrBr, x, y, colW, DivHdrH);
-        g.DrawString($"{blk.DayName}  ·  {blk.DivName}", hf, Brushes.White,
+        // Division name only — it already contains day info
+        g.DrawString(blk.DivName, hf, Brushes.White,
             new RectangleF(x + PadX, y, colW - PadX * 2, DivHdrH), lsf);
         y += DivHdrH;
 
-        // Column headers
         g.FillRectangle(hdrBr, x, y, colW, ColHdrH);
-        g.DrawString("Team", hf, Brushes.White,
-            new RectangleF(x + PadX, y, teamW - PadX * 2, ColHdrH), lsf);
+        g.DrawString("Team", hf, Brushes.White, new RectangleF(x + PadX, y, teamW - PadX * 2, ColHdrH), lsf);
         float sx = x + teamW;
         for (int i = 0; i < lay.StatHeaders.Length; i++)
         {
@@ -340,7 +323,6 @@ public static class StandingsPrintService
         }
         y += ColHdrH;
 
-        // Data rows
         for (int ri = 0; ri < blk.Rows.Count; ri++)
         {
             var r = blk.Rows[ri];
@@ -363,7 +345,6 @@ public static class StandingsPrintService
         g.DrawRectangle(linePen, x, yStart, colW - 1, y - yStart - 1);
     }
 
-    // SeasonSeed is shown first so readers see overall playoff position at a glance
     private static string[] GetStatValues(StandingView r, bool isGamesMode, bool h2hUsed)
     {
         var v = new List<string>
@@ -373,10 +354,8 @@ public static class StandingsPrintService
             r.Wins.ToString()
         };
         if (!isGamesMode) v.Add(r.Ties.ToString());
-        v.Add(r.Losses.ToString());
-        v.Add(r.Forfeits.ToString());
-        v.Add(r.StandingsPoints.ToString());
-        v.Add(PmStr(r.PlusMinus));
+        v.Add(r.Losses.ToString()); v.Add(r.Forfeits.ToString());
+        v.Add(r.StandingsPoints.ToString()); v.Add(PmStr(r.PlusMinus));
         if (h2hUsed) { v.Add(PmStr(r.H2HPlusMinus)); v.Add(r.H2HWins.ToString()); }
         return v.ToArray();
     }
@@ -389,7 +368,6 @@ public static class StandingsPrintService
         StringFormat csf, StringFormat lsf)
     {
         float y = b.Top;
-
         g.FillRectangle(darkBr, b.Left, y, b.Width, DocHdrH);
         g.DrawString("Season Standings — Playoff Seeding Order", bigF, Brushes.White,
             new RectangleF(b.Left, y, b.Width, DocHdrH), csf);
@@ -402,11 +380,19 @@ public static class StandingsPrintService
         int total = lay.SeedRows.Count;
         int leftN = (total + 1) / 2;
 
-        string[] hdrs  = BuildSeedHeaders(lay.IsGamesMode);
-        float[]  colWs = MeasureSeedCols(hdrs, lay.SeedTeamW, lay.SeedDivW, halfW, g, hf, df);
+        string[] hdrs = BuildSeedHeaders(lay.IsGamesMode);
 
-        DrawSeedHalf(g, leftX,  halfW, y, hdrs, colWs, lay, lay.SeedRows.Take(leftN).ToList(),        hf, df, hdrBr, dimBr, linePen, csf, lsf);
-        DrawSeedHalf(g, rightX, halfW, y, hdrs, colWs, lay, lay.SeedRows.Skip(leftN).ToList(),        hf, df, hdrBr, dimBr, linePen, csf, lsf);
+        // Measure Team and Division widths using the actual print Graphics — avoids DPI mismatch
+        float W(string s, Font f) => g.MeasureString(s, f).Width + PadX * 2;
+        float seedTeamW = MathF.Max(W("Team", hf),
+            lay.SeedRows.Select(sr => W(sr.Row.TeamName, df)).DefaultIfEmpty(0f).Max());
+        float seedDivW  = MathF.Max(W("Division", hf),
+            lay.SeedRows.Select(sr => W(sr.ShortDivName, df)).DefaultIfEmpty(0f).Max());
+
+        float[] colWs = MeasureSeedCols(hdrs, seedTeamW, seedDivW, halfW, g, hf, df);
+
+        DrawSeedHalf(g, leftX,  halfW, y, hdrs, colWs, lay, lay.SeedRows.Take(leftN).ToList(), hf, df, hdrBr, dimBr, linePen, csf, lsf);
+        DrawSeedHalf(g, rightX, halfW, y, hdrs, colWs, lay, lay.SeedRows.Skip(leftN).ToList(), hf, df, hdrBr, dimBr, linePen, csf, lsf);
     }
 
     private static string[] BuildSeedHeaders(bool isGamesMode)
@@ -426,7 +412,7 @@ public static class StandingsPrintService
         {
             "Team"     => teamW,
             "Division" => divW,
-            _          => MathF.Max(W(h, hf), W(h.Contains('+') || h.Contains('-') ? "+999" : "999", df))
+            _ => MathF.Max(W(h, hf), W(h.Contains('+') || h.Contains('-') ? "+999" : "999", df))
         }).ToArray();
 
         float total = ws.Sum();
@@ -452,7 +438,6 @@ public static class StandingsPrintService
     {
         float yStart = y;
 
-        // Column headers
         g.FillRectangle(hdrBr, x, y, w, ColHdrH);
         float cx = x;
         for (int i = 0; i < hdrs.Length; i++)
@@ -495,17 +480,10 @@ public static class StandingsPrintService
     private static string[] GetSeedValues(StandingView r, string shortDivName, bool isGamesMode)
     {
         var v = new List<string>
-        {
-            r.SeasonSeed.ToString(),
-            r.TeamName,
-            shortDivName,
-            r.StandingsPoints.ToString(),
-            PmStr(r.PlusMinus),
-            r.Wins.ToString()
-        };
+            { r.SeasonSeed.ToString(), r.TeamName, shortDivName,
+              r.StandingsPoints.ToString(), PmStr(r.PlusMinus), r.Wins.ToString() };
         if (!isGamesMode) v.Add(r.Ties.ToString());
-        v.Add(r.Losses.ToString());
-        v.Add(r.Forfeits.ToString());
+        v.Add(r.Losses.ToString()); v.Add(r.Forfeits.ToString());
         return v.ToArray();
     }
 
@@ -514,6 +492,5 @@ public static class StandingsPrintService
     private static string PmStr(int v) => v >= 0 ? $"+{v}" : $"{v}";
 
     private static string ToTitle(string? s) =>
-        string.IsNullOrEmpty(s) ? "" :
-        char.ToUpper(s[0]) + s.Substring(1).ToLower();
+        string.IsNullOrEmpty(s) ? "" : char.ToUpper(s[0]) + s.Substring(1).ToLower();
 }

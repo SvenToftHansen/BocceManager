@@ -154,6 +154,16 @@ _Generated 2026-06-15 from TODO.md, memory files, and app state analysis_
   - Send history log
   - Related: Email Lists Panel
 
+- [ ] **Automated Standings Email per Team** — email each team their own division standings + overall season seed report
+  - Generate per-team divisional standings (their division only, formatted as a compact table)
+  - Generate overall Season Seed / Playoff Seeding Order report (all teams)
+  - Combine into one email per team: "Your Standings + League Standings"
+  - Trigger manually from Standings panel ("Email Standings" button) or from Email panel
+  - Use Brevo API (same as general email); one send per team = 1 email per team per send
+  - Consider PDF attachment vs. HTML inline table for the standings content
+  - Needs: In-App Email Client + Brevo Integration to be in place first
+  - Low-volume: ~60 teams × 2 reports = 60 emails per send (well within free tier)
+
 - [ ] **Brevo Account Reminder on Season Status Change** — prompt user to manage their Brevo plan when season transitions
   - When season advances to "League Play": show reminder to upgrade Brevo plan with a button that opens Brevo billing page in browser
   - When season is marked "Completed": show reminder to downgrade Brevo plan to save money

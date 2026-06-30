@@ -12,11 +12,24 @@ public class StandingsPanel : UserControl
     private Label  _lblStatus = null!;
     private Button _btnFilter = null!;
     private TabControl _tabs  = null!;
+    private TabPage?   _allDivTabPage = null;
+    private Panel?     _allDivPanel   = null;
 
-    // All-divisions panel filter state
+    // ── Stored data for filter-driven rebuilds ────────────────────────────────
+
+    private record DivData(Division Div, List<StandingView> Rows);
+
+    private List<(int Id, string Label, int Sort)> _timeCols   = [];
+    private Dictionary<int, List<DivData>>          _timeColDivs = []; // timeId → ordered list (by day)
+    private int[]  _teamColWidths = [];
+    private bool   _isGamesMode;
+    private bool   _h2hUsed;
+
+    // ── Filter state ──────────────────────────────────────────────────────────
+
     private List<(int DivId, string Label)> _divFilterItems = [];
-    private HashSet<int>? _filteredDivIds = null;          // null = all visible
-    private Dictionary<int, Panel> _divCellPanels = [];   // divId → cell panel in All Divisions tab
+    private HashSet<int>? _filteredDivIds = null;   // null = all visible
+    private Dictionary<int, Panel> _divCellPanels  = [];
 
     // ── Construction ──────────────────────────────────────────────────────────
 
@@ -54,7 +67,7 @@ public class StandingsPanel : UserControl
         };
 
         var btnPrint = MakeBtn("Print", Color.FromArgb(60, 100, 160), 8, 80);
-        btnPrint.Click += (_, _) => PrintStandings();
+        btnPrint.Click += (_, _) => PrintCurrent();
         toolbar.Controls.Add(btnPrint);
 
         _btnFilter = MakeBtn("All Divisions ▼", Color.FromArgb(80, 120, 170), 96, 150);
@@ -72,6 +85,7 @@ public class StandingsPanel : UserControl
         {
             Dock = DockStyle.Fill, Font = AppTheme.FontDefault, Padding = new Point(12, 4)
         };
+        _tabs.SelectedIndexChanged += (_, _) => _btnFilter.Visible = _tabs.SelectedIndex == 0;
 
         Controls.Add(_tabs);
         Controls.Add(toolbar);
@@ -91,11 +105,16 @@ public class StandingsPanel : UserControl
     private void LoadData()
     {
         _tabs.TabPages.Clear();
-        _divCellPanels.Clear();
+        _allDivTabPage = null;
+        _allDivPanel   = null;
+        _timeCols      = [];
+        _timeColDivs   = [];
+        _teamColWidths = [];
         _divFilterItems.Clear();
         _filteredDivIds = null;
         _lblStatus.Text = "";
         _btnFilter.Text = "All Divisions ▼";
+        _btnFilter.Visible = true;
 
         try
         {
@@ -113,8 +132,8 @@ public class StandingsPanel : UserControl
 
             if (allRows.Count == 0) { _lblStatus.Text = "No scores entered yet."; return; }
 
-            bool isGamesMode = season.ScoringMode == "games_mode";
-            bool h2hUsed = allRows.Any(r => r.H2HPlusMinus != 0 || r.H2HWins != 0);
+            _isGamesMode = season.ScoringMode == "games_mode";
+            _h2hUsed     = allRows.Any(r => r.H2HPlusMinus != 0 || r.H2HWins != 0);
 
             var divIds = allRows.Select(r => r.DivisionId).Distinct().ToList();
             var divisions = db.Divisions
@@ -123,63 +142,55 @@ public class StandingsPanel : UserControl
                 .Where(d => divIds.Contains(d.Id))
                 .ToList();
 
-            // Distinct timeslot columns ordered by SortOrder
-            var timeCols = divisions
+            // Timeslot columns, ordered by SortOrder
+            _timeCols = divisions
                 .Where(d => d.TimeSlotId.HasValue && d.TimeSlot != null)
                 .Select(d => (d.TimeSlotId!.Value, d.TimeSlot!.Timeslot12h, d.TimeSlot!.SortOrder ?? 999))
                 .Distinct().OrderBy(t => t.Item3)
                 .Select(t => (Id: t.Item1, Label: t.Item2, Sort: t.Item3)).ToList();
 
-            // Distinct day rows ordered by DayNbr
-            var dayRows = divisions
-                .Where(d => d.DaySlotId.HasValue && d.DaySlot != null)
-                .Select(d => (d.DaySlotId!.Value, d.DaySlot!.DayName, d.DaySlot!.DayNbr))
-                .Distinct().OrderBy(d => d.Item3)
-                .Select(d => (Id: d.Item1, Name: d.Item2, Nbr: d.Item3)).ToList();
+            // Per-timeslot column: divisions in day order (packed, no gaps)
+            _timeColDivs = _timeCols.ToDictionary(
+                tc => tc.Id,
+                tc => divisions
+                    .Where(d => d.TimeSlotId == tc.Id && d.DaySlotId.HasValue && d.DaySlot != null)
+                    .OrderBy(d => d.DaySlot!.DayNbr)
+                    .Select(d => new DivData(d, allRows.Where(r => r.DivisionId == d.Id).ToList()))
+                    .ToList());
 
-            // Cell map: (dayId, timeId) → (division, rows)
-            var cells = new Dictionary<(int, int), (Division Div, List<StandingView> Rows)>();
-            foreach (var div in divisions.Where(d => d.DaySlotId.HasValue && d.TimeSlotId.HasValue))
-            {
-                var key = (div.DaySlotId!.Value, div.TimeSlotId!.Value);
-                if (!cells.ContainsKey(key))
-                    cells[key] = (div, allRows.Where(r => r.DivisionId == div.Id).ToList());
-            }
-
-            // Build filter item list: day × timeslot order
-            foreach (var day in dayRows)
-                foreach (var tc in timeCols)
-                    if (cells.TryGetValue((day.Id, tc.Id), out var cell))
-                        _divFilterItems.Add((cell.Div.Id, $"{TitleAbbr(cell.Div.DaySlot?.DayAbbr)} {tc.Label}"));
-
-            // Measure team column widths per timeslot column (max of all team names in column)
-            int[] teamColWidths;
+            // Measure team column widths per timeslot column
             using (var bmp = new Bitmap(1, 1))
-            using (var g = Graphics.FromImage(bmp))
+            using (var g   = Graphics.FromImage(bmp))
             {
                 int MeasureW(string s) => (int)Math.Ceiling(g.MeasureString(s, AppTheme.FontDefault).Width) + 10;
-                teamColWidths = timeCols.Select((tc, _) =>
+                _teamColWidths = _timeCols.Select((tc, _) =>
                 {
-                    int maxNameW = dayRows
-                        .Select(dr => cells.TryGetValue((dr.Id, tc.Id), out var c) ? c.Rows : null)
-                        .Where(r => r != null)
-                        .SelectMany(r => r!.Select(sv => MeasureW(sv.TeamName)))
+                    var divs = _timeColDivs.TryGetValue(tc.Id, out var list) ? list : [];
+                    int maxNameW = divs
+                        .SelectMany(d => d.Rows.Select(r => MeasureW(r.TeamName)))
                         .DefaultIfEmpty(0).Max();
                     return Math.Max(MeasureW("Team"), maxNameW);
                 }).ToArray();
             }
 
+            // Build filter items: per timeslot column, in day order
+            foreach (var (tc, _) in _timeCols.Select((tc, i) => (tc, i)))
+            {
+                if (!_timeColDivs.TryGetValue(tc.Id, out var divs)) continue;
+                foreach (var d in divs)
+                    _divFilterItems.Add((d.Div.Id, $"{TitleAbbr(d.Div.DaySlot?.DayAbbr)} {tc.Label}"));
+            }
+
             // ── All Divisions tab ─────────────────────────────────────────────
-            var allDivPage = MakePage("All Divisions");
-            var scrollPanel = BuildAllDivisionsPanel(timeCols, dayRows, cells, teamColWidths, isGamesMode, h2hUsed);
-            allDivPage.Controls.Add(scrollPanel);
-            _tabs.TabPages.Add(allDivPage);
+            _allDivTabPage = MakePage("All Divisions");
+            RebuildAllDivisionsPanel();
+            _tabs.TabPages.Add(_allDivTabPage);
 
             // ── Season Seed tab ───────────────────────────────────────────────
             var divNames = divisions.ToDictionary(d => d.Id, d => d.Name);
             var seedRows = allRows.OrderBy(r => r.SeasonSeed).ToList();
             var seedPage = MakePage("Season Seed");
-            var seedGrid = BuildSeasonSeedGrid(seedRows, divNames, season.TeamsInPlayoffs, isGamesMode);
+            var seedGrid = BuildSeasonSeedGrid(seedRows, divNames, season.TeamsInPlayoffs, _isGamesMode);
             seedGrid.Dock = DockStyle.Fill;
             seedPage.Controls.Add(seedGrid);
             _tabs.TabPages.Add(seedPage);
@@ -190,50 +201,56 @@ public class StandingsPanel : UserControl
         }
     }
 
-    // ── All-Divisions scrollable panel ────────────────────────────────────────
+    // ── All-Divisions scrollable panel (rebuilt on filter change) ─────────────
 
-    private const int CellHdrH = 26;   // division header label height
-    private const int DgvHdrH  = 28;   // DataGridView column header height
-    private const int DgvRowH  = 26;   // DataGridView data row height
-    private const int SlotHdrH = 32;   // timeslot column header label height
-    private const int ColGap   = 8;    // gap between timeslot columns
-    private const int RowGap   = 6;    // gap between day-row blocks
+    private const int CellHdrH = 26;
+    private const int DgvHdrH  = 28;
+    private const int DgvRowH  = 26;
+    private const int SlotHdrH = 32;
+    private const int ColGap   = 8;
+    private const int CellGap  = 6;
 
     private static int[] GetStatWidths(bool isGamesMode, bool h2hUsed)
     {
-        // Ordered to match GetStatDefs: GP/MP, W, [T], L, F, Pts, +/-, [H2H+/-, H2HW]
-        var ws = new List<int> { 44, 44 };      // GP/MP, W
-        if (!isGamesMode) ws.Add(44);            // T (match mode only)
-        ws.AddRange([44, 44, 50, 54]);           // L, F, Pts, +/-
-        if (h2hUsed) ws.AddRange([64, 54]);      // H2H+/-, H2HW
+        var ws = new List<int> { 44, 44 };
+        if (!isGamesMode) ws.Add(44);
+        ws.AddRange([44, 44, 50, 54]);
+        if (h2hUsed) ws.AddRange([64, 54]);
         return ws.ToArray();
     }
 
-    private Panel BuildAllDivisionsPanel(
-        List<(int Id, string Label, int Sort)> timeCols,
-        List<(int Id, string Name, int Nbr)>   dayRows,
-        Dictionary<(int, int), (Division Div, List<StandingView> Rows)> cells,
-        int[] teamColWidths,
-        bool isGamesMode, bool h2hUsed)
+    private void RebuildAllDivisionsPanel()
     {
-        int[] statWs = GetStatWidths(isGamesMode, h2hUsed);
+        if (_allDivTabPage == null) return;
+
+        _allDivPanel?.Dispose();
+        _allDivCellPanels_Clear();
+
+        if (_timeCols.Count == 0) { _allDivPanel = null; return; }
+
+        int[] statWs    = GetStatWidths(_isGamesMode, _h2hUsed);
         int   statTotal = statWs.Sum();
-        int[] colWs = teamColWidths.Select(tw => tw + statTotal).ToArray();
+        int[] colWs     = _teamColWidths.Select(tw => tw + statTotal).ToArray();
 
-        // Per-day-row block heights: CellHdr + DgvHdr + maxTeams*DgvRow
-        int[] blockHs = dayRows.Select(dr =>
+        // Visible divisions per column (filter applied)
+        var visibleByCol = _timeCols.Select((tc, _) =>
         {
-            int maxN = timeCols
-                .Select(tc => cells.TryGetValue((dr.Id, tc.Id), out var c) ? c.Rows.Count : 0)
-                .DefaultIfEmpty(0).Max();
-            return CellHdrH + DgvHdrH + maxN * DgvRowH;
-        }).ToArray();
+            var divs = _timeColDivs.TryGetValue(tc.Id, out var list) ? list : [];
+            return divs
+                .Where(d => _filteredDivIds == null || _filteredDivIds.Contains(d.Div.Id))
+                .ToList();
+        }).ToList();
 
-        int[] colXs = new int[timeCols.Count];
-        for (int ci = 0, x = 0; ci < timeCols.Count; ci++) { colXs[ci] = x; x += colWs[ci] + ColGap; }
+        // Per-column heights (sum of div table heights + gaps)
+        int[] colHs = visibleByCol.Select(divs =>
+            divs.Sum(d => CellHdrH + DgvHdrH + d.Rows.Count * DgvRowH + CellGap)
+        ).ToArray();
 
-        int totalW = colWs.Sum() + (timeCols.Count - 1) * ColGap;
-        int totalH = SlotHdrH + blockHs.Sum() + dayRows.Count * RowGap;
+        int[] colXs = new int[_timeCols.Count];
+        for (int ci = 0, x = 0; ci < _timeCols.Count; ci++) { colXs[ci] = x; x += colWs[ci] + ColGap; }
+
+        int totalW = colWs.Sum() + (_timeCols.Count - 1) * ColGap;
+        int totalH = SlotHdrH + (colHs.DefaultIfEmpty(0).Max());
 
         var outer = new Panel
         {
@@ -242,11 +259,11 @@ public class StandingsPanel : UserControl
             AutoScrollMinSize = new Size(totalW, totalH)
         };
 
-        // Timeslot column header labels (top row)
-        for (int ci = 0; ci < timeCols.Count; ci++)
+        // Timeslot column headers
+        for (int ci = 0; ci < _timeCols.Count; ci++)
             outer.Controls.Add(new Label
             {
-                Text = timeCols[ci].Label,
+                Text = _timeCols[ci].Label,
                 Font = AppTheme.FontDefaultBold,
                 ForeColor = Color.White,
                 BackColor = AppTheme.GridHeaderBackground,
@@ -256,39 +273,39 @@ public class StandingsPanel : UserControl
                 AutoSize = false
             });
 
-        // Division cell panels
-        int yOff = SlotHdrH;
-        for (int ri = 0; ri < dayRows.Count; ri++)
+        // Division cells — packed top-to-bottom per column, no gaps for missing days
+        for (int ci = 0; ci < _timeCols.Count; ci++)
         {
-            var day    = dayRows[ri];
-            int blockH = blockHs[ri];
-
-            for (int ci = 0; ci < timeCols.Count; ci++)
+            int y    = SlotHdrH;
+            int teamW = _teamColWidths[ci];
+            foreach (var d in visibleByCol[ci])
             {
-                var tc = timeCols[ci];
-                if (!cells.TryGetValue((day.Id, tc.Id), out var cell)) continue;
-
-                var cellPanel = BuildDivCell(cell.Div, cell.Rows, teamColWidths[ci], statWs, colWs[ci], blockH, isGamesMode, h2hUsed);
-                cellPanel.Location = new Point(colXs[ci], yOff);
+                int rowsH  = DgvHdrH + d.Rows.Count * DgvRowH + 2;
+                int cellH  = CellHdrH + rowsH;
+                var cellPanel = BuildDivCell(d.Div, d.Rows, teamW, statWs, colWs[ci], cellH);
+                cellPanel.Location = new Point(colXs[ci], y);
                 outer.Controls.Add(cellPanel);
-                _divCellPanels[cell.Div.Id] = cellPanel;
+                _divCellPanels[d.Div.Id] = cellPanel;
+                y += cellH + CellGap;
             }
-
-            yOff += blockH + RowGap;
         }
 
-        return outer;
+        _allDivPanel = outer;
+        _allDivTabPage.Controls.Clear();
+        _allDivTabPage.Controls.Add(_allDivPanel);
     }
 
-    private static Panel BuildDivCell(Division div, List<StandingView> rows,
-        int teamW, int[] statWs, int colW, int blockH,
-        bool isGamesMode, bool h2hUsed)
-    {
-        var cell = new Panel { Size = new Size(colW, blockH), BackColor = AppTheme.ContentBackground };
+    private void _allDivCellPanels_Clear() => _divCellPanels.Clear();
 
+    private Panel BuildDivCell(Division div, List<StandingView> rows,
+        int teamW, int[] statWs, int colW, int cellH)
+    {
+        var cell = new Panel { Size = new Size(colW, cellH), BackColor = AppTheme.ContentBackground };
+
+        // Division name only (division name already contains day info)
         cell.Controls.Add(new Label
         {
-            Text = $"{div.DaySlot?.DayName ?? ""}  ·  {div.Name}",
+            Text = div.Name,
             Font = AppTheme.FontDefaultBold,
             ForeColor = Color.White,
             BackColor = Color.FromArgb(100, 130, 170),
@@ -299,23 +316,20 @@ public class StandingsPanel : UserControl
             Padding = new Padding(6, 0, 0, 0)
         });
 
-        var grid = BuildDivGrid(rows, teamW, statWs, isGamesMode, h2hUsed);
+        var grid = BuildDivGrid(rows, teamW, statWs);
         grid.Location = new Point(0, CellHdrH);
         grid.Size = new Size(colW, DgvHdrH + rows.Count * DgvRowH + 2);
         cell.Controls.Add(grid);
-
         return cell;
     }
 
-    private static DataGridView BuildDivGrid(List<StandingView> rows,
-        int teamW, int[] statWs, bool isGamesMode, bool h2hUsed)
+    private DataGridView BuildDivGrid(List<StandingView> rows, int teamW, int[] statWs)
     {
         var grid = MakeGrid();
         grid.ScrollBars = ScrollBars.None;
-
         grid.Columns.Add(Col("Team", "Team", teamW));
 
-        var defs = GetStatDefs(isGamesMode, h2hUsed);
+        var defs = GetStatDefs(_isGamesMode, _h2hUsed);
         for (int i = 0; i < defs.Count; i++)
         {
             var (name, hdr, mid, tip) = defs[i];
@@ -324,17 +338,16 @@ public class StandingsPanel : UserControl
 
         foreach (var r in rows)
         {
-            var vals = new List<object?> { r.TeamName, isGamesMode ? r.GamesPlayed : r.MatchesPlayed, r.Wins };
-            if (!isGamesMode) vals.Add(r.Ties);
+            var vals = new List<object?> { r.TeamName, _isGamesMode ? r.GamesPlayed : r.MatchesPlayed, r.Wins };
+            if (!_isGamesMode) vals.Add(r.Ties);
             vals.Add(r.Losses); vals.Add(r.Forfeits);
             vals.Add(r.StandingsPoints); vals.Add(PmStr(r.PlusMinus));
-            if (h2hUsed) { vals.Add(PmStr(r.H2HPlusMinus)); vals.Add(r.H2HWins); }
+            if (_h2hUsed) { vals.Add(PmStr(r.H2HPlusMinus)); vals.Add(r.H2HWins); }
 
             int idx = grid.Rows.Add(vals.Cast<object>().ToArray());
             ApplyRowStyle(grid.Rows[idx], idx);
             if (r.DivisionRank == 1) grid.Rows[idx].DefaultCellStyle.Font = AppTheme.FontDefaultBold;
         }
-
         return grid;
     }
 
@@ -351,11 +364,7 @@ public class StandingsPanel : UserControl
         d.Add(("F",   "F",   true, "Forfeit losses"));
         d.Add(("Pts", "Pts", true, "Standings points"));
         d.Add(("PM",  "+/-", true, "Plus/Minus"));
-        if (h2hUsed)
-        {
-            d.Add(("H2HPM", "H2H+/-", true, "H2H plus/minus"));
-            d.Add(("H2HW",  "H2HW",   true, "H2H wins"));
-        }
+        if (h2hUsed) { d.Add(("H2HPM", "H2H+/-", true, "H2H PM")); d.Add(("H2HW", "H2HW", true, "H2H Wins")); }
         return d;
     }
 
@@ -368,13 +377,13 @@ public class StandingsPanel : UserControl
         var grid = MakeGrid();
 
         grid.Columns.AddRange(
-            Col("Seed", "Seed",     62,  mid: true, tip: "Season seed — playoff order"),
-            Col("Team", "Team",     155),
-            Col("Div",  "Division", 185, tip: "Division"),
-            Col("DivR", "Div #",    52,  mid: true, tip: "Division rank"),
-            Col("Pts",  "Pts",      50,  mid: true, tip: "Standings points"),
-            Col("PM",   "+/-",      54,  mid: true, tip: "Plus/Minus"),
-            Col("W",    "W",        44,  mid: true, tip: "Wins")
+            Col("Seed",   "Seed",      62,  mid: true, tip: "Season seed — playoff order"),
+            Col("Team",   "Team",      155),
+            Col("Div",    "Division",  185, tip: "Division"),
+            Col("DivR",   "Div. Seed", 80,  mid: true, tip: "Division seed (finish position in division)"),
+            Col("Pts",    "Pts",       50,  mid: true, tip: "Standings points"),
+            Col("PM",     "+/-",       54,  mid: true, tip: "Plus/Minus"),
+            Col("W",      "W",         44,  mid: true, tip: "Wins")
         );
         if (!isGamesMode)
             grid.Columns.Add(Col("T", "T", 44, mid: true, tip: "Ties"));
@@ -402,7 +411,6 @@ public class StandingsPanel : UserControl
             if (qualifies) grid.Rows[idx].DefaultCellStyle.Font = AppTheme.FontDefaultBold;
             if (teamsInPlayoffs > 0 && r.SeasonSeed == teamsInPlayoffs) grid.Rows[idx].DividerHeight = 2;
         }
-
         return grid;
     }
 
@@ -412,7 +420,7 @@ public class StandingsPanel : UserControl
     {
         if (_divFilterItems.Count == 0) return;
 
-        int formH = Math.Min(420, 40 + _divFilterItems.Count * 22 + 40);
+        int formH = Math.Min(440, 40 + _divFilterItems.Count * 22 + 40);
         var form = new Form
         {
             FormBorderStyle = FormBorderStyle.FixedToolWindow,
@@ -432,44 +440,17 @@ public class StandingsPanel : UserControl
         foreach (var (divId, label) in _divFilterItems)
             clb.Items.Add(label, _filteredDivIds == null || _filteredDivIds.Contains(divId));
 
-        var btnBar = new Panel { Dock = DockStyle.Bottom, Height = 36, BackColor = AppTheme.Surface };
-        var btnAll = new Button
-        {
-            Text = "All", Width = 60, Height = 28, Location = new Point(6, 4),
-            Font = AppTheme.FontDefault, FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(60, 100, 160), ForeColor = Color.White,
-            FlatAppearance = { BorderSize = 0 }
-        };
-        var btnNone = new Button
-        {
-            Text = "None", Width = 60, Height = 28, Location = new Point(72, 4),
-            Font = AppTheme.FontDefault, FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(100, 100, 110), ForeColor = Color.White,
-            FlatAppearance = { BorderSize = 0 }
-        };
-        var btnClose = new Button
-        {
-            Text = "Close", Width = 64, Height = 28, Location = new Point(138, 4),
-            Font = AppTheme.FontDefault, FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(80, 80, 80), ForeColor = Color.White,
-            FlatAppearance = { BorderSize = 0 }
-        };
+        var btnBar  = new Panel { Dock = DockStyle.Bottom, Height = 36, BackColor = AppTheme.Surface };
+        var btnAll  = MakeSmallBtn("All",   Color.FromArgb(60, 100, 160), 6);
+        var btnNone = MakeSmallBtn("None",  Color.FromArgb(100, 100, 110), 72);
+        var btnClose= MakeSmallBtn("Close", Color.FromArgb(80, 80, 80), 138);
         btnBar.Controls.AddRange([btnAll, btnNone, btnClose]);
-
         form.Controls.Add(clb);
         form.Controls.Add(btnBar);
 
         clb.ItemCheck += (_, _) => BeginInvoke(() => ApplyFilterFrom(clb));
-        btnAll.Click  += (_, _) =>
-        {
-            for (int i = 0; i < clb.Items.Count; i++) clb.SetItemChecked(i, true);
-            BeginInvoke(() => ApplyFilterFrom(clb));
-        };
-        btnNone.Click += (_, _) =>
-        {
-            for (int i = 0; i < clb.Items.Count; i++) clb.SetItemChecked(i, false);
-            BeginInvoke(() => ApplyFilterFrom(clb));
-        };
+        btnAll.Click  += (_, _) => { for (int i = 0; i < clb.Items.Count; i++) clb.SetItemChecked(i, true);  BeginInvoke(() => ApplyFilterFrom(clb)); };
+        btnNone.Click += (_, _) => { for (int i = 0; i < clb.Items.Count; i++) clb.SetItemChecked(i, false); BeginInvoke(() => ApplyFilterFrom(clb)); };
         btnClose.Click += (_, _) => form.Close();
 
         var pt = _btnFilter.PointToScreen(new Point(0, _btnFilter.Height));
@@ -477,6 +458,13 @@ public class StandingsPanel : UserControl
         form.Show(FindForm() ?? (IWin32Window?)this);
         form.Deactivate += (_, _) => { try { form.Close(); } catch { } };
     }
+
+    private static Button MakeSmallBtn(string text, Color bg, int x) => new()
+    {
+        Text = text, Width = 60, Height = 28, Location = new Point(x, 4),
+        Font = AppTheme.FontDefault, FlatStyle = FlatStyle.Flat,
+        BackColor = bg, ForeColor = Color.White, FlatAppearance = { BorderSize = 0 }
+    };
 
     private void ApplyFilterFrom(CheckedListBox clb)
     {
@@ -492,28 +480,41 @@ public class StandingsPanel : UserControl
             int n = checkedIdx.Count;
             _btnFilter.Text = n == 0 ? "No Divisions ▼" : $"{n} division{(n == 1 ? "" : "s")} ▼";
         }
-        foreach (var (divId, panel) in _divCellPanels)
-            panel.Visible = _filteredDivIds == null || _filteredDivIds.Contains(divId);
+        // Rebuild with compact layout — visible divisions always climb to top
+        RebuildAllDivisionsPanel();
+    }
+
+    // ── Print ─────────────────────────────────────────────────────────────────
+
+    private void PrintCurrent()
+    {
+        if (!_seasonId.HasValue) return;
+
+        bool onSeedTab = _tabs.SelectedIndex > 0;
+        if (onSeedTab)
+        {
+            StandingsPrintService.ShowPrintPreview(this, _seasonId.Value, StandingsPrintMode.SeasonSeed);
+        }
+        else
+        {
+            StandingsPrintService.ShowPrintPreview(this, _seasonId.Value, StandingsPrintMode.AllDivisions, _filteredDivIds);
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static TabPage MakePage(string title) => new(title)
     {
-        BackColor = AppTheme.ContentBackground,
-        Padding   = new Padding(0)
+        BackColor = AppTheme.ContentBackground, Padding = new Padding(0)
     };
 
     private static DataGridView MakeGrid() => new()
     {
         ReadOnly = true, AllowUserToAddRows = false, AllowUserToDeleteRows = false,
         SelectionMode = DataGridViewSelectionMode.FullRowSelect, MultiSelect = false,
-        RowHeadersVisible = false,
-        AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None,
-        BackgroundColor = AppTheme.ContentBackground,
-        GridColor = AppTheme.Separator,
-        BorderStyle = BorderStyle.None,
-        Font = AppTheme.FontDefault,
+        RowHeadersVisible = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None,
+        BackgroundColor = AppTheme.ContentBackground, GridColor = AppTheme.Separator,
+        BorderStyle = BorderStyle.None, Font = AppTheme.FontDefault,
         ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
         {
             BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary,
@@ -552,10 +553,4 @@ public class StandingsPanel : UserControl
     private static string TitleAbbr(string? abbr) =>
         string.IsNullOrEmpty(abbr) ? "" :
         char.ToUpper(abbr[0]) + abbr.Substring(1).ToLower();
-
-    private void PrintStandings()
-    {
-        if (!_seasonId.HasValue) return;
-        StandingsPrintService.ShowPrintPreview(this, _seasonId.Value);
-    }
 }
