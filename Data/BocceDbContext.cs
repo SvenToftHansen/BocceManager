@@ -91,7 +91,9 @@ public class BocceDbContext : DbContext
     public DbSet<ReportParameter> ReportParameters => Set<ReportParameter>();
 
     // Views
-    public DbSet<Stats> Stats => Set<Stats>();
+    public DbSet<Stats>        Stats    => Set<Stats>();
+    public DbSet<Scoring>      Scoring  => Set<Scoring>();
+    public DbSet<StandingView> Standings => Set<StandingView>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder options)
     {
@@ -248,7 +250,9 @@ model.Entity<SeasonCourt>().HasIndex(e => new { e.SeasonId, e.CourtId }).IsUniqu
             .HasOne(e => e.Winner).WithMany()
             .HasForeignKey(e => e.WinnerId).OnDelete(DeleteBehavior.Restrict);
 
-        // Stats view
-        model.Entity<Stats>().ToView("Stats").HasNoKey();
+        // Views
+        model.Entity<Stats>()        .ToView("Stats")      .HasNoKey();
+        model.Entity<Scoring>()      .ToView("Scoring")    .HasNoKey();
+        model.Entity<StandingView>() .ToView("Standings")  .HasNoKey();
     }
 }
