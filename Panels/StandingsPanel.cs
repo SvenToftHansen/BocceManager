@@ -237,18 +237,29 @@ public class StandingsPanel : UserControl
                     _divFilterItems.Add((d.Id, $"{TitleAbbr(d.DaySlot?.DayAbbr)} {tc.Label}"));
             }
 
-            // Measure team column widths from all team names (stable across week ranges)
+            // Load all team names + division IDs in one shot (can't nest in-memory
+            // List operations inside EF query lambdas — they can't be SQL-translated).
+            var allTeamNames = db.Scoring
+                .Where(s => s.SeasonId == _seasonId.Value)
+                .Select(s => new { s.DivisionId, s.TeamName })
+                .Distinct()
+                .ToList();
+
+            // Measure team column widths purely in-memory
             using (var bmp = new Bitmap(1, 1))
             using (var g   = Graphics.FromImage(bmp))
             {
                 int Mw(string s) => (int)Math.Ceiling(g.MeasureString(s, AppTheme.FontDefault).Width) + 10;
                 _teamColWidths = _timeCols.Select((tc, _) =>
                 {
-                    var names = db.Scoring
-                        .Where(s => s.SeasonId == _seasonId.Value && _allDivisions
-                            .Where(d => d.TimeSlotId == tc.Id).Select(d => d.Id).Contains(s.DivisionId))
-                        .Select(s => s.TeamName).Distinct().ToList();
-                    int maxW = names.Select(n => Mw(n)).DefaultIfEmpty(0).Max();
+                    var tcDivIds = _allDivisions
+                        .Where(d => d.TimeSlotId == tc.Id)
+                        .Select(d => d.Id)
+                        .ToHashSet();
+                    int maxW = allTeamNames
+                        .Where(x => tcDivIds.Contains(x.DivisionId))
+                        .Select(x => Mw(x.TeamName))
+                        .DefaultIfEmpty(0).Max();
                     return Math.Max(Mw("Team"), maxW);
                 }).ToArray();
             }
