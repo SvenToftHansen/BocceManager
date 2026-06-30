@@ -190,9 +190,9 @@ public class StandingsPanel : UserControl
             var divNames = divisions.ToDictionary(d => d.Id, d => d.Name);
             var seedRows = allRows.OrderBy(r => r.SeasonSeed).ToList();
             var seedPage = MakePage("Season Seed");
-            var seedGrid = BuildSeasonSeedGrid(seedRows, divNames, season.TeamsInPlayoffs, _isGamesMode);
-            seedGrid.Dock = DockStyle.Fill;
-            seedPage.Controls.Add(seedGrid);
+            var seedPanel = BuildSeasonSeedSplitPanel(seedRows, divNames, season.TeamsInPlayoffs, _isGamesMode);
+            seedPanel.Dock = DockStyle.Fill;
+            seedPage.Controls.Add(seedPanel);
             _tabs.TabPages.Add(seedPage);
         }
         catch (Exception ex)
@@ -212,10 +212,10 @@ public class StandingsPanel : UserControl
 
     private static int[] GetStatWidths(bool isGamesMode, bool h2hUsed)
     {
-        var ws = new List<int> { 44, 44 };
-        if (!isGamesMode) ws.Add(44);
-        ws.AddRange([44, 44, 50, 54]);
-        if (h2hUsed) ws.AddRange([64, 54]);
+        var ws = new List<int> { 50, 44, 44 };  // Seed, GP/MP, W
+        if (!isGamesMode) ws.Add(44);            // T
+        ws.AddRange([44, 44, 50, 54]);           // L, F, Pts, +/-
+        if (h2hUsed) ws.AddRange([64, 54]);      // H2H+/-, H2HW
         return ws.ToArray();
     }
 
@@ -338,7 +338,7 @@ public class StandingsPanel : UserControl
 
         foreach (var r in rows)
         {
-            var vals = new List<object?> { r.TeamName, _isGamesMode ? r.GamesPlayed : r.MatchesPlayed, r.Wins };
+            var vals = new List<object?> { r.TeamName, r.SeasonSeed, _isGamesMode ? r.GamesPlayed : r.MatchesPlayed, r.Wins };
             if (!_isGamesMode) vals.Add(r.Ties);
             vals.Add(r.Losses); vals.Add(r.Forfeits);
             vals.Add(r.StandingsPoints); vals.Add(PmStr(r.PlusMinus));
@@ -355,6 +355,7 @@ public class StandingsPanel : UserControl
     {
         var d = new List<(string, string, bool, string)>
         {
+            ("Seed", "Seed", true, "Overall season seed / playoff position"),
             (isGamesMode ? "GP" : "MP", isGamesMode ? "GP" : "MP", true,
              isGamesMode ? "Games Played" : "Matches Played"),
             ("W", "W", true, "Wins")
@@ -368,19 +369,69 @@ public class StandingsPanel : UserControl
         return d;
     }
 
+    // ── Season Seed two-column panel ──────────────────────────────────────────
+
+    private static SplitContainer BuildSeasonSeedSplitPanel(
+        List<StandingView> rows, Dictionary<int, string> divNames,
+        int teamsInPlayoffs, bool isGamesMode)
+    {
+        int total = rows.Count;
+        int leftN = (total + 1) / 2;
+
+        // Measure Team column width from ALL rows so both halves stay consistent
+        int teamW;
+        using (var bmp = new Bitmap(1, 1))
+        using (var g   = Graphics.FromImage(bmp))
+        {
+            int M(string s) => (int)Math.Ceiling(g.MeasureString(s, AppTheme.FontDefault).Width) + 10;
+            teamW = Math.Max(M("Team"), rows.Select(r => M(r.TeamName)).DefaultIfEmpty(0).Max());
+        }
+
+        var sc = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Vertical,
+            SplitterWidth = 6,
+            BackColor = AppTheme.Separator,
+            Panel1MinSize = 100,
+            Panel2MinSize = 100
+        };
+
+        void Apply()
+        {
+            if (!sc.IsHandleCreated || sc.Width <= sc.SplitterWidth) return;
+            int half = (sc.Width - sc.SplitterWidth) / 2;
+            sc.SplitterDistance = Math.Clamp(half, sc.Panel1MinSize,
+                sc.Width - sc.SplitterWidth - sc.Panel2MinSize);
+        }
+        sc.HandleCreated += (_, _) => Apply();
+        sc.SizeChanged   += (_, _) => Apply();
+
+        var leftGrid  = BuildSeasonSeedGrid(rows.Take(leftN).ToList(),  divNames, teamsInPlayoffs, isGamesMode, teamW);
+        var rightGrid = BuildSeasonSeedGrid(rows.Skip(leftN).ToList(),  divNames, teamsInPlayoffs, isGamesMode, teamW);
+        leftGrid.Dock  = DockStyle.Fill;
+        rightGrid.Dock = DockStyle.Fill;
+
+        sc.Panel1.BackColor = AppTheme.ContentBackground;
+        sc.Panel2.BackColor = AppTheme.ContentBackground;
+        sc.Panel1.Controls.Add(leftGrid);
+        sc.Panel2.Controls.Add(rightGrid);
+        return sc;
+    }
+
     // ── Season Seed grid ──────────────────────────────────────────────────────
 
     private static DataGridView BuildSeasonSeedGrid(
         List<StandingView> rows, Dictionary<int, string> divNames,
-        int teamsInPlayoffs, bool isGamesMode)
+        int teamsInPlayoffs, bool isGamesMode, int teamW = 155)
     {
         var grid = MakeGrid();
 
         grid.Columns.AddRange(
             Col("Seed",   "Seed",      62,  mid: true, tip: "Season seed — playoff order"),
-            Col("Team",   "Team",      155),
+            Col("Team",   "Team",      teamW),
             Col("Div",    "Division",  185, tip: "Division"),
-            Col("DivR",   "Div. Seed", 80,  mid: true, tip: "Division seed (finish position in division)"),
+            Col("DivR",   "Div. Seed", 92,  mid: true, tip: "Division seed (finish position in division)"),
             Col("Pts",    "Pts",       50,  mid: true, tip: "Standings points"),
             Col("PM",     "+/-",       54,  mid: true, tip: "Plus/Minus"),
             Col("W",      "W",         44,  mid: true, tip: "Wins")
