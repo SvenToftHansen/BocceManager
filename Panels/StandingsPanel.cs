@@ -212,7 +212,7 @@ public class StandingsPanel : UserControl
 
     private static int[] GetStatWidths(bool isGamesMode, bool h2hUsed)
     {
-        var ws = new List<int> { 50, 44, 44 };  // Seed, GP/MP, W
+        var ws = new List<int> { 40, 44, 44 };  // #(Seed), GP/MP, W
         if (!isGamesMode) ws.Add(44);            // T
         ws.AddRange([44, 44, 50, 54]);           // L, F, Pts, +/-
         if (h2hUsed) ws.AddRange([64, 54]);      // H2H+/-, H2HW
@@ -355,7 +355,7 @@ public class StandingsPanel : UserControl
     {
         var d = new List<(string, string, bool, string)>
         {
-            ("Seed", "Seed", true, "Overall season seed / playoff position"),
+            ("Seed", "#", true, "# = Overall season seed (playoff position)"),
             (isGamesMode ? "GP" : "MP", isGamesMode ? "GP" : "MP", true,
              isGamesMode ? "Games Played" : "Matches Played"),
             ("W", "W", true, "Wins")
