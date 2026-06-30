@@ -613,10 +613,12 @@ public class StandingsPanel : UserControl
         };
         void Apply()
         {
-            if (!sc.IsHandleCreated || sc.Width <= sc.SplitterWidth) return;
-            int half = (sc.Width - sc.SplitterWidth) / 2;
-            sc.SplitterDistance = Math.Clamp(half, sc.Panel1MinSize,
-                sc.Width - sc.SplitterWidth - sc.Panel2MinSize);
+            if (!sc.IsHandleCreated) return;
+            int available = sc.Width - sc.SplitterWidth;
+            // Guard: available space must fit both panel minimums or Math.Clamp throws.
+            // HandleCreated fires before layout assigns the real size; SizeChanged will retry.
+            if (available < sc.Panel1MinSize + sc.Panel2MinSize) return;
+            sc.SplitterDistance = Math.Clamp(available / 2, sc.Panel1MinSize, available - sc.Panel2MinSize);
         }
         sc.HandleCreated += (_, _) => Apply();
         sc.SizeChanged   += (_, _) => Apply();
