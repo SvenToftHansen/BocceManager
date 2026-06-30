@@ -9,8 +9,6 @@ public class Season
     public DateOnly? EndDate { get; set; }
 
     public int GamesPerSeason { get; set; }
-    // weekly | schedule_determined
-    public string GameInterval { get; set; } = "weekly";
 
     public int? PlayersPerTeamMinimum { get; set; }
     public int? PlayersPerTeamMaximum { get; set; }

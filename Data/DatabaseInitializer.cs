@@ -45,8 +45,7 @@ public static class DatabaseInitializer
         AddColumnIfMissing(conn, "Seasons", "PlayersPerTeamMinimum", "INTEGER");
         AddColumnIfMissing(conn, "Seasons", "PlayersPerTeamMaximum", "INTEGER");
         AddColumnIfMissing(conn, "Seasons", "GamesPerSeason",        "INTEGER NOT NULL DEFAULT 0");
-        AddColumnIfMissing(conn, "Seasons", "GameInterval",          "TEXT NOT NULL DEFAULT 'weekly'");
-        AddColumnIfMissing(conn, "Seasons", "TimeslotDriven",        "INTEGER NOT NULL DEFAULT 1");
+AddColumnIfMissing(conn, "Seasons", "TimeslotDriven",        "INTEGER NOT NULL DEFAULT 1");
         AddColumnIfMissing(conn, "Seasons", "PointsForWin",          "INTEGER NOT NULL DEFAULT 2");
         AddColumnIfMissing(conn, "Seasons", "PointsForTie",          "INTEGER NOT NULL DEFAULT 1");
         AddColumnIfMissing(conn, "Seasons", "PointsForLoss",         "INTEGER NOT NULL DEFAULT 0");

@@ -44,7 +44,6 @@ public class SeasonPanel : UserControl
     private ThemedNumericUpDown _numMaxTeamsDiv = null!;
 
     // ── Editor – scoring ──────────────────────────────────────────────────────
-    private ComboBox      _cmbGameInterval   = null!;
     private ThemedNumericUpDown _numPlayersMin     = null!;
     private ThemedNumericUpDown _numPlayersMax     = null!;
     private ThemedNumericUpDown _numPtsWin         = null!;
@@ -372,13 +371,6 @@ public class SeasonPanel : UserControl
 
         // ── Scoring Parameters ────────────────────────────────────────────
         Add(SecHdr("Scoring Parameters", lx, y)); y += 34;
-
-        Add(Lbl("Game Interval", lx, y));
-        _cmbGameInterval = StrCombo(ix, y, 300,
-            ("weekly",              "Weekly - same day each week"),
-            ("schedule_determined", "Schedule Determined"));
-        _cmbGameInterval.SelectedIndexChanged += (_, _) => MarkDirty();
-        Add(_cmbGameInterval); y += 44;
 
         Add(Lbl("Players / Team Min", lx, y));
         _numPlayersMin = Num(ix, y, 0, 99);
@@ -817,7 +809,6 @@ public class SeasonPanel : UserControl
             _txtSeasonFeeAmount.Text = feeParam?.Value ?? "0.00";
 
             _numMaxTeamsDiv.Value = s.MaxTeamsInDivision;
-            SelStr(_cmbGameInterval, s.GameInterval);
             _numPlayersMin.Value     = s.PlayersPerTeamMinimum ?? 0;
             _numPlayersMax.Value     = s.PlayersPerTeamMaximum ?? 0;
             _numPtsWin.Value         = s.PointsForWin;
@@ -859,7 +850,6 @@ public class SeasonPanel : UserControl
         _numMaxTeamsDiv.Enabled      = !isLocked;
         _numPlayersMin.Enabled       = !isLocked;
         _numPlayersMax.Enabled       = !isLocked;
-        _cmbGameInterval.Enabled     = !isLocked;
         _numPtsWin.Enabled           = !isLocked;
         _numPtsTie.Enabled           = !isLocked;
         _numPtsLoss.Enabled          = !isLocked;
@@ -913,7 +903,6 @@ public class SeasonPanel : UserControl
         _txtSeasonFeeAmount.Text = "0.00";
 
         _numMaxTeamsDiv.Value = 0;
-        if (_cmbGameInterval.Items.Count > 0) _cmbGameInterval.SelectedIndex = 0;
         _numPlayersMin.Value = 0; _numPlayersMax.Value = 0;
         _numPtsWin.Value = 2; _numPtsTie.Value = 1; _numPtsLoss.Value = 0;
         _numPtsNoShow.Value = -1; _numPtsToWin.Value = 12;
@@ -1149,7 +1138,6 @@ public class SeasonPanel : UserControl
         _cmbStatus.SelectedIndex = 0; // Default to "Setup"
 
         _numMaxTeamsDiv.Value = source.MaxTeamsInDivision;
-        SelStr(_cmbGameInterval, source.GameInterval);
         _numPlayersMin.Value   = source.PlayersPerTeamMinimum ?? 0;
         _numPlayersMax.Value   = source.PlayersPerTeamMaximum ?? 0;
         _numPtsWin.Value       = source.PointsForWin;
@@ -1382,7 +1370,6 @@ public class SeasonPanel : UserControl
         s.IsCurrent        = _chkIsCurrent.Checked;
         s.IsLocked         = _chkIsLocked.Checked;
         s.Status           = StrVal(_cmbStatus) ?? "Setup";
-        s.GameInterval     = StrVal(_cmbGameInterval)  ?? "weekly";
         s.PlayersPerTeamMinimum = _numPlayersMin.Value > 0 ? (int)_numPlayersMin.Value : (int?)null;
         s.PlayersPerTeamMaximum = _numPlayersMax.Value > 0 ? (int)_numPlayersMax.Value : (int?)null;
         s.PointsForWin     = (int)_numPtsWin.Value;

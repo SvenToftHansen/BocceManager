@@ -14,7 +14,6 @@ public class Division
     // Actual count of teams in this division; auto-updated from Teams tab; drives scheduling
     [Column("TeamsInDivision")]
     public int TeamCount { get; set; }
-    // NULL when season.game_interval = 'schedule_determined'
     public int? DaySlotId { get; set; }
     public int? TimeSlotId { get; set; }
     public bool IsActive { get; set; } = true;
