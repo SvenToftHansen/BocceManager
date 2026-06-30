@@ -307,10 +307,10 @@ public partial class MainForm : Form
         AddGroup("OPERATIONS", add => {
             add("Score Entry", NavSection.ScoreEntry);
             add("Schedule",    NavSection.Schedule);
+            add("Standings",   NavSection.Standings);
         });
 
         AddGroup("REPORTS", add => {
-            add("Standings",    NavSection.Standings);
             add("Playoffs",     NavSection.Playoffs);
             add("Team Listing", NavSection.ReportTeamListing);
             add("Schedules",    NavSection.ReportScheduleGeneric);

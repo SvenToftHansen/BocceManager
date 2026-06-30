@@ -153,12 +153,13 @@ public class StandingsPanel : UserControl
         bool h2hUsed = rows.Any(r => r.H2HPlusMinus != 0 || r.H2HWins != 0);
 
         grid.Columns.AddRange(
-            Col("Rank", "#",    40, mid: true, tip: "Division rank (DENSE_RANK — tied teams share a number)"),
-            Col("Seed", "Seed", 44, mid: true, tip: "Division seed for bracket (always unique)"),
             Col("Team", "Team", 200),
             Col("GP",   isGamesMode ? "GP" : "MP", 40, mid: true, tip: isGamesMode ? "Games Played" : "Matches Played"),
-            Col("W",    "W",    36, mid: true, tip: "Wins"),
-            Col("T",    "T",    36, mid: true, tip: "Ties"),
+            Col("W",    "W",    36, mid: true, tip: "Wins")
+        );
+        if (!isGamesMode)
+            grid.Columns.Add(Col("T", "T", 36, mid: true, tip: "Ties"));
+        grid.Columns.AddRange(
             Col("L",    "L",    36, mid: true, tip: "Non-forfeit losses"),
             Col("F",    "F",    36, mid: true, tip: "Forfeit losses"),
             Col("Pts",  "Pts",  48, mid: true, tip: "Standings points"),
@@ -175,20 +176,19 @@ public class StandingsPanel : UserControl
         {
             var vals = new List<object?>
             {
-                r.DivisionRank,
-                r.DivisionSeed,
                 r.TeamName,
                 isGamesMode ? r.GamesPlayed : r.MatchesPlayed,
-                r.Wins, r.Ties, r.Losses, r.Forfeits,
-                r.StandingsPoints,
-                PmStr(r.PlusMinus)
+                r.Wins
             };
+            if (!isGamesMode) vals.Add(r.Ties);
+            vals.Add(r.Losses); vals.Add(r.Forfeits);
+            vals.Add(r.StandingsPoints);
+            vals.Add(PmStr(r.PlusMinus));
             if (h2hUsed) { vals.Add(PmStr(r.H2HPlusMinus)); vals.Add(r.H2HWins); }
 
             int idx = grid.Rows.Add(vals.Cast<object>().ToArray());
             ApplyRowStyle(grid.Rows[idx], idx);
 
-            // Bold the 1st-place row
             if (r.DivisionRank == 1)
                 grid.Rows[idx].DefaultCellStyle.Font = AppTheme.FontDefaultBold;
         }
@@ -302,7 +302,7 @@ public class StandingsPanel : UserControl
 
     private void PrintCurrentTab()
     {
-        // TODO: implement print preview for standings
-        MessageBox.Show("Print not yet implemented.", "Standings", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        if (!_seasonId.HasValue) return;
+        StandingsPrintService.ShowPrintPreview(this, _seasonId.Value);
     }
 }
