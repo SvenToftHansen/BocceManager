@@ -25,4 +25,7 @@ public class StandingView
     public int PlusMinus { get; set; }
     public int PointsFor { get; set; }
     public int PointsAgainst { get; set; }
+    // Head-to-head stats against tied opponents only (used as tiebreaker after PlusMinus/Wins)
+    public int H2HPlusMinus { get; set; }
+    public int H2HWins { get; set; }
 }
