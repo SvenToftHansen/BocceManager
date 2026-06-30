@@ -194,11 +194,12 @@ public class StandingsPanel : UserControl
             _firstPlaceGuaranteed = season.FirstPlaceGuaranteed;
             _teamsInPlayoffs      = season.TeamsInPlayoffs;
 
-            // Find the highest week number that has any scores in this season
-            _maxWeek = db.Scoring
+            // Find the highest week number that has any scores in this season.
+            // Use nullable Max so EF Core translates it correctly for keyless view entities
+            // (DefaultIfEmpty with a value arg cannot be translated to SQL for views).
+            _maxWeek = (int)(db.Scoring
                 .Where(s => s.SeasonId == _seasonId.Value)
-                .Select(s => s.WeekId)
-                .DefaultIfEmpty(0).Max();
+                .Max(s => (int?)s.WeekId) ?? 0);
 
             if (_maxWeek == 0) { _lblStatus.Text = "No scores entered yet."; return; }
 
