@@ -30,15 +30,16 @@ public static class StandingsPrintService
         List<(int Id, string Label, int Sort)> TimeCols,
         List<(int Id, string Name, int Nbr)>   DayRows,
         Dictionary<(int DayId, int TimeId), DivBlock> Cells,
-        List<(StandingView Row, string DivName)> SeedRows,
+        // Seed page: short div name "Mon, 9:00 AM" used on Page 2
+        List<(StandingView Row, string ShortDivName)> SeedRows,
         int   TeamsInPlayoffs,
         bool  IsGamesMode,
         bool  H2hUsed,
-        string[] StatHeaders,
+        string[] StatHeaders,     // division grid stat columns (includes "Seed" first)
         float[]  StatWidths,
-        float[]  TimeColTeamW,
+        float[]  TimeColTeamW,   // per timeslot column
         float    SeedTeamW,
-        float    SeedDivW);
+        float    SeedDivW);      // measured from SHORT division names
 
     // ── Entry point ───────────────────────────────────────────────────────────
 
@@ -76,20 +77,15 @@ public static class StandingsPrintService
         var timeCols = divisions
             .Where(d => d.TimeSlotId.HasValue && d.TimeSlot != null)
             .Select(d => (d.TimeSlotId!.Value, d.TimeSlot!.Timeslot12h, d.TimeSlot!.SortOrder ?? 999))
-            .Distinct()
-            .OrderBy(t => t.Item3)
-            .Select(t => (Id: t.Item1, Label: t.Item2, Sort: t.Item3))
-            .ToList();
+            .Distinct().OrderBy(t => t.Item3)
+            .Select(t => (Id: t.Item1, Label: t.Item2, Sort: t.Item3)).ToList();
 
         var dayRows = divisions
             .Where(d => d.DaySlotId.HasValue && d.DaySlot != null)
             .Select(d => (d.DaySlotId!.Value, d.DaySlot!.DayName, d.DaySlot!.DayNbr))
-            .Distinct()
-            .OrderBy(d => d.Item3)
-            .Select(d => (Id: d.Item1, Name: d.Item2, Nbr: d.Item3))
-            .ToList();
+            .Distinct().OrderBy(d => d.Item3)
+            .Select(d => (Id: d.Item1, Name: d.Item2, Nbr: d.Item3)).ToList();
 
-        // Build cell map: one DivBlock per (day, timeslot) pair
         var cells = new Dictionary<(int, int), DivBlock>();
         foreach (var div in divisions.Where(d => d.DaySlotId.HasValue && d.TimeSlotId.HasValue))
         {
@@ -99,17 +95,20 @@ public static class StandingsPrintService
                     allRows.Where(r => r.DivisionId == div.Id).ToList());
         }
 
-        var divNameMap = divisions.ToDictionary(d => d.Id, d => d.Name);
-        var seedRows   = allRows.OrderBy(r => r.SeasonSeed)
-                                .Select(r => (Row: r, DivName: divNameMap.TryGetValue(r.DivisionId, out var n) ? n : "?"))
-                                .ToList();
+        // Short division name: "Mon, 9:00 AM"
+        var shortNames = divisions.ToDictionary(d => d.Id,
+            d => d.DaySlot != null && d.TimeSlot != null
+                ? $"{ToTitle(d.DaySlot.DayAbbr)}, {d.TimeSlot.Timeslot12h}"
+                : d.Name);
+
+        var seedRows = allRows.OrderBy(r => r.SeasonSeed)
+            .Select(r => (Row: r, Short: shortNames.TryGetValue(r.DivisionId, out var sn) ? sn : "?"))
+            .ToList();
 
         string[] statHdrs = BuildStatHeaders(isGamesMode, h2hUsed);
 
-        // Measure all column widths once using a temporary Graphics context
-        float[] statWidths;
-        float[] tcTeamW;
-        float   seedTeamW, seedDivW;
+        float[] statWidths, tcTeamW;
+        float seedTeamW, seedDivW;
 
         using (var bmp = new Bitmap(1, 1))
         using (var g   = Graphics.FromImage(bmp))
@@ -121,8 +120,16 @@ public static class StandingsPrintService
                 float W(string s, Font f) => g.MeasureString(s, f).Width + PadX * 2;
 
                 statWidths = statHdrs.Select(h =>
-                    MathF.Max(W(h, hf), W(h.Contains('+') || h.Contains('-') ? "+999" : "999", df))
-                ).ToArray();
+                {
+                    float hw = W(h, hf);
+                    float dw = h switch
+                    {
+                        "Seed"                                 => W("99",   df),
+                        _ when h.Contains('+') || h.Contains('-') => W("+999", df),
+                        _                                      => W("999",  df)
+                    };
+                    return MathF.Max(hw, dw);
+                }).ToArray();
 
                 tcTeamW = timeCols.Select((tc, _) =>
                 {
@@ -137,8 +144,9 @@ public static class StandingsPrintService
                 seedTeamW = MathF.Max(W("Team", hf),
                     seedRows.Select(sr => W(sr.Row.TeamName, df)).DefaultIfEmpty(0f).Max());
 
+                // Division column on Page 2 sized to short names
                 seedDivW = MathF.Max(W("Division", hf),
-                    seedRows.Select(sr => W(sr.DivName, df)).DefaultIfEmpty(0f).Max());
+                    seedRows.Select(sr => W(sr.Short, df)).DefaultIfEmpty(0f).Max());
             }
             finally { hf.Dispose(); df.Dispose(); }
         }
@@ -150,9 +158,10 @@ public static class StandingsPrintService
         return CreatePrintDoc(lay);
     }
 
+    // "Seed" is added as the FIRST stat column so readers can see overall playoff position
     private static string[] BuildStatHeaders(bool isGamesMode, bool h2hUsed)
     {
-        var h = new List<string> { isGamesMode ? "GP" : "MP", "W" };
+        var h = new List<string> { "Seed", isGamesMode ? "GP" : "MP", "W" };
         if (!isGamesMode) h.Add("T");
         h.AddRange(["L", "F", "Pts", "+/-"]);
         if (h2hUsed) h.AddRange(["H2H+/-", "H2HW"]);
@@ -196,7 +205,7 @@ public static class StandingsPrintService
 
             if (!seedDone && dayIdx < lay.DayRows.Count)
             {
-                // ── Division grid page ────────────────────────────────────────
+                // ── Division grid pages ────────────────────────────────────────
                 float y = b.Top;
 
                 if (pageNum == 1)
@@ -214,7 +223,7 @@ public static class StandingsPrintService
                 pe.HasMorePages = false;
                 while (dayIdx < lay.DayRows.Count)
                 {
-                    float blockH = ComputeBlockHeight(lay, dayIdx);
+                    float blockH = ComputeBlockH(lay, dayIdx);
                     if (y + blockH > yMax) { pe.HasMorePages = true; goto PageDone; }
                     DrawDayBlock(g, colXs, colWs, y, lay, dayIdx, hf, df, hdrBr, dimBr, linePen, divPen, lsf, csf);
                     y += blockH + BlockGapH;
@@ -232,7 +241,7 @@ public static class StandingsPrintService
             }
 
             PageDone:
-            var fs  = g.MeasureString($"Page {pageNum}", df);
+            var fs = g.MeasureString($"Page {pageNum}", df);
             g.DrawString($"Page {pageNum}", df, Brushes.Gray, b.Right - fs.Width, b.Bottom - fs.Height);
         };
 
@@ -241,21 +250,21 @@ public static class StandingsPrintService
 
     // ── Column-position helpers ───────────────────────────────────────────────
 
-    private static (float[] xs, float[] ws) ComputeColPositions(Layout lay, float pageLeft, float pageWidth)
+    private static (float[] xs, float[] ws) ComputeColPositions(Layout lay, float left, float pageW)
     {
-        int     n        = lay.TimeCols.Count;
-        float   statsW   = lay.StatWidths.Sum();
-        float[] ws       = lay.TimeColTeamW.Select(tw => tw + statsW).ToArray();
-        float   totalW   = ws.Sum() + (n - 1) * ColGapW;
+        int     n      = lay.TimeCols.Count;
+        float   statsW = lay.StatWidths.Sum();
+        float[] ws     = lay.TimeColTeamW.Select(tw => tw + statsW).ToArray();
+        float   total  = ws.Sum() + (n - 1) * ColGapW;
 
-        if (totalW > pageWidth)
+        if (total > pageW)
         {
-            float scale = pageWidth / totalW;
+            float scale = pageW / total;
             ws = ws.Select(w => w * scale).ToArray();
         }
 
         float[] xs = new float[n];
-        float   x  = pageLeft;
+        float   x  = left;
         for (int i = 0; i < n; i++) { xs[i] = x; x += ws[i] + ColGapW; }
         return (xs, ws);
     }
@@ -274,12 +283,12 @@ public static class StandingsPrintService
         }
     }
 
-    private static float ComputeBlockHeight(Layout lay, int dayIdx)
+    private static float ComputeBlockH(Layout lay, int dayIdx)
     {
-        int maxRows = lay.TimeCols
+        int maxN = lay.TimeCols
             .Select(tc => lay.Cells.TryGetValue((lay.DayRows[dayIdx].Id, tc.Id), out var blk) ? blk.Rows.Count : 0)
             .DefaultIfEmpty(0).Max();
-        return DivHdrH + ColHdrH + maxRows * RowH;
+        return DivHdrH + ColHdrH + maxN * RowH;
     }
 
     private static void DrawDayBlock(Graphics g, float[] xs, float[] ws, float y, Layout lay,
@@ -287,7 +296,7 @@ public static class StandingsPrintService
         Pen linePen, Pen divPen, StringFormat lsf, StringFormat csf)
     {
         var   day    = lay.DayRows[dayIdx];
-        float blockH = ComputeBlockHeight(lay, dayIdx);
+        float blockH = ComputeBlockH(lay, dayIdx);
 
         for (int ci = 0; ci < lay.TimeCols.Count; ci++)
         {
@@ -299,7 +308,6 @@ public static class StandingsPrintService
                 g.DrawRectangle(divPen, xs[ci], y, ws[ci] - 1, blockH - 1);
         }
 
-        // Separator below the day block
         float lineY = y + blockH + BlockGapH / 2f;
         float right = xs[lay.TimeCols.Count - 1] + ws[lay.TimeCols.Count - 1];
         g.DrawLine(divPen, xs[0], lineY, right, lineY);
@@ -310,10 +318,10 @@ public static class StandingsPrintService
         SolidBrush hdrBr, SolidBrush dimBr, Pen linePen,
         StringFormat lsf, StringFormat csf)
     {
-        float yStart  = y;
-        float[] statW = lay.StatWidths;
+        float yStart = y;
+        float[] sw   = lay.StatWidths;
 
-        // Division header bar
+        // Division header
         using var divHdrBr = new SolidBrush(Color.FromArgb(100, 130, 170));
         g.FillRectangle(divHdrBr, x, y, colW, DivHdrH);
         g.DrawString($"{blk.DayName}  ·  {blk.DivName}", hf, Brushes.White,
@@ -322,12 +330,13 @@ public static class StandingsPrintService
 
         // Column headers
         g.FillRectangle(hdrBr, x, y, colW, ColHdrH);
-        g.DrawString("Team", hf, Brushes.White, new RectangleF(x + PadX, y, teamW - PadX * 2, ColHdrH), lsf);
+        g.DrawString("Team", hf, Brushes.White,
+            new RectangleF(x + PadX, y, teamW - PadX * 2, ColHdrH), lsf);
         float sx = x + teamW;
         for (int i = 0; i < lay.StatHeaders.Length; i++)
         {
-            g.DrawString(lay.StatHeaders[i], hf, Brushes.White, new RectangleF(sx, y, statW[i], ColHdrH), csf);
-            sx += statW[i];
+            g.DrawString(lay.StatHeaders[i], hf, Brushes.White, new RectangleF(sx, y, sw[i], ColHdrH), csf);
+            sx += sw[i];
         }
         y += ColHdrH;
 
@@ -337,9 +346,7 @@ public static class StandingsPrintService
             var r = blk.Rows[ri];
             if (ri % 2 == 1) g.FillRectangle(dimBr, x, y, colW, RowH);
 
-            bool bold = r.DivisionRank == 1;
-            using var rowF = new Font("Consolas", 8.5f, bold ? FontStyle.Bold : FontStyle.Regular);
-
+            using var rowF = new Font("Consolas", 8.5f, r.DivisionRank == 1 ? FontStyle.Bold : FontStyle.Regular);
             g.DrawString(r.TeamName, rowF, Brushes.Black,
                 new RectangleF(x + PadX, y, teamW - PadX * 2, RowH), lsf);
 
@@ -347,20 +354,21 @@ public static class StandingsPrintService
             sx = x + teamW;
             for (int i = 0; i < vals.Length; i++)
             {
-                g.DrawString(vals[i], rowF, Brushes.Black, new RectangleF(sx, y, statW[i], RowH), csf);
-                sx += statW[i];
+                g.DrawString(vals[i], rowF, Brushes.Black, new RectangleF(sx, y, sw[i], RowH), csf);
+                sx += sw[i];
             }
             y += RowH;
         }
 
-        // Outer border
         g.DrawRectangle(linePen, x, yStart, colW - 1, y - yStart - 1);
     }
 
+    // SeasonSeed is shown first so readers see overall playoff position at a glance
     private static string[] GetStatValues(StandingView r, bool isGamesMode, bool h2hUsed)
     {
         var v = new List<string>
         {
+            r.SeasonSeed.ToString(),
             (isGamesMode ? r.GamesPlayed : r.MatchesPlayed).ToString(),
             r.Wins.ToString()
         };
@@ -438,7 +446,7 @@ public static class StandingsPrintService
 
     private static void DrawSeedHalf(Graphics g, float x, float w, float y,
         string[] hdrs, float[] colWs, Layout lay,
-        List<(StandingView Row, string DivName)> rows,
+        List<(StandingView Row, string ShortDivName)> rows,
         Font hf, Font df, SolidBrush hdrBr, SolidBrush dimBr, Pen linePen,
         StringFormat csf, StringFormat lsf)
     {
@@ -450,22 +458,22 @@ public static class StandingsPrintService
         for (int i = 0; i < hdrs.Length; i++)
         {
             var sf = hdrs[i] is "Team" or "Division" ? lsf : csf;
-            g.DrawString(hdrs[i], hf, Brushes.White, new RectangleF(cx + PadX, y, colWs[i] - PadX * 2, ColHdrH), sf);
+            g.DrawString(hdrs[i], hf, Brushes.White,
+                new RectangleF(cx + PadX, y, colWs[i] - PadX * 2, ColHdrH), sf);
             cx += colWs[i];
         }
         y += ColHdrH;
 
-        // Data rows
         for (int ri = 0; ri < rows.Count; ri++)
         {
-            var (r, divName) = rows[ri];
+            var (r, shortDiv) = rows[ri];
             if (ri % 2 == 1) g.FillRectangle(dimBr, x, y, w, RowH);
 
             bool qualifies = lay.TeamsInPlayoffs > 0 && r.SeasonSeed <= lay.TeamsInPlayoffs;
             using var rowF = new Font("Consolas", 8.5f, qualifies ? FontStyle.Bold : FontStyle.Regular);
 
             cx = x;
-            var vals = GetSeedValues(r, divName, lay.IsGamesMode);
+            var vals = GetSeedValues(r, shortDiv, lay.IsGamesMode);
             for (int i = 0; i < hdrs.Length; i++)
             {
                 var sf = hdrs[i] is "Team" or "Division" ? lsf : csf;
@@ -474,7 +482,6 @@ public static class StandingsPrintService
                 cx += colWs[i];
             }
 
-            // Dashed line at playoff cut-off
             if (lay.TeamsInPlayoffs > 0 && r.SeasonSeed == lay.TeamsInPlayoffs)
                 using (var cut = new Pen(Color.Gray, 1) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dash })
                     g.DrawLine(cut, x, y + RowH, x + w, y + RowH);
@@ -485,13 +492,13 @@ public static class StandingsPrintService
         g.DrawRectangle(linePen, x, yStart, w - 1, y - yStart - 1);
     }
 
-    private static string[] GetSeedValues(StandingView r, string divName, bool isGamesMode)
+    private static string[] GetSeedValues(StandingView r, string shortDivName, bool isGamesMode)
     {
         var v = new List<string>
         {
             r.SeasonSeed.ToString(),
             r.TeamName,
-            divName,
+            shortDivName,
             r.StandingsPoints.ToString(),
             PmStr(r.PlusMinus),
             r.Wins.ToString()
@@ -505,4 +512,8 @@ public static class StandingsPrintService
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static string PmStr(int v) => v >= 0 ? $"+{v}" : $"{v}";
+
+    private static string ToTitle(string? s) =>
+        string.IsNullOrEmpty(s) ? "" :
+        char.ToUpper(s[0]) + s.Substring(1).ToLower();
 }
