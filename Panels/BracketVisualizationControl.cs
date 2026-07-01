@@ -25,7 +25,7 @@ public class BracketVisualizationControl : UserControl
     private const int ByeLabelH    = 18;   // "Bye N" label above bye team
     private const int SectionVGap  = 40;   // gap between bracket sections
     private const int LeftPad      = 30;
-    private const int TopPad       = 20;
+    private const int TopPad       = 50;
 
     // ── Data ──────────────────────────────────────────────────────────────────
 
@@ -44,6 +44,7 @@ public class BracketVisualizationControl : UserControl
     private int _totalRounds;
     private int _teamCount;
     private bool _scaleToFit = true;
+    private int _tiebreakerBalls = 1;
 
     // Scoring interaction
     public event EventHandler<int>? MatchClicked; // passes matchId
@@ -72,8 +73,9 @@ public class BracketVisualizationControl : UserControl
         _teamCount    = season.TeamsInPlayoffs;
         _totalRounds  = PlayoffService.GetRoundCount(_teamCount);
 
-        var config = db.PlayoffConfigs.FirstOrDefault(c => c.SeasonId == seasonId);
-        _scaleToFit   = config?.DisplayMode != "Scroll";
+        var config       = db.PlayoffConfigs.FirstOrDefault(c => c.SeasonId == seasonId);
+        _scaleToFit      = config?.DisplayMode != "Scroll";
+        _tiebreakerBalls = config?.TiebreakerBalls ?? 1;
 
         var rawMatches = db.PlayoffMatches
             .Include(m => m.Team1).Include(m => m.Team2)
@@ -192,6 +194,12 @@ public class BracketVisualizationControl : UserControl
         foreach (var roundGroup in byRound)
             foreach (var m in roundGroup.OrderBy(x => x.Slot))
                 DrawMatch(g, m, positions[m.Id]);
+
+        // Footer note — tiebreaker rule
+        string footer = $"* Each match: 2 games. Tie (1–1) → tiebreaker, {_tiebreakerBalls} ball(s), winner scores 1 point.";
+        using var footerFont  = new Font(AppTheme.FontSmall.FontFamily, 7.5f, FontStyle.Italic);
+        using var footerBrush = new SolidBrush(AppTheme.TextMuted);
+        g.DrawString(footer, footerFont, footerBrush, new PointF(LeftPad, _naturalH - 24));
     }
 
     // ── Position computation ──────────────────────────────────────────────────

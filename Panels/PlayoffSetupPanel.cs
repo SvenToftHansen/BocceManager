@@ -16,8 +16,9 @@ public class PlayoffSetupPanel : UserControl
 
     // ── Controls ──────────────────────────────────────────────────────────────
 
-    private NumericUpDown _numMatchDuration = null!;
-    private ComboBox      _cboDisplayMode   = null!;
+    private NumericUpDown _numMatchDuration   = null!;
+    private NumericUpDown _numTiebreakerBalls = null!;
+    private ComboBox      _cboDisplayMode     = null!;
     private Label         _lblByeCount      = null!;
     private Label         _lblTeamCount     = null!;
     private DataGridView  _gridSeeding      = null!;
@@ -84,6 +85,16 @@ public class PlayoffSetupPanel : UserControl
         };
         _numMatchDuration.ValueChanged += (_, _) => RefreshPreview();
         inner.Controls.Add(_numMatchDuration);
+        y += 34;
+
+        AddLabel(inner, "Tiebreaker Balls:", 0, y);
+        _numTiebreakerBalls = new NumericUpDown
+        {
+            Location = new Point(200, y), Size = new Size(80, 28),
+            Minimum = 1, Maximum = 20, Value = 1,
+            Font = AppTheme.FontDefault, TextAlign = HorizontalAlignment.Center,
+        };
+        inner.Controls.Add(_numTiebreakerBalls);
         y += 34;
 
         AddLabel(inner, "Display Mode:", 0, y);
@@ -220,6 +231,7 @@ public class PlayoffSetupPanel : UserControl
         }
 
         _numMatchDuration.Value        = _config.MatchDurationMins;
+        _numTiebreakerBalls.Value      = _config.TiebreakerBalls;
         _cboDisplayMode.SelectedIndex  = _config.DisplayMode == "Scroll" ? 1 : 0;
 
         // Load teams
@@ -380,8 +392,9 @@ public class PlayoffSetupPanel : UserControl
             var cfg = db.PlayoffConfigs.Include(c => c.DayParams)
                 .First(c => c.Id == _config.Id);
 
-            cfg.MatchDurationMins = (int)_numMatchDuration.Value;
-            cfg.DisplayMode       = _cboDisplayMode.SelectedIndex == 1 ? "Scroll" : "ScaleToFit";
+            cfg.MatchDurationMins  = (int)_numMatchDuration.Value;
+            cfg.TiebreakerBalls    = (int)_numTiebreakerBalls.Value;
+            cfg.DisplayMode        = _cboDisplayMode.SelectedIndex == 1 ? "Scroll" : "ScaleToFit";
 
             // Save day params
             db.PlayoffDayParams.RemoveRange(cfg.DayParams);

@@ -6,6 +6,7 @@ public class PlayoffConfig
     public int      Id                       { get; set; }
     public int      SeasonId                 { get; set; }
     public int      MatchDurationMins        { get; set; } = 90;
+    public int      TiebreakerBalls          { get; set; } = 1;
     // ScaleToFit | Scroll
     public string   DisplayMode              { get; set; } = "ScaleToFit";
     public bool     IsGenerated              { get; set; } = false;

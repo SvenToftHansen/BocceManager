@@ -364,7 +364,15 @@ public static class PlayoffService
     /// <summary>
     /// Records scores for a match, determines winner, advances them to next round.
     /// </summary>
-    public static void SaveMatchScore(BocceDbContext db, int matchId, int team1GamesWon, int team2GamesWon)
+    /// <summary>
+    /// Saves scores for a 2-game playoff match plus optional tiebreaker.
+    /// tiebreakerWinner: 1 = team1, 2 = team2, null = no tiebreaker played.
+    /// Aggregate shown on bracket = sum of all game scores per team (tiebreaker adds 0 or 1).
+    /// </summary>
+    public static void SaveMatchScore(BocceDbContext db, int matchId,
+        int t1g1, int t2g1,
+        int t1g2, int t2g2,
+        int? tiebreakerWinner)
     {
         var match = db.PlayoffMatches
             .Include(m => m.Team1)
@@ -372,29 +380,35 @@ public static class PlayoffService
             .FirstOrDefault(m => m.Id == matchId)
             ?? throw new InvalidOperationException("Match not found.");
 
-        // Determine winner
+        // Determine winner from games won (each game won by higher scorer)
+        int t1wins = (t1g1 > t2g1 ? 1 : 0) + (t1g2 > t2g2 ? 1 : 0);
+        int t2wins = (t2g1 > t1g1 ? 1 : 0) + (t2g2 > t1g2 ? 1 : 0);
+
         int? winnerId;
-        if (team1GamesWon > team2GamesWon)       winnerId = match.Team1Id;
-        else if (team2GamesWon > team1GamesWon)  winnerId = match.Team2Id;
-        else                                     winnerId = null; // tie — leave unresolved
+        if      (t1wins > t2wins)         winnerId = match.Team1Id;
+        else if (t2wins > t1wins)         winnerId = match.Team2Id;
+        else if (tiebreakerWinner == 1)   winnerId = match.Team1Id;
+        else if (tiebreakerWinner == 2)   winnerId = match.Team2Id;
+        else                              winnerId = null; // tied, no tiebreaker yet
 
         match.WinnerId  = winnerId;
         match.Status    = winnerId.HasValue ? "completed" : "scheduled";
         match.EnteredAt = DateTime.UtcNow;
 
-        // Write individual game rows (replace existing)
-        var oldGames = db.PlayoffGames.Where(g => g.PlayoffMatchId == matchId).ToList();
-        db.PlayoffGames.RemoveRange(oldGames);
+        // Replace game rows
+        db.PlayoffGames.Where(g => g.PlayoffMatchId == matchId).ExecuteDelete();
 
-        // Store as two summary game records (games won each)
-        db.PlayoffGames.Add(new PlayoffGame
-        {
-            PlayoffMatchId = matchId,
-            GameNumber     = 1,
-            Team1Score     = team1GamesWon,
-            Team2Score     = team2GamesWon,
-            EnteredAt      = DateTime.UtcNow,
-        });
+        db.PlayoffGames.Add(new PlayoffGame { PlayoffMatchId = matchId, GameNumber = 1,
+            Team1Score = t1g1, Team2Score = t2g1, EnteredAt = DateTime.UtcNow });
+        db.PlayoffGames.Add(new PlayoffGame { PlayoffMatchId = matchId, GameNumber = 2,
+            Team1Score = t1g2, Team2Score = t2g2, EnteredAt = DateTime.UtcNow });
+
+        // Tiebreaker: stored as GameNumber 3 with 1/0 to indicate winner
+        if (tiebreakerWinner.HasValue)
+            db.PlayoffGames.Add(new PlayoffGame { PlayoffMatchId = matchId, GameNumber = 3,
+                Team1Score = tiebreakerWinner == 1 ? 1 : 0,
+                Team2Score = tiebreakerWinner == 2 ? 1 : 0,
+                EnteredAt  = DateTime.UtcNow });
 
         // Advance winner to next match
         if (winnerId.HasValue && match.NextMatchId.HasValue)
