@@ -395,13 +395,14 @@ public static class PlayoffService
             .FirstOrDefault(m => m.Id == matchId)
             ?? throw new InvalidOperationException("Match not found.");
 
-        // Determine winner from games won (each game won by higher scorer)
-        int t1wins = (t1g1 > t2g1 ? 1 : 0) + (t1g2 > t2g2 ? 1 : 0);
-        int t2wins = (t2g1 > t1g1 ? 1 : 0) + (t2g2 > t1g2 ? 1 : 0);
+        // Winner = higher total points across both games (e.g. 12+5=17 vs 6+12=18 → Team2 wins).
+        // Tie (both totals equal) requires a tiebreaker.
+        int t1total = t1g1 + t1g2;
+        int t2total = t2g1 + t2g2;
 
         int? winnerId;
-        if      (t1wins > t2wins)         winnerId = match.Team1Id;
-        else if (t2wins > t1wins)         winnerId = match.Team2Id;
+        if      (t1total > t2total)       winnerId = match.Team1Id;
+        else if (t2total > t1total)       winnerId = match.Team2Id;
         else if (tiebreakerWinner == 1)   winnerId = match.Team1Id;
         else if (tiebreakerWinner == 2)   winnerId = match.Team2Id;
         else                              winnerId = null; // tied, no tiebreaker yet

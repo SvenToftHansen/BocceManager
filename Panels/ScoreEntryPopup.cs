@@ -273,15 +273,25 @@ public class ScoreEntryPopup : Form
             return;
         }
 
-        int t1wins = (t1g1 > t2g1 ? 1 : 0) + (t1g2 > t2g2 ? 1 : 0);
-        int t2wins = (t2g1 > t1g1 ? 1 : 0) + (t2g2 > t1g2 ? 1 : 0);
-        bool tied  = t1wins == t2wins;
+        int t1total = t1g1.Value + t1g2.Value;
+        int t2total = t2g1.Value + t2g2.Value;
+        bool tied   = t1total == t2total;
 
         _rbTb1.Enabled = _rbTb2.Enabled = tied;
         if (!tied) { _rbTb1.Checked = _rbTb2.Checked = false; }
 
-        _lblTbInfo.Text      = tied ? "Tied 1–1 — select tiebreaker winner" : "No tiebreaker needed";
-        _lblTbInfo.ForeColor = tied ? Color.DarkOrange : AppTheme.TextMuted;
+        string totals = $"{_lblTeam1.Text}: {t1total}  –  {_lblTeam2.Text}: {t2total}";
+        if (tied)
+        {
+            _lblTbInfo.Text      = $"Tied {t1total}–{t2total} — select tiebreaker winner";
+            _lblTbInfo.ForeColor = Color.DarkOrange;
+        }
+        else
+        {
+            string leader = t1total > t2total ? _lblTeam1.Text : _lblTeam2.Text;
+            _lblTbInfo.Text      = $"{totals}  →  {leader} wins";
+            _lblTbInfo.ForeColor = AppTheme.TextMuted;
+        }
     }
 
     // ── Data load ─────────────────────────────────────────────────────────────
@@ -365,11 +375,10 @@ public class ScoreEntryPopup : Form
 
             int? tbWinner = _rbTb1.Checked ? 1 : _rbTb2.Checked ? 2 : null;
 
-            int t1wins = (t1g1 > t2g1 ? 1 : 0) + (t1g2 > t2g2 ? 1 : 0);
-            int t2wins = (t2g1 > t1g1 ? 1 : 0) + (t2g2 > t1g2 ? 1 : 0);
-            if (t1wins == t2wins && tbWinner == null)
+            // Winner = higher total points across both games
+            if (t1g1.Value + t1g2.Value == t2g1.Value + t2g2.Value && tbWinner == null)
             {
-                _lblStatus.Text      = "Teams tied — select a tiebreaker winner.";
+                _lblStatus.Text      = "Teams tied on total points — select a tiebreaker winner.";
                 _lblStatus.ForeColor = Color.DarkRed;
                 return;
             }
