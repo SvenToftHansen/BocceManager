@@ -26,6 +26,7 @@ public class PlayoffSetupPanel : UserControl
     private Label         _lblPreview       = null!;
     private Button        _btnGenerate      = null!;
     private Label         _lblStatus        = null!;
+    private FlowLayoutPanel _pnlCourts      = null!;
 
     public PlayoffSetupPanel()
     {
@@ -152,6 +153,22 @@ public class PlayoffSetupPanel : UserControl
         _gridDays.CellValueChanged += (_, _) => RefreshPreview();
         y += 170;
 
+        // ── Section: Playoff Courts ───────────────────────────────────────────
+        y = AddSectionHeader(inner, "Playoff Courts", y);
+
+        _pnlCourts = new FlowLayoutPanel
+        {
+            Location    = new Point(0, y),
+            Size        = new Size(680, 36),
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents  = false,
+            AutoSize      = true,
+            AutoSizeMode  = AutoSizeMode.GrowAndShrink,
+            BackColor     = AppTheme.ContentBackground,
+        };
+        inner.Controls.Add(_pnlCourts);
+        y += 46;
+
         // ── Section: Schedule Preview ─────────────────────────────────────────
         y = AddSectionHeader(inner, "Schedule Preview", y);
 
@@ -256,6 +273,7 @@ public class PlayoffSetupPanel : UserControl
 
         PopulateSeedingGrid(db, seasonId.Value, teamCount);
         PopulateDayGrid(teamCount, season.PlayoffStartDate);
+        PopulateCourtCheckboxes(db);
         RefreshPreview();
 
         _lblStatus.Text = _config.IsGenerated ? "Bracket already generated." : "";
@@ -360,6 +378,40 @@ public class PlayoffSetupPanel : UserControl
         }
     }
 
+    private void PopulateCourtCheckboxes(BocceDbContext db)
+    {
+        _pnlCourts.Controls.Clear();
+
+        // All active courts available in the system
+        var allCourts = db.Courts
+            .Where(c => c.IsActive)
+            .OrderBy(c => c.SortOrder)
+            .ToList();
+
+        // Courts already selected for this playoff
+        var selected = _config == null
+            ? new HashSet<int>()
+            : db.PlayoffCourts
+                .Where(pc => pc.PlayoffConfigId == _config.Id)
+                .Select(pc => pc.CourtId)
+                .ToHashSet();
+
+        foreach (var court in allCourts)
+        {
+            var chk = new CheckBox
+            {
+                Text      = $"Court {court.CourtNumber}",
+                Tag       = court.Id,
+                Checked   = selected.Contains(court.Id),
+                Font      = AppTheme.FontDefault,
+                ForeColor = AppTheme.TextPrimary,
+                AutoSize  = true,
+                Margin    = new Padding(0, 4, 16, 4),
+            };
+            _pnlCourts.Controls.Add(chk);
+        }
+    }
+
     private void RefreshPreview()
     {
         if (_seasonId == null) return;
@@ -375,7 +427,10 @@ public class PlayoffSetupPanel : UserControl
         if (!dayParams.Any()) { _lblPreview.Text = "Enter day parameters above."; return; }
 
         using var db2 = new BocceDbContext();
-        int courtCount = db2.SeasonCourts.Count(sc => sc.SeasonId == _seasonId.Value);
+        // Use checked playoff courts; fall back to season courts if none checked yet
+        int courtCount = _pnlCourts.Controls.OfType<CheckBox>().Count(c => c.Checked);
+        if (courtCount == 0)
+            courtCount = db2.SeasonCourts.Count(sc => sc.SeasonId == _seasonId.Value);
 
         var schedule = PlayoffService.ComputeRoundSchedule(
             teamCount, (int)_numMatchDuration.Value, dayParams, Math.Max(1, courtCount));
@@ -410,6 +465,18 @@ public class PlayoffSetupPanel : UserControl
             db.PlayoffDayParams.RemoveRange(cfg.DayParams);
             foreach (var dp in ParseDayGrid())
                 cfg.DayParams.Add(dp);
+
+            // Save playoff court selections
+            db.PlayoffCourts.Where(pc => pc.PlayoffConfigId == _config.Id).ExecuteDelete();
+            int sortOrder = 0;
+            foreach (Control ctrl in _pnlCourts.Controls)
+            {
+                if (ctrl is CheckBox chk && chk.Checked && chk.Tag is int courtId)
+                    db.PlayoffCourts.Add(new PlayoffCourt
+                    {
+                        PlayoffConfigId = _config.Id, CourtId = courtId, SortOrder = sortOrder++
+                    });
+            }
 
             // Save seedings
             db.PlayoffSeedings.Where(s => s.SeasonId == _seasonId.Value).ExecuteDelete();

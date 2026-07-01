@@ -129,12 +129,21 @@ public static class PlayoffService
         int teamCount = season.TeamsInPlayoffs;
         if (teamCount < 2) throw new InvalidOperationException("Need at least 2 playoff teams.");
 
-        var courts = db.SeasonCourts
-            .Where(sc => sc.SeasonId == seasonId)
-            .Include(sc => sc.Court)
-            .Select(sc => sc.Court)
-            .OrderBy(c => c.SortOrder)
+        // Use playoff-specific courts if configured; fall back to season courts.
+        var courts = db.PlayoffCourts
+            .Where(pc => pc.PlayoffConfigId == config.Id)
+            .Include(pc => pc.Court)
+            .OrderBy(pc => pc.SortOrder)
+            .Select(pc => pc.Court)
             .ToList();
+
+        if (courts.Count == 0)
+            courts = db.SeasonCourts
+                .Where(sc => sc.SeasonId == seasonId)
+                .Include(sc => sc.Court)
+                .Select(sc => sc.Court)
+                .OrderBy(c => c.SortOrder)
+                .ToList();
 
         var schedule = ComputeRoundSchedule(
             teamCount,
