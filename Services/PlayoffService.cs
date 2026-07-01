@@ -205,17 +205,33 @@ public static class PlayoffService
         // Build each round from second-to-last back to first
         for (int r = totalRounds - 1; r >= 1; r--)
         {
+            int childCount  = GetGamesInRound(teamCount, r);
+            if (childCount <= 0) childCount = 1;
             int parentCount = matchSlots[r + 1].Length;
-            int childCount  = parentCount * 2;
             matchSlots[r]   = new PlayoffMatch[childCount];
 
             var roundRow = rounds.ContainsKey(r) ? rounds[r] : null;
 
             for (int slot = 0; slot < childCount; slot++)
             {
-                int parentSlot    = slot / 2;
-                bool isTopOfParent = slot % 2 == 0;
-                var parent        = matchSlots[r + 1][parentSlot];
+                int  parentSlot;
+                bool isTopOfParent;
+
+                if (childCount == parentCount)
+                {
+                    // Bye-entry transition (e.g. 12-team R1→R2): same number of games.
+                    // Each R2 match already has a bye in the top slot; R1 winner fills bottom.
+                    parentSlot    = slot;
+                    isTopOfParent = false;
+                }
+                else
+                {
+                    // Normal doubling: 2 children per parent match.
+                    parentSlot    = slot / 2;
+                    isTopOfParent = slot % 2 == 0;
+                }
+
+                var parent = matchSlots[r + 1][parentSlot];
 
                 var match = new PlayoffMatch
                 {
@@ -343,23 +359,19 @@ public static class PlayoffService
     // Bye 4 (strongest opp): R1 match is (byeCount+1) v (byeCount+half+1)
     private static List<(int top, int bot)> BuildNonByePairs(int teamCount, int byeCount, List<int> byeOrder)
     {
-        // Non-bye seeds: byeCount+1 .. teamCount
-        // Pair them top vs bottom within the non-bye group
-        // The pairing matches the bye order so each bye faces the right opponent
+        // Non-bye seeds byeCount+1..teamCount paired strongest-first:
+        // e.g. 12 teams → [(5,12),(6,11),(7,10),(8,9)]
         int lo = byeCount + 1;
         int hi = teamCount;
-        int n  = (hi - lo + 1) / 2; // number of R1 games
+        int n  = (hi - lo + 1) / 2;
         var pairs = new List<(int, int)>();
         for (int i = 0; i < n; i++)
             pairs.Add((lo + i, hi - i));
 
-        // Reorder pairs to align with byeOrder:
-        // bye order gives: bye 1 → weakest R1 winner → pair with seeds closest to middle
-        // For 12 teams: pairs = (5,12),(6,11),(7,10),(8,9); bye order = 1,4,3,2
-        // Bye 1 wants weakest → pair (8,9); Bye 4 wants strongest → pair (5,12)
-        // So reverse the pairs list for correct alignment with byeOrder
-        pairs.Reverse();
-        return pairs;
+        // Map each bye slot to its correct R1 pair by bye-seed strength:
+        //   bye seed s → pairs[byeCount - s]  (bye1 weakest opp → last pair; bye4 strongest → first)
+        // e.g. byeOrder=[1,4,3,2] → indices [3,0,1,2] → [(8,9),(5,12),(6,11),(7,10)]
+        return byeOrder.Select(s => pairs[byeCount - s]).ToList();
     }
 
     // ── Winner advancement ────────────────────────────────────────────────────
