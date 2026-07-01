@@ -76,9 +76,12 @@ public class BocceDbContext : DbContext
     public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
 
     // Playoffs
-    public DbSet<PlayoffRound> PlayoffRounds => Set<PlayoffRound>();
-    public DbSet<PlayoffMatch> PlayoffMatches => Set<PlayoffMatch>();
-    public DbSet<PlayoffGame> PlayoffGames => Set<PlayoffGame>();
+    public DbSet<PlayoffConfig>    PlayoffConfigs   => Set<PlayoffConfig>();
+    public DbSet<PlayoffDayParams> PlayoffDayParams => Set<PlayoffDayParams>();
+    public DbSet<PlayoffSeeding>   PlayoffSeedings  => Set<PlayoffSeeding>();
+    public DbSet<PlayoffRound>     PlayoffRounds    => Set<PlayoffRound>();
+    public DbSet<PlayoffMatch>     PlayoffMatches   => Set<PlayoffMatch>();
+    public DbSet<PlayoffGame>      PlayoffGames     => Set<PlayoffGame>();
 
     // Documents
     public DbSet<ClubDocument> ClubDocuments => Set<ClubDocument>();
@@ -239,7 +242,19 @@ model.Entity<SeasonCourt>().HasIndex(e => new { e.SeasonId, e.CourtId }).IsUniqu
             .HasOne(e => e.CreatedPlayer).WithMany()
             .HasForeignKey(e => e.CreatedPlayerId).OnDelete(DeleteBehavior.SetNull);
 
-        // PlayoffMatch: three FKs to Team
+        // PlayoffConfig: one per season
+        model.Entity<PlayoffConfig>()
+            .HasOne(e => e.Season).WithMany()
+            .HasForeignKey(e => e.SeasonId).OnDelete(DeleteBehavior.Cascade);
+
+        // PlayoffSeeding: unique seed per season
+        model.Entity<PlayoffSeeding>()
+            .HasIndex(e => new { e.SeasonId, e.Seed }).IsUnique();
+        model.Entity<PlayoffSeeding>()
+            .HasOne(e => e.Team).WithMany()
+            .HasForeignKey(e => e.TeamId).OnDelete(DeleteBehavior.Restrict);
+
+        // PlayoffMatch: three FKs to Team + self-ref NextMatch
         model.Entity<PlayoffMatch>()
             .HasOne(e => e.Team1).WithMany()
             .HasForeignKey(e => e.Team1Id).OnDelete(DeleteBehavior.Restrict);
@@ -249,6 +264,9 @@ model.Entity<SeasonCourt>().HasIndex(e => new { e.SeasonId, e.CourtId }).IsUniqu
         model.Entity<PlayoffMatch>()
             .HasOne(e => e.Winner).WithMany()
             .HasForeignKey(e => e.WinnerId).OnDelete(DeleteBehavior.Restrict);
+        model.Entity<PlayoffMatch>()
+            .HasOne(e => e.NextMatch).WithMany()
+            .HasForeignKey(e => e.NextMatchId).OnDelete(DeleteBehavior.SetNull);
 
         // Views
         model.Entity<Stats>()        .ToView("Stats")      .HasNoKey();
