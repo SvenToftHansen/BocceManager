@@ -15,17 +15,20 @@ public class BracketVisualizationControl : UserControl
 {
     // ── Layout constants (unscaled) ───────────────────────────────────────────
 
-    private const int ColWidth     = 220;  // horizontal distance between rounds
-    private const int TeamBoxH     = 28;   // height of one team name row
-    private const int ScoreBoxW    = 40;   // width of score area beside team name
-    private const int TeamNameW    = 160;  // width of team name area
-    private const int GameBoxH     = 36;   // height of the court/time info box
-    private const int MatchH       = TeamBoxH + GameBoxH + TeamBoxH; // total match height
-    private const int MatchVGap    = 20;   // vertical gap between matches in same round
-    private const int ByeLabelH    = 18;   // "Bye N" label above bye team
-    private const int SectionVGap  = 40;   // gap between bracket sections
-    private const int LeftPad      = 30;
-    private const int TopPad       = 50;
+    private const int ColWidth    = 170;  // horizontal gap between rounds (for connectors)
+    private const int TeamBoxH    = 34;   // height of one team name row
+    private const int ScoreBoxW   = 56;   // width of aggregate score area (fits "24")
+    private const int TeamNameW   = 148;  // width of team name area
+    private const int GameBoxH    = 24;   // court/time info box — 2 lines of 7pt text
+    private const int MatchH      = TeamBoxH + GameBoxH + TeamBoxH;
+    private const int MatchVGap   = 4;    // minimal gap between matches in same round
+    private const int ByeLabelH   = 14;   // "Bye N" label above bye team
+    private const int LeftPad     = 20;
+    private const int TopPad      = 24;
+
+    private const float ScoreFontSize    = 12f;   // aggregate score — large and bold
+    private const float TeamNameFontSize = 9f;
+    private const float InfoFontSize     = 7f;    // court/time info
 
     // ── Data ──────────────────────────────────────────────────────────────────
 
@@ -129,8 +132,11 @@ public class BracketVisualizationControl : UserControl
     private void ComputeNaturalSize()
     {
         if (_totalRounds == 0) { _naturalW = 400; _naturalH = 200; return; }
-        _naturalW = LeftPad + _totalRounds * (ColWidth + TeamNameW + ScoreBoxW) + 60;
-        _naturalH = TopPad + TotalSlots() * (MatchH + MatchVGap) + SectionVGap * 4 + 40;
+        // Width: leftPad + each round's box width + (rounds-1) gaps between rounds + right pad
+        _naturalW = LeftPad + _totalRounds * (TeamNameW + ScoreBoxW)
+                  + (_totalRounds - 1) * ColWidth + 40;
+        // Height: top pad + all slots × (match height + gap) + footer space
+        _naturalH = TopPad + TotalSlots() * (MatchH + MatchVGap) + 40;
     }
 
     private int TotalSlots() => (int)Math.Pow(2, _totalRounds - 1);
@@ -321,26 +327,27 @@ public class BracketVisualizationControl : UserControl
         using var borderPen = new Pen(Color.FromArgb(200, 200, 200), 1f);
         g.DrawRectangle(borderPen, x, y, TeamNameW + ScoreBoxW, TeamBoxH);
 
-        // Team name — always create a new Font so using{} owns it (never dispose shared AppTheme fonts)
-        using var nameFont  = new Font(AppTheme.FontDefault.FontFamily, AppTheme.FontDefault.Size,
+        // Team name
+        using var nameFont  = new Font(AppTheme.FontDefault.FontFamily, TeamNameFontSize,
                                        isWinner ? FontStyle.Bold : FontStyle.Regular);
         using var textBrush = new SolidBrush(AppTheme.TextPrimary);
         g.DrawString(name ?? "TBD", nameFont, textBrush,
-            new RectangleF(x + 4, y + 4, TeamNameW - 8, TeamBoxH - 6));
+            new RectangleF(x + 3, y + 2, TeamNameW - 6, TeamBoxH - 4));
 
-        // Score box
+        // Score box — larger font, prominent
         int sx = x + TeamNameW;
-        using var scoreBg = new SolidBrush(Color.FromArgb(245, 245, 245));
+        var scoreBgColor = isWinner ? Color.FromArgb(210, 235, 210) : Color.FromArgb(242, 242, 248);
+        using var scoreBg = new SolidBrush(scoreBgColor);
         g.FillRectangle(scoreBg, sx, y, ScoreBoxW, TeamBoxH);
-        using var scoreBorder = new Pen(Color.FromArgb(180, 180, 180), 1f);
+        using var scoreBorder = new Pen(Color.FromArgb(160, 160, 180), 1f);
         g.DrawRectangle(scoreBorder, sx, y, ScoreBoxW, TeamBoxH);
 
         if (score.HasValue)
         {
-            using var scoreFont = new Font(AppTheme.FontDefault.FontFamily, AppTheme.FontDefault.Size, FontStyle.Bold);
-            using var scoreBrush = new SolidBrush(AppTheme.TextPrimary);
-            var scoreRect = new RectangleF(sx, y + 2, ScoreBoxW, TeamBoxH - 4);
-            var fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+            using var scoreFont  = new Font(AppTheme.FontDefault.FontFamily, ScoreFontSize, FontStyle.Bold);
+            using var scoreBrush = new SolidBrush(isWinner ? Color.FromArgb(30, 100, 30) : AppTheme.TextPrimary);
+            var scoreRect = new RectangleF(sx, y + 1, ScoreBoxW, TeamBoxH - 2);
+            using var fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
             g.DrawString(score.Value.ToString(), scoreFont, scoreBrush, scoreRect, fmt);
         }
     }
@@ -352,19 +359,57 @@ public class BracketVisualizationControl : UserControl
         using var borderPen = new Pen(Color.FromArgb(180, 190, 210), 1f);
         g.DrawRectangle(borderPen, x, y, TeamNameW + ScoreBoxW, GameBoxH);
 
+        // Combine court + day/time onto one or two compact lines
         string line1 = m.CourtName ?? "";
         string line2 = "";
         if (m.Date.HasValue && m.Time.HasValue)
-            line2 = $"{m.Date:ddd} @ {m.Time:h:mm tt}";
+            line2 = $"{m.Date:ddd} {m.Time:HHmm}";
         else if (m.Date.HasValue)
             line2 = m.Date.Value.ToString("ddd MMM d");
 
-        using var infoFont  = new Font(AppTheme.FontSmall.FontFamily, 7.5f, FontStyle.Regular);
-        using var infoBrush = new SolidBrush(Color.FromArgb(60, 80, 120));
-        var rect = new RectangleF(x + 2, y + 2, TeamNameW + ScoreBoxW - 4, GameBoxH - 4);
-        var fmt  = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Near };
-        g.DrawString(line1 + (line1.Length > 0 && line2.Length > 0 ? "\n" : "") + line2,
-            infoFont, infoBrush, rect, fmt);
+        string infoText = line1.Length > 0 && line2.Length > 0
+            ? $"{line1}  {line2}"   // single line when both present — saves vertical space
+            : line1.Length > 0 ? line1 : line2;
+
+        using var infoFont  = new Font(AppTheme.FontSmall.FontFamily, InfoFontSize, FontStyle.Regular);
+        using var infoBrush = new SolidBrush(Color.FromArgb(50, 70, 110));
+        using var fmt       = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+        g.DrawString(infoText, infoFont, infoBrush,
+            new RectangleF(x + 2, y, TeamNameW + ScoreBoxW - 4, GameBoxH), fmt);
+    }
+
+    // ── Public print API — vector-quality direct render ───────────────────────
+
+    /// <summary>
+    /// Renders the bracket directly onto <paramref name="g"/> scaled to fit
+    /// <paramref name="bounds"/>. Use this for printing instead of DrawToBitmap.
+    /// </summary>
+    public void DrawTo(Graphics g, RectangleF bounds)
+    {
+        if (_matches.Count == 0) return;
+
+        float scale = Math.Min(bounds.Width  / Math.Max(1f, _naturalW),
+                               bounds.Height / Math.Max(1f, _naturalH));
+
+        var state = g.Save();
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        g.TranslateTransform(bounds.Left, bounds.Top);
+        g.ScaleTransform(scale, scale);
+
+        var byRound   = _matches.GroupBy(m => m.Round).OrderBy(gr => gr.Key).ToList();
+        var positions = ComputePositions(byRound);
+
+        DrawConnectors(g, byRound, positions);
+        foreach (var rg in byRound)
+            foreach (var m in rg.OrderBy(x => x.Slot))
+                DrawMatch(g, m, positions[m.Id]);
+
+        string footer = $"* Each match: 2 games. Tie → tiebreaker ({_tiebreakerBalls} ball(s)), winner scores 1 point.";
+        using var fFont  = new Font(AppTheme.FontSmall.FontFamily, InfoFontSize, FontStyle.Italic);
+        using var fBrush = new SolidBrush(AppTheme.TextMuted);
+        g.DrawString(footer, fFont, fBrush, new PointF(LeftPad, _naturalH - 16));
+
+        g.Restore(state);
     }
 
     // ── Click handling (opens score entry) ───────────────────────────────────

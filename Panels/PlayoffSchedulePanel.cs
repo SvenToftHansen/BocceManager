@@ -225,43 +225,77 @@ public class PlayoffSchedulePanel : UserControl
         if (!db.PlayoffConfigs.Any(c => c.SeasonId == _seasonId.Value && c.IsGenerated))
         { _lblStatus.Text = "No bracket to print."; return; }
 
-        int page = 0;
-        var pd   = new PrintDocument { DocumentName = "Playoff Schedule" };
+        var pd = new PrintDocument { DocumentName = "Playoff Schedule" };
         pd.DefaultPageSettings.Landscape = true;
-        pd.BeginPrint += (_, _) => page = 0;
-        pd.PrintPage  += (_, pe) =>
+
+        // Try to fit everything on one page; fall back to 2 pages if bracket is too small
+        bool twoPage    = false;
+        bool firstPage  = true;
+        pd.BeginPrint  += (_, _) => { twoPage = false; firstPage = true; };
+        pd.PrintPage   += (_, pe) =>
         {
-            if (page == 0) { DrawTextPage(pe.Graphics!, pe.MarginBounds); pe.HasMorePages = true; }
-            else           { DrawBracketPage(pe.Graphics!, pe.MarginBounds); pe.HasMorePages = false; }
-            page++;
+            var b = pe.MarginBounds;
+            if (firstPage)
+            {
+                // Measure how much vertical space the text table needs
+                float tableH = MeasureTableHeight(b);
+                float bracketH = b.Height - tableH - 8;
+
+                if (bracketH / b.Height >= 0.40f)
+                {
+                    // Enough room — draw both on one page
+                    DrawTextTable(pe.Graphics!, new RectangleF(b.Left, b.Top, b.Width, tableH));
+                    _bracket.DrawTo(pe.Graphics!,
+                        new RectangleF(b.Left, b.Top + tableH + 8, b.Width, bracketH));
+                    pe.HasMorePages = false;
+                }
+                else
+                {
+                    // Not enough room — text on page 1, bracket on page 2
+                    twoPage = true;
+                    DrawTextTable(pe.Graphics!, b);
+                    pe.HasMorePages = true;
+                }
+                firstPage = false;
+            }
+            else
+            {
+                _bracket.DrawTo(pe.Graphics!, b);
+                pe.HasMorePages = false;
+            }
         };
 
         PrintPreviewService.ShowPrintPreview(this, pd);
     }
 
-    // Page 1: text schedule table
-    private void DrawTextPage(Graphics g, RectangleF bounds)
+    // Returns approximate height needed for the schedule table
+    private float MeasureTableHeight(RectangleF bounds) =>
+        20f                          // title
+        + 16f                        // header row
+        + _grid.Rows.Count * 15f     // data rows at compact 15pt height
+        + 6f;                        // gap
+
+    // Draws the compact text schedule table into the given bounds
+    private void DrawTextTable(Graphics g, RectangleF bounds)
     {
-        using var titleFont = new Font("Segoe UI", 12f, FontStyle.Bold);
-        using var hdrFont   = new Font("Segoe UI",  8f, FontStyle.Bold);
-        using var rowFont   = new Font("Segoe UI",  8f, FontStyle.Regular);
+        using var titleFont = new Font("Segoe UI", 10f, FontStyle.Bold);
+        using var hdrFont   = new Font("Segoe UI",  7f, FontStyle.Bold);
+        using var rowFont   = new Font("Segoe UI",  7f, FontStyle.Regular);
         using var blackBr   = new SolidBrush(Color.Black);
         using var hdrBr     = new SolidBrush(Color.FromArgb(35, 55, 80));
         using var whiteBr   = new SolidBrush(Color.White);
         using var altBr     = new SolidBrush(Color.FromArgb(240, 244, 250));
-        using var linePen   = new Pen(Color.FromArgb(180, 180, 180), 0.5f);
-        var ctr = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-        var lft = new StringFormat { Alignment = StringAlignment.Near,   LineAlignment = StringAlignment.Center };
+        using var linePen   = new Pen(Color.FromArgb(200, 200, 200), 0.5f);
+        using var lft       = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center };
 
         float y = bounds.Top;
         g.DrawString("Playoff Schedule", titleFont, blackBr, new PointF(bounds.Left, y));
-        y += 24;
+        y += 20f;
 
-        float[] widths = [90, 45, 140, 140, 60, 80, 60, 70, 60];
+        float[] widths  = [90, 38, 130, 130, 55, 72, 48, 58, 55];
         string[] headers = ["Round", "Game", "Top Team", "Bot Team", "Court", "Date", "Time", "Score", "Status"];
-        float rowH = 18f;
+        float rowH = 15f;
 
-        // Header row
         float x = bounds.Left;
         for (int i = 0; i < headers.Length; i++)
         {
@@ -271,9 +305,9 @@ public class PlayoffSchedulePanel : UserControl
         }
         y += rowH;
 
-        // Data rows
         for (int ri = 0; ri < _grid.Rows.Count; ri++)
         {
+            if (y + rowH > bounds.Bottom) break;
             var row = _grid.Rows[ri];
             if (ri % 2 == 1) g.FillRectangle(altBr, bounds.Left, y, widths.Sum(), rowH);
             x = bounds.Left;
@@ -283,26 +317,9 @@ public class PlayoffSchedulePanel : UserControl
                 g.DrawString(val, rowFont, blackBr, new RectangleF(x + 2, y, widths[ci] - 4, rowH), lft);
                 x += widths[ci];
             }
-            g.DrawLine(linePen, bounds.Left, y + rowH, x, y + rowH);
+            g.DrawLine(linePen, bounds.Left, y + rowH, bounds.Left + widths.Sum(), y + rowH);
             y += rowH;
-            if (y + rowH > bounds.Bottom) break;
         }
-
-        ctr.Dispose(); lft.Dispose();
-    }
-
-    // Page 2: bracket visual rendered to bitmap then scaled to page
-    private void DrawBracketPage(Graphics g, RectangleF bounds)
-    {
-        if (_bracket.Width <= 0 || _bracket.Height <= 0) return;
-
-        using var bmp = new Bitmap(_bracket.Width, _bracket.Height);
-        _bracket.DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
-
-        float scale = Math.Min(bounds.Width / bmp.Width, bounds.Height / bmp.Height);
-        float w = bmp.Width * scale;
-        float h = bmp.Height * scale;
-        g.DrawImage(bmp, bounds.Left, bounds.Top, w, h);
     }
 
     // ── Grid column helper ────────────────────────────────────────────────────
