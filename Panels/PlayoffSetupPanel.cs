@@ -233,7 +233,7 @@ public class PlayoffSetupPanel : UserControl
             .ToList();
 
         PopulateSeedingGrid(db, seasonId.Value, teamCount);
-        PopulateDayGrid(teamCount);
+        PopulateDayGrid(teamCount, season.PlayoffStartDate);
         RefreshPreview();
 
         _lblStatus.Text = _config.IsGenerated ? "Bracket already generated." : "";
@@ -309,12 +309,10 @@ public class PlayoffSetupPanel : UserControl
         _lblStatus.Text = "Seedings reloaded from standings.";
     }
 
-    private void PopulateDayGrid(int teamCount)
+    private void PopulateDayGrid(int teamCount, DateOnly? playoffStartDate)
     {
         int totalRounds = PlayoffService.GetRoundCount(teamCount);
-
-        // Ensure enough day rows for all rounds (estimate 2 rounds per day)
-        int daysNeeded = (int)Math.Ceiling(totalRounds / 2.0);
+        int daysNeeded  = (int)Math.Ceiling(totalRounds / 2.0);
 
         _gridDays.Rows.Clear();
 
@@ -323,9 +321,16 @@ public class PlayoffSetupPanel : UserControl
         for (int d = 1; d <= Math.Max(daysNeeded, existing.Count); d++)
         {
             var dp = existing.FirstOrDefault(x => x.DayNumber == d);
+
+            // Default date: saved value, or PlayoffStartDate + (d-1) days, or blank
+            string dateStr = dp?.GameDate.ToString("yyyy-MM-dd")
+                ?? (playoffStartDate.HasValue
+                    ? playoffStartDate.Value.AddDays(d - 1).ToString("yyyy-MM-dd")
+                    : "");
+
             _gridDays.Rows.Add(
                 d.ToString(),
-                dp?.GameDate.ToString("yyyy-MM-dd") ?? "",
+                dateStr,
                 dp?.StartTime.ToString("HH:mm") ?? "08:30",
                 dp?.EndTime.ToString("HH:mm")   ?? "18:00",
                 dp?.DurationBetweenRoundsMins.ToString() ?? "30"
