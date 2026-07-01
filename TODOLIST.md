@@ -21,6 +21,7 @@ _Generated 2026-06-15 from TODO.md, memory files, and app state analysis_
 - [ ] **Standings Panel** — Calculated standings per division
   - Sort: StandingsPoints DESC → PlusMinus DESC → Wins DESC
   - Show DivisionRank and PlayoffSeed
+  - Consider replacing week-range NumericUpDown spinners with plain TextBox fields (~20 lines, see StandingsPanel.cs:106–142)
 
 - [ ] **Playoffs Panel** — Bracket/ladder management and results
   - Playoff types: ladder or round_robin

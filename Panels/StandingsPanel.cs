@@ -16,6 +16,7 @@ public class StandingsPanel : UserControl
     private bool   _firstPlaceGuaranteed;
     private int    _teamsInPlayoffs;
     private int    _maxWeek;                        // last week that has any scores
+    private bool   _seasonComplete;                  // all weeks played (maxWeek >= WeeksInSeason)
     private bool   _suppressWeekRefresh;
 
     // Structural data — loaded once per season; stable across week-range changes
@@ -175,7 +176,7 @@ public class StandingsPanel : UserControl
         _allDivPage = null; _seedPage = null; _allDivPanel = null;
         _timeCols = []; _timeColDivs = []; _teamColWidths = [];
         _divFilterItems.Clear(); _filteredDivIds = null;
-        _allDivisions = []; _currentRows = []; _maxWeek = 0;
+        _allDivisions = []; _currentRows = []; _maxWeek = 0; _seasonComplete = false;
         _lblStatus.Text = "";
         _btnFilter.Text = "All Divisions ▼";
         _btnFilter.Visible = true;
@@ -202,6 +203,8 @@ public class StandingsPanel : UserControl
                 .Max(s => (int?)s.WeekId) ?? 0);
 
             if (_maxWeek == 0) { _lblStatus.Text = "No scores entered yet."; return; }
+
+            _seasonComplete = season.WeeksInSeason > 0 && _maxWeek >= season.WeeksInSeason;
 
             // Set spinner range and default (1 → last scored week)
             _numFrom.Maximum = _maxWeek;
@@ -260,7 +263,7 @@ public class StandingsPanel : UserControl
                         .Where(x => tcDivIds.Contains(x.DivisionId))
                         .Select(x => Mw(x.TeamName))
                         .DefaultIfEmpty(0).Max();
-                    return Math.Max(Mw("Team"), maxW);
+                    return (int)(Math.Max(Mw("Team"), maxW) * 1.5);
                 }).ToArray();
             }
 
@@ -334,6 +337,7 @@ public class StandingsPanel : UserControl
 
     private void ResetWeekRange()
     {
+        if (_maxWeek == 0) return;
         _suppressWeekRefresh = true;
         _numFrom.Value = 1;
         _numTo.Value   = _maxWeek;
@@ -547,7 +551,9 @@ public class StandingsPanel : UserControl
 
         foreach (var r in rows)
         {
-            var vals = new List<object?> { r.TeamName, r.SeasonSeed, _isGamesMode ? r.GamesPlayed : r.MatchesPlayed, r.Wins };
+            string teamDisplay = _teamsInPlayoffs > 0 && r.SeasonSeed > 0 && r.SeasonSeed <= _teamsInPlayoffs
+                ? $"{(_seasonComplete ? "✓" : "*")} {r.TeamName}" : r.TeamName;
+            var vals = new List<object?> { teamDisplay, r.SeasonSeed, _isGamesMode ? r.GamesPlayed : r.MatchesPlayed, r.Wins };
             if (!_isGamesMode) vals.Add(r.Ties);
             vals.Add(r.Losses); vals.Add(r.Forfeits);
             vals.Add(r.StandingsPoints); vals.Add(PmStr(r.PlusMinus));
@@ -587,14 +593,14 @@ public class StandingsPanel : UserControl
 
         var seedRows = _currentRows.OrderBy(r => r.SeasonSeed).ToList();
         var divNames = _allDivisions.ToDictionary(d => d.Id, d => d.Name);
-        var panel    = BuildSeasonSeedSplitPanel(seedRows, divNames, _teamsInPlayoffs, _isGamesMode);
+        var panel    = BuildSeasonSeedSplitPanel(seedRows, divNames, _teamsInPlayoffs, _isGamesMode, _seasonComplete);
         panel.Dock = DockStyle.Fill;
         _seedPage.Controls.Add(panel);
     }
 
     private static SplitContainer BuildSeasonSeedSplitPanel(
         List<StandingView> rows, Dictionary<int, string> divNames,
-        int teamsInPlayoffs, bool isGamesMode)
+        int teamsInPlayoffs, bool isGamesMode, bool seasonComplete)
     {
         int leftN = (rows.Count + 1) / 2;
 
@@ -623,8 +629,8 @@ public class StandingsPanel : UserControl
         sc.HandleCreated += (_, _) => Apply();
         sc.SizeChanged   += (_, _) => Apply();
 
-        var leftGrid  = BuildSeasonSeedGrid(rows.Take(leftN).ToList(),  divNames, teamsInPlayoffs, isGamesMode, teamW);
-        var rightGrid = BuildSeasonSeedGrid(rows.Skip(leftN).ToList(),  divNames, teamsInPlayoffs, isGamesMode, teamW);
+        var leftGrid  = BuildSeasonSeedGrid(rows.Take(leftN).ToList(),  divNames, teamsInPlayoffs, isGamesMode, teamW, seasonComplete);
+        var rightGrid = BuildSeasonSeedGrid(rows.Skip(leftN).ToList(),  divNames, teamsInPlayoffs, isGamesMode, teamW, seasonComplete);
         leftGrid.Dock = DockStyle.Fill; rightGrid.Dock = DockStyle.Fill;
         sc.Panel1.BackColor = AppTheme.ContentBackground;
         sc.Panel2.BackColor = AppTheme.ContentBackground;
@@ -635,7 +641,7 @@ public class StandingsPanel : UserControl
 
     private static DataGridView BuildSeasonSeedGrid(
         List<StandingView> rows, Dictionary<int, string> divNames,
-        int teamsInPlayoffs, bool isGamesMode, int teamW = 155)
+        int teamsInPlayoffs, bool isGamesMode, int teamW = 155, bool seasonComplete = false)
     {
         var grid = MakeGrid();
         grid.Columns.AddRange(
@@ -653,6 +659,8 @@ public class StandingsPanel : UserControl
             Col("L", "L", 44, mid: true, tip: "Losses"),
             Col("F", "F", 44, mid: true, tip: "Forfeits")
         );
+        if (teamsInPlayoffs > 0)
+            grid.Columns.Add(Col("PO", "✓", 38, mid: true, tip: "Qualifying for playoffs"));
 
         for (int i = 0; i < rows.Count; i++)
         {
@@ -665,6 +673,8 @@ public class StandingsPanel : UserControl
             };
             if (!isGamesMode) vals.Add(r.Ties);
             vals.Add(r.Losses); vals.Add(r.Forfeits);
+            if (teamsInPlayoffs > 0)
+                vals.Add(r.SeasonSeed <= teamsInPlayoffs ? (seasonComplete ? "✓" : "*") : "");
 
             int idx = grid.Rows.Add(vals.Cast<object>().ToArray());
             ApplyRowStyle(grid.Rows[idx], i);

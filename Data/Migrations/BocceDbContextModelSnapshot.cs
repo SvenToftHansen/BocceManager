@@ -1539,6 +1539,12 @@ namespace BocceManager.Data.Migrations
                     b.Property<int>("GamesPlayed")
                         .HasColumnType("integer");
 
+                    b.Property<int>("H2HPlusMinus")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("H2HWins")
+                        .HasColumnType("integer");
+
                     b.Property<int>("LeagueId")
                         .HasColumnType("integer");
 

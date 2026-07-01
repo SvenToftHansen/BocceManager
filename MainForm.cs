@@ -13,7 +13,8 @@ public partial class MainForm : Form
         Leagues, Seasons, Divisions,
         Players, Teams, TeamApplicants, LookingForTeam,
         ScoreEntry, Schedule,
-        Standings, Playoffs, ReportTeamListing, ReportScheduleGeneric, ReportSpareLists,
+        Standings, Playoffs, PlayoffScoreEntry, PlayoffSchedule, PlayoffStandings,
+        ReportTeamListing, ReportScheduleGeneric, ReportSpareLists,
         SpareLists, Announcements, Fees, EmailLists, EmailCompose, EmailHistory, Documents, Parameters, Courts, Utilities, Theme
     }
 
@@ -30,7 +31,7 @@ public partial class MainForm : Form
     {
         InitializeComponent();
         BuildNavigation();
-        if (_navGroups.Count > 0) ToggleGroup(0);  // open LEAGUE group on startup
+        if (_navGroups.Count > 0) ToggleGroup(0);  // open CLUB group on startup
         SetupTopBarInteraction();
         AppParameterService.DefaultsChanged += OnDefaultsChanged;
         FormClosed += OnMainFormClosed;
@@ -290,7 +291,7 @@ public partial class MainForm : Form
 
         AddStandaloneItem("Dashboard", NavSection.Dashboard);
 
-        AddGroup("LEAGUE", add => {
+        AddGroup("CLUB", add => {
             add("Leagues",   NavSection.Leagues);
             add("Seasons",   NavSection.Seasons);
             add("Divisions", NavSection.Divisions);
@@ -304,14 +305,19 @@ public partial class MainForm : Form
             add("Looking For Team", NavSection.LookingForTeam);
         });
 
-        AddGroup("OPERATIONS", add => {
+        AddGroup("LEAGUE", add => {
             add("Score Entry", NavSection.ScoreEntry);
             add("Schedule",    NavSection.Schedule);
             add("Standings",   NavSection.Standings);
         });
 
+        AddGroup("PLAYOFFS", add => {
+            add("Score Entry", NavSection.PlayoffScoreEntry);
+            add("Schedule",    NavSection.PlayoffSchedule);
+            add("Standings",   NavSection.PlayoffStandings);
+        });
+
         AddGroup("REPORTS", add => {
-            add("Playoffs",     NavSection.Playoffs);
             add("Team Listing", NavSection.ReportTeamListing);
             add("Schedules",    NavSection.ReportScheduleGeneric);
             add("Spare List",   NavSection.ReportSpareLists);
@@ -467,7 +473,10 @@ public partial class MainForm : Form
         NavSection.ReportTeamListing     => "Team Listing",
         NavSection.ReportScheduleGeneric => "Schedules",
         NavSection.ReportSpareLists      => "Spare List",
-        NavSection.Playoffs      => "Playoffs",
+        NavSection.Playoffs           => "Playoffs",
+        NavSection.PlayoffScoreEntry  => "Playoff Score Entry",
+        NavSection.PlayoffSchedule    => "Playoff Schedule",
+        NavSection.PlayoffStandings   => "Playoff Standings",
         NavSection.SpareLists    => "Spare Lists",
         NavSection.Announcements => "Announcements",
         NavSection.Fees          => "Fees",
@@ -552,6 +561,9 @@ public partial class MainForm : Form
                 sectionsToEnable.Add(NavSection.Schedule);
                 sectionsToEnable.Add(NavSection.Standings);
                 sectionsToEnable.Add(NavSection.Playoffs);
+                sectionsToEnable.Add(NavSection.PlayoffScoreEntry);
+                sectionsToEnable.Add(NavSection.PlayoffSchedule);
+                sectionsToEnable.Add(NavSection.PlayoffStandings);
                 sectionsToEnable.Add(NavSection.ReportTeamListing);
                 sectionsToEnable.Add(NavSection.ReportScheduleGeneric);
                 sectionsToEnable.Add(NavSection.ReportSpareLists);

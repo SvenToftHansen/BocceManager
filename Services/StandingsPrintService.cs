@@ -35,6 +35,7 @@ public static class StandingsPrintService
         int  TeamsInPlayoffs,
         bool IsGamesMode,
         bool H2hUsed,
+        bool IsSeasonComplete,    // true when maxWeek >= WeeksInSeason
         string[] StatHeaders,
         float[]  StatWidths,
         float[]  TimeColTeamW);   // per timeslot column
@@ -64,6 +65,11 @@ public static class StandingsPrintService
 
         bool isGamesMode = season.ScoringMode == "games_mode";
         bool h2hUsed     = allRows.Any(r => r.H2HPlusMinus != 0 || r.H2HWins != 0);
+
+        int maxWeek = (int)(db.Scoring
+            .Where(s => s.SeasonId == seasonId)
+            .Max(s => (int?)s.WeekId) ?? 0);
+        bool isSeasonComplete = season.WeeksInSeason > 0 && maxWeek >= season.WeeksInSeason;
 
         var clubName  = AppParameterService.GetAppParameter(db, "ClubName") ?? "Bocce League";
         string docHdr = $"{clubName}  —  {season.League.Name}  —  {season.Name}  —  Standings";
@@ -133,14 +139,14 @@ public static class StandingsPrintService
                     float max = divs
                         .SelectMany(d => d.Rows.Select(r => W(r.TeamName, df)))
                         .DefaultIfEmpty(0f).Max();
-                    return MathF.Max(W("Team", hf), max);
+                    return MathF.Max(W("Team", hf), max) * 1.35f;
                 }).ToArray();
             }
             finally { hf.Dispose(); df.Dispose(); }
         }
 
         var lay = new Layout(docHdr, timeCols, columnDivs, seedRows,
-            season.TeamsInPlayoffs, isGamesMode, h2hUsed, statHdrs, statWidths, tcTeamW);
+            season.TeamsInPlayoffs, isGamesMode, h2hUsed, isSeasonComplete, statHdrs, statWidths, tcTeamW);
 
         return CreatePrintDoc(lay, mode);
     }
@@ -329,7 +335,9 @@ public static class StandingsPrintService
             if (ri % 2 == 1) g.FillRectangle(dimBr, x, y, colW, RowH);
 
             using var rowF = new Font("Consolas", 8.5f, r.DivisionRank == 1 ? FontStyle.Bold : FontStyle.Regular);
-            g.DrawString(r.TeamName, rowF, Brushes.Black,
+            string teamDisplay = lay.TeamsInPlayoffs > 0 && r.SeasonSeed > 0 && r.SeasonSeed <= lay.TeamsInPlayoffs
+                ? $"{(lay.IsSeasonComplete ? "✓" : "*")} {r.TeamName}" : r.TeamName;
+            g.DrawString(teamDisplay, rowF, Brushes.Black,
                 new RectangleF(x + PadX, y, teamW - PadX * 2, RowH), lsf);
 
             var vals = GetStatValues(r, lay.IsGamesMode, lay.H2hUsed);
@@ -380,7 +388,7 @@ public static class StandingsPrintService
         int total = lay.SeedRows.Count;
         int leftN = (total + 1) / 2;
 
-        string[] hdrs = BuildSeedHeaders(lay.IsGamesMode);
+        string[] hdrs = BuildSeedHeaders(lay.IsGamesMode, lay.TeamsInPlayoffs);
 
         // Measure Team and Division widths using the actual print Graphics — avoids DPI mismatch
         float W(string s, Font f) => g.MeasureString(s, f).Width + PadX * 2;
@@ -395,11 +403,12 @@ public static class StandingsPrintService
         DrawSeedHalf(g, rightX, halfW, y, hdrs, colWs, lay, lay.SeedRows.Skip(leftN).ToList(), hf, df, hdrBr, dimBr, linePen, csf, lsf);
     }
 
-    private static string[] BuildSeedHeaders(bool isGamesMode)
+    private static string[] BuildSeedHeaders(bool isGamesMode, int teamsInPlayoffs)
     {
         var h = new List<string> { "#", "Team", "Division", "Pts", "+/-", "W" };
         if (!isGamesMode) h.Add("T");
         h.AddRange(["L", "F"]);
+        if (teamsInPlayoffs > 0) h.Add("✓");
         return h.ToArray();
     }
 
@@ -412,6 +421,7 @@ public static class StandingsPrintService
         {
             "Team"     => teamW,
             "Division" => divW,
+            "✓"        => MathF.Max(W("✓", hf), W("✓", df)),
             _ => MathF.Max(W(h, hf), W(h.Contains('+') || h.Contains('-') ? "+999" : "999", df))
         }).ToArray();
 
@@ -458,7 +468,7 @@ public static class StandingsPrintService
             using var rowF = new Font("Consolas", 8.5f, qualifies ? FontStyle.Bold : FontStyle.Regular);
 
             cx = x;
-            var vals = GetSeedValues(r, shortDiv, lay.IsGamesMode);
+            var vals = GetSeedValues(r, shortDiv, lay.IsGamesMode, lay.TeamsInPlayoffs, lay.IsSeasonComplete);
             for (int i = 0; i < hdrs.Length; i++)
             {
                 var sf = hdrs[i] is "Team" or "Division" ? lsf : csf;
@@ -477,13 +487,16 @@ public static class StandingsPrintService
         g.DrawRectangle(linePen, x, yStart, w - 1, y - yStart - 1);
     }
 
-    private static string[] GetSeedValues(StandingView r, string shortDivName, bool isGamesMode)
+    private static string[] GetSeedValues(StandingView r, string shortDivName, bool isGamesMode,
+        int teamsInPlayoffs = 0, bool seasonComplete = false)
     {
         var v = new List<string>
             { r.SeasonSeed.ToString(), r.TeamName, shortDivName,
               r.StandingsPoints.ToString(), PmStr(r.PlusMinus), r.Wins.ToString() };
         if (!isGamesMode) v.Add(r.Ties.ToString());
         v.Add(r.Losses.ToString()); v.Add(r.Forfeits.ToString());
+        if (teamsInPlayoffs > 0)
+            v.Add(r.SeasonSeed <= teamsInPlayoffs ? (seasonComplete ? "✓" : "*") : "");
         return v.ToArray();
     }
 
