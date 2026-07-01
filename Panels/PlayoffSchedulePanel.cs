@@ -217,50 +217,71 @@ public class PlayoffSchedulePanel : UserControl
 
     // ── Print ─────────────────────────────────────────────────────────────────
 
+    private const float DocHdrH   = 36f;
+    private const float PrintMargin = 25f;  // hundredths-of-inch, matches other reports
+
     private void OnPrint(object? sender, EventArgs e)
     {
         if (_seasonId == null) { _lblStatus.Text = "No season selected."; return; }
 
-        using var db = new BocceDbContext();
-        if (!db.PlayoffConfigs.Any(c => c.SeasonId == _seasonId.Value && c.IsGenerated))
-        { _lblStatus.Text = "No bracket to print."; return; }
+        string docHeader;
+        using (var db = new BocceDbContext())
+        {
+            if (!db.PlayoffConfigs.Any(c => c.SeasonId == _seasonId.Value && c.IsGenerated))
+            { _lblStatus.Text = "No bracket to print."; return; }
+
+            var season   = db.Seasons.Include(s => s.League).FirstOrDefault(s => s.Id == _seasonId.Value);
+            var clubName = AppParameterService.GetAppParameter(db, "ClubName") ?? "";
+            docHeader = string.Join("  —  ",
+                new[] { clubName, season?.League.Name, season?.Name, "Playoff Schedule" }
+                .Where(s => !string.IsNullOrWhiteSpace(s)));
+        }
 
         var pd = new PrintDocument { DocumentName = "Playoff Schedule" };
-        pd.DefaultPageSettings.Landscape = true;
 
-        // Try to fit everything on one page; fall back to 2 pages if bracket is too small
-        bool twoPage    = false;
-        bool firstPage  = true;
-        pd.BeginPrint  += (_, _) => { twoPage = false; firstPage = true; };
-        pd.PrintPage   += (_, pe) =>
+        // Slim margins matching other reports
+        pd.QueryPageSettings += (_, qe) =>
+        {
+            qe.PageSettings.Landscape = true;
+            qe.PageSettings.Margins   = new Margins((int)PrintMargin, (int)PrintMargin,
+                                                    (int)PrintMargin, (int)PrintMargin);
+        };
+
+        bool firstPage = true;
+        pd.BeginPrint += (_, _) => firstPage = true;
+        pd.PrintPage  += (_, pe) =>
         {
             var b = pe.MarginBounds;
+            var g = pe.Graphics!;
+
+            // Document header band on every page
+            DrawPageHeader(g, b, docHeader);
+            var content = new RectangleF(b.Left, b.Top + DocHdrH + 4, b.Width, b.Height - DocHdrH - 4);
+
             if (firstPage)
             {
-                // Measure how much vertical space the text table needs
-                float tableH = MeasureTableHeight(b);
-                float bracketH = b.Height - tableH - 8;
+                float tableH   = MeasureTableHeight();
+                float bracketH = content.Height - tableH - 8;
 
-                if (bracketH / b.Height >= 0.40f)
+                if (bracketH / content.Height >= 0.35f)
                 {
-                    // Enough room — draw both on one page
-                    DrawTextTable(pe.Graphics!, new RectangleF(b.Left, b.Top, b.Width, tableH));
-                    _bracket.DrawTo(pe.Graphics!,
-                        new RectangleF(b.Left, b.Top + tableH + 8, b.Width, bracketH));
+                    // Both fit on one page
+                    DrawTextTable(g, new RectangleF(content.Left, content.Top, content.Width, tableH));
+                    _bracket.DrawTo(g, new RectangleF(content.Left, content.Top + tableH + 8,
+                                                       content.Width, bracketH));
                     pe.HasMorePages = false;
                 }
                 else
                 {
-                    // Not enough room — text on page 1, bracket on page 2
-                    twoPage = true;
-                    DrawTextTable(pe.Graphics!, b);
+                    // Text page 1, bracket page 2
+                    DrawTextTable(g, content);
                     pe.HasMorePages = true;
                 }
                 firstPage = false;
             }
             else
             {
-                _bracket.DrawTo(pe.Graphics!, b);
+                _bracket.DrawTo(g, content);
                 pe.HasMorePages = false;
             }
         };
@@ -268,43 +289,53 @@ public class PlayoffSchedulePanel : UserControl
         PrintPreviewService.ShowPrintPreview(this, pd);
     }
 
-    // Returns approximate height needed for the schedule table
-    private float MeasureTableHeight(RectangleF bounds) =>
-        20f                          // title
-        + 16f                        // header row
-        + _grid.Rows.Count * 15f     // data rows at compact 15pt height
-        + 6f;                        // gap
+    // Navy header band matching other reports (Consolas 11pt Bold, white text)
+    private static void DrawPageHeader(Graphics g, RectangleF b, string text)
+    {
+        using var navyBr = new SolidBrush(AppTheme.NavHeader);
+        g.FillRectangle(navyBr, b.Left, b.Top, b.Width, DocHdrH);
+        using var hdrFont = new Font("Consolas", 11f, FontStyle.Bold);
+        using var csf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+        g.DrawString(text, hdrFont, Brushes.White,
+            new RectangleF(b.Left, b.Top, b.Width, DocHdrH), csf);
+    }
 
-    // Draws the compact text schedule table into the given bounds
+    // Height of the schedule table (header + data rows, no title — header band replaces it)
+    private float MeasureTableHeight() =>
+        16f                          // column header row
+        + _grid.Rows.Count * 15f     // data rows
+        + 4f;                        // gap below
+
+    // Compact text schedule table — no title (page header band carries the title)
     private void DrawTextTable(Graphics g, RectangleF bounds)
     {
-        using var titleFont = new Font("Segoe UI", 10f, FontStyle.Bold);
-        using var hdrFont   = new Font("Segoe UI",  7f, FontStyle.Bold);
-        using var rowFont   = new Font("Segoe UI",  7f, FontStyle.Regular);
-        using var blackBr   = new SolidBrush(Color.Black);
-        using var hdrBr     = new SolidBrush(Color.FromArgb(35, 55, 80));
-        using var whiteBr   = new SolidBrush(Color.White);
-        using var altBr     = new SolidBrush(Color.FromArgb(240, 244, 250));
-        using var linePen   = new Pen(Color.FromArgb(200, 200, 200), 0.5f);
-        using var lft       = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center };
+        using var hdrFont  = new Font("Consolas",  7.5f, FontStyle.Bold);
+        using var rowFont  = new Font("Consolas",  7.5f, FontStyle.Regular);
+        using var colHdrBr = new SolidBrush(AppTheme.GridHeaderBackground);
+        using var whiteBr  = new SolidBrush(Color.White);
+        using var blackBr  = new SolidBrush(Color.Black);
+        using var altBr    = new SolidBrush(Color.FromArgb(240, 244, 250));
+        using var linePen  = new Pen(AppTheme.GridLines, 0.5f);
+        using var lft      = new StringFormat { Alignment = StringAlignment.Near,
+                                                LineAlignment = StringAlignment.Center,
+                                                Trimming = StringTrimming.EllipsisCharacter };
 
-        float y = bounds.Top;
-        g.DrawString("Playoff Schedule", titleFont, blackBr, new PointF(bounds.Left, y));
-        y += 20f;
-
-        float[] widths  = [90, 38, 130, 130, 55, 72, 48, 58, 55];
+        float[] widths   = [95, 38, 130, 130, 55, 72, 48, 60, 56];
         string[] headers = ["Round", "Game", "Top Team", "Bot Team", "Court", "Date", "Time", "Score", "Status"];
         float rowH = 15f;
+        float y = bounds.Top;
 
+        // Column headers
         float x = bounds.Left;
         for (int i = 0; i < headers.Length; i++)
         {
-            g.FillRectangle(hdrBr, x, y, widths[i], rowH);
+            g.FillRectangle(colHdrBr, x, y, widths[i], rowH);
             g.DrawString(headers[i], hdrFont, whiteBr, new RectangleF(x + 2, y, widths[i] - 4, rowH), lft);
             x += widths[i];
         }
         y += rowH;
 
+        // Data rows
         for (int ri = 0; ri < _grid.Rows.Count; ri++)
         {
             if (y + rowH > bounds.Bottom) break;
