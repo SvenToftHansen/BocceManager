@@ -353,8 +353,8 @@ public class PlayoffSetupPanel : UserControl
             _gridDays.Rows.Add(
                 d.ToString(),
                 dateStr,
-                dp?.StartTime.ToString("HH:mm") ?? "08:30",
-                dp?.EndTime.ToString("HH:mm")   ?? "18:00",
+                dp?.StartTime.ToString("HHmm") ?? "0830",
+                dp?.EndTime.ToString("HHmm")   ?? "1800",
                 dp?.MatchLengthMins.ToString() ?? "120"
             );
         }
@@ -469,8 +469,8 @@ public class PlayoffSetupPanel : UserControl
         {
             if (!int.TryParse(row.Cells["Day"].Value?.ToString(), out int dayNum)) continue;
             if (!DateOnly.TryParse(row.Cells["Date"].Value?.ToString(), out var date)) continue;
-            if (!TimeOnly.TryParse(row.Cells["Start"].Value?.ToString(), out var start)) continue;
-            if (!TimeOnly.TryParse(row.Cells["End"].Value?.ToString(), out var end)) continue;
+            if (!ParseHhmm(row.Cells["Start"].Value?.ToString(), out var start)) continue;
+            if (!ParseHhmm(row.Cells["End"].Value?.ToString(),   out var end))   continue;
             if (!int.TryParse(row.Cells["Gap"].Value?.ToString(), out int gap)) gap = 30;
 
             result.Add(new PlayoffDayParams
@@ -547,4 +547,19 @@ public class PlayoffSetupPanel : UserControl
 
     private static decimal Clamp(int value, decimal min, decimal max) =>
         Math.Max(min, Math.Min(max, value));
+
+    // Accepts 4-digit no-colon format (2000, 0830, 830) or standard HH:mm.
+    private static bool ParseHhmm(string? s, out TimeOnly t)
+    {
+        t = default;
+        if (string.IsNullOrWhiteSpace(s)) return false;
+        s = s.Trim();
+        if (!s.Contains(':') && int.TryParse(s.PadLeft(4, '0'), out int hhmm))
+        {
+            int h = hhmm / 100, m = hhmm % 100;
+            if (h is >= 0 and <= 23 && m is >= 0 and <= 59) { t = new TimeOnly(h, m); return true; }
+            return false;
+        }
+        return TimeOnly.TryParse(s, out t);
+    }
 }
