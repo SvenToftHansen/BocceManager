@@ -117,6 +117,18 @@ public class PlayoffSetupPanel : UserControl
         };
         y += 210;
 
+        var btnReset = new Button
+        {
+            Text = "Reset from Standings", Location = new Point(0, y),
+            Size = new Size(180, 28), Font = AppTheme.FontDefault,
+            BackColor = Color.FromArgb(100, 110, 120), ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+        };
+        btnReset.FlatAppearance.BorderSize = 0;
+        btnReset.Click += OnResetFromStandings;
+        inner.Controls.Add(btnReset);
+        y += 38;
+
         // ── Section: Day Parameters ───────────────────────────────────────────
         y = AddSectionHeader(inner, "Day / Round Parameters", y);
 
@@ -229,29 +241,72 @@ public class PlayoffSetupPanel : UserControl
 
     private void PopulateSeedingGrid(BocceDbContext db, int seasonId, int teamCount)
     {
-        var existingSeeds = db.PlayoffSeedings
-            .Where(s => s.SeasonId == seasonId)
-            .OrderBy(s => s.Seed)
-            .ToList();
-
         // Refresh team dropdown
         var teamCol = (DataGridViewComboBoxColumn)_gridSeeding.Columns["Team"]!;
         teamCol.Items.Clear();
         teamCol.Items.Add("");
         foreach (var t in _seasonTeams) teamCol.Items.Add(t.Name);
 
+        // Prefer saved seedings; fall back to standings SeasonSeed order
+        var savedSeeds = db.PlayoffSeedings
+            .Where(s => s.SeasonId == seasonId)
+            .OrderBy(s => s.Seed)
+            .ToList();
+
+        List<(int Seed, int TeamId)> seedMap;
+        if (savedSeeds.Count > 0)
+        {
+            seedMap = savedSeeds.Select(s => (s.Seed, s.TeamId)).ToList();
+        }
+        else
+        {
+            // Auto-populate from standings view (SeasonSeed = cross-division rank)
+            seedMap = db.Standings
+                .Where(s => s.SeasonId == seasonId)
+                .OrderBy(s => s.SeasonSeed)
+                .Take(teamCount)
+                .AsEnumerable()
+                .Select((s, i) => (Seed: i + 1, s.TeamId))
+                .ToList();
+        }
+
         _gridSeeding.Rows.Clear();
         for (int seed = 1; seed <= teamCount; seed++)
         {
-            var existing = existingSeeds.FirstOrDefault(s => s.Seed == seed);
-            string teamName = "";
-            if (existing != null)
-            {
-                var t = _seasonTeams.FirstOrDefault(x => x.Id == existing.TeamId);
-                teamName = t.Name ?? "";
-            }
-            _gridSeeding.Rows.Add(seed.ToString(), teamName);
+            var entry    = seedMap.FirstOrDefault(s => s.Seed == seed);
+            string name  = entry.TeamId > 0
+                ? (_seasonTeams.FirstOrDefault(t => t.Id == entry.TeamId).Name ?? "")
+                : "";
+            _gridSeeding.Rows.Add(seed.ToString(), name);
         }
+    }
+
+    private void OnResetFromStandings(object? sender, EventArgs e)
+    {
+        if (_seasonId == null) return;
+        using var db     = new BocceDbContext();
+        var season       = db.Seasons.Find(_seasonId.Value);
+        if (season == null) return;
+        int teamCount    = season.TeamsInPlayoffs;
+
+        var standings = db.Standings
+            .Where(s => s.SeasonId == _seasonId.Value)
+            .OrderBy(s => s.SeasonSeed)
+            .Take(teamCount)
+            .AsEnumerable()
+            .Select((s, i) => (Seed: i + 1, s.TeamId))
+            .ToList();
+
+        for (int i = 0; i < _gridSeeding.Rows.Count; i++)
+        {
+            var entry = standings.FirstOrDefault(s => s.Seed == i + 1);
+            string name = entry.TeamId > 0
+                ? (_seasonTeams.FirstOrDefault(t => t.Id == entry.TeamId).Name ?? "")
+                : "";
+            _gridSeeding.Rows[i].Cells["Team"].Value = name;
+        }
+
+        _lblStatus.Text = "Seedings reloaded from standings.";
     }
 
     private void PopulateDayGrid(int teamCount)
