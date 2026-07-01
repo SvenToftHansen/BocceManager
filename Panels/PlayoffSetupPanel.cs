@@ -153,6 +153,18 @@ public class PlayoffSetupPanel : UserControl
         _gridDays.CellValueChanged += (_, _) => RefreshPreview();
         y += 170;
 
+        var btnAddDay = new Button
+        {
+            Text = "+ Add Day", Location = new Point(0, y),
+            Size = new Size(100, 26), Font = AppTheme.FontDefault,
+            BackColor = Color.FromArgb(80, 100, 120), ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+        };
+        btnAddDay.FlatAppearance.BorderSize = 0;
+        btnAddDay.Click += (_, _) => AddDayRow();
+        inner.Controls.Add(btnAddDay);
+        y += 36;
+
         // ── Section: Playoff Courts ───────────────────────────────────────────
         y = AddSectionHeader(inner, "Playoff Courts", y);
 
@@ -352,17 +364,17 @@ public class PlayoffSetupPanel : UserControl
     private void PopulateDayGrid(int teamCount, DateOnly? playoffStartDate)
     {
         int totalRounds = PlayoffService.GetRoundCount(teamCount);
-        int daysNeeded  = (int)Math.Ceiling(totalRounds / 2.0);
+        // Default: one row per round (worst case, user can consolidate rounds onto one day)
+        int daysDefault = totalRounds;
 
         _gridDays.Rows.Clear();
 
         var existing = _config?.DayParams.OrderBy(d => d.DayNumber).ToList() ?? [];
 
-        for (int d = 1; d <= Math.Max(daysNeeded, existing.Count); d++)
+        for (int d = 1; d <= Math.Max(daysDefault, existing.Count); d++)
         {
             var dp = existing.FirstOrDefault(x => x.DayNumber == d);
 
-            // Default date: saved value, or PlayoffStartDate + (d-1) days, or blank
             string dateStr = dp?.GameDate.ToString("yyyy-MM-dd")
                 ?? (playoffStartDate.HasValue
                     ? playoffStartDate.Value.AddDays(d - 1).ToString("yyyy-MM-dd")
@@ -376,6 +388,23 @@ public class PlayoffSetupPanel : UserControl
                 dp?.MatchLengthMins.ToString() ?? "120"
             );
         }
+    }
+
+    private void AddDayRow()
+    {
+        int nextDay = _gridDays.Rows.Count + 1;
+
+        // Default date = last row's date + 1 day
+        string dateStr = "";
+        if (_gridDays.Rows.Count > 0)
+        {
+            string? lastDate = _gridDays.Rows[_gridDays.Rows.Count - 1].Cells["Date"].Value?.ToString();
+            if (DateOnly.TryParse(lastDate, out var d))
+                dateStr = d.AddDays(1).ToString("yyyy-MM-dd");
+        }
+
+        _gridDays.Rows.Add(nextDay.ToString(), dateStr, "0830", "1800", "120");
+        RefreshPreview();
     }
 
     private void PopulateCourtCheckboxes(BocceDbContext db)

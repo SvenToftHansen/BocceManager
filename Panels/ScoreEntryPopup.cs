@@ -349,8 +349,10 @@ public class ScoreEntryPopup : Form
 
             UpdateTiebreaker();
 
+            // Defer focus until the form handle exists (Shown fires after ShowDialog creates the handle)
             var first = _boxOrder.FirstOrDefault(b => string.IsNullOrWhiteSpace(b.Text));
-            if (first != null) BeginInvoke(() => first.Focus());
+            if (first != null)
+                Shown += (_, _) => first.Focus();
         }
         catch (Exception ex) { _lblStatus.Text = $"Error loading: {ex.Message}"; }
     }
