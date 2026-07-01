@@ -313,10 +313,9 @@ public class BracketVisualizationControl : UserControl
         using var borderPen = new Pen(Color.FromArgb(200, 200, 200), 1f);
         g.DrawRectangle(borderPen, x, y, TeamNameW + ScoreBoxW, TeamBoxH);
 
-        // Team name
-        using var nameFont = isWinner
-            ? new Font(AppTheme.FontDefault.FontFamily, AppTheme.FontDefault.Size, FontStyle.Bold)
-            : AppTheme.FontDefault;
+        // Team name — always create a new Font so using{} owns it (never dispose shared AppTheme fonts)
+        using var nameFont  = new Font(AppTheme.FontDefault.FontFamily, AppTheme.FontDefault.Size,
+                                       isWinner ? FontStyle.Bold : FontStyle.Regular);
         using var textBrush = new SolidBrush(AppTheme.TextPrimary);
         g.DrawString(name ?? "TBD", nameFont, textBrush,
             new RectangleF(x + 4, y + 4, TeamNameW - 8, TeamBoxH - 6));
