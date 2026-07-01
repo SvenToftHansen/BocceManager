@@ -544,9 +544,20 @@ public class PlayoffSetupPanel : UserControl
 
         try
         {
-            OnSaveConfig(null, EventArgs.Empty); // save first
+            // Reload from DB first — picks up any Season changes (e.g. TeamsInPlayoffs)
+            // made since this panel was last loaded, then save and generate.
+            LoadData();
+
+            if (_config == null || _seasonId == null)
+            { _lblStatus.Text = "No playoff config found."; return; }
+
+            OnSaveConfig(null, EventArgs.Empty); // save current grid values
+
             using var db = new BocceDbContext();
             PlayoffService.GenerateBracket(db, _seasonId.Value);
+
+            // Reload display to reflect generated state
+            LoadData();
             _lblStatus.Text = "Bracket generated successfully.";
         }
         catch (Exception ex)

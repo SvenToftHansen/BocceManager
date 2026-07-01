@@ -364,23 +364,30 @@ public static class PlayoffService
     }
 
     // Pair R1 seeds to match each bye opponent correctly.
-    // Bye 1 (weakest opp): R1 match is (byeCount+half) v N, e.g. #8v#9 for 12 teams
-    // Bye 4 (strongest opp): R1 match is (byeCount+1) v (byeCount+half+1)
+    // Works for all team counts — previous formula (pairs[byeCount-s]) only
+    // worked when pairs.Count == byeCount (e.g. 12 or 24 teams); crashed for
+    // 20 teams (byeCount=12, pairs.Count=4) or any count where teamCount ≠ 3×byeCount.
     private static List<(int top, int bot)> BuildNonByePairs(int teamCount, int byeCount, List<int> byeOrder)
     {
-        // Non-bye seeds byeCount+1..teamCount paired strongest-first:
-        // e.g. 12 teams → [(5,12),(6,11),(7,10),(8,9)]
         int lo = byeCount + 1;
         int hi = teamCount;
-        int n  = (hi - lo + 1) / 2;
-        var pairs = new List<(int, int)>();
+        int n  = (hi - lo + 1) / 2;   // number of R1 games
+        if (n <= 0) return [];
+
+        // pairs[0] = strongest (lowest seed numbers), pairs[n-1] = weakest
+        var pairs = new List<(int, int)>(n);
         for (int i = 0; i < n; i++)
             pairs.Add((lo + i, hi - i));
 
-        // Map each bye slot to its correct R1 pair by bye-seed strength:
-        //   bye seed s → pairs[byeCount - s]  (bye1 weakest opp → last pair; bye4 strongest → first)
-        // e.g. byeOrder=[1,4,3,2] → indices [3,0,1,2] → [(8,9),(5,12),(6,11),(7,10)]
-        return byeOrder.Select(s => pairs[byeCount - s]).ToList();
+        // Only the first n byes in byeOrder get R1 opponents.
+        // Within those n byes, stronger bye (lower seed) → weaker pair; weaker bye → stronger pair.
+        var byesWithR1 = byeOrder.Take(n).ToList();
+        var sortedAsc  = byesWithR1.OrderBy(s => s).ToList();  // seed 1 = index 0 = strongest
+        var pairMap    = new Dictionary<int, (int, int)>(n);
+        for (int rank = 0; rank < n; rank++)
+            pairMap[sortedAsc[rank]] = pairs[n - 1 - rank];   // rank 0 → weakest pair
+
+        return byesWithR1.Select(s => pairMap[s]).ToList();
     }
 
     // ── Winner advancement ────────────────────────────────────────────────────
