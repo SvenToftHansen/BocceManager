@@ -22,9 +22,10 @@ public class PlayoffDayParams
     public int       PlayoffConfigId           { get; set; }
     public int       DayNumber                 { get; set; }   // 1, 2, 3 …
     public DateOnly  GameDate                  { get; set; }
-    public TimeOnly  StartTime                 { get; set; }
-    public TimeOnly  EndTime                   { get; set; }
-    public int       DurationBetweenRoundsMins { get; set; } = 30;
+    public TimeOnly  StartTime       { get; set; }
+    public TimeOnly  EndTime         { get; set; }
+    // Total time per match slot including gap — gap is built in, not separate
+    public int       MatchLengthMins { get; set; } = 120;
 
     public PlayoffConfig PlayoffConfig         { get; set; } = null!;
 }

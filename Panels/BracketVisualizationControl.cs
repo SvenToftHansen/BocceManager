@@ -384,11 +384,9 @@ public class BracketVisualizationControl : UserControl
         {
             if (!positions.TryGetValue(m.Id, out var pos)) continue;
 
-            // Only the score boxes are clickable
-            var scoreRect = new RectangleF(pos.x + TeamNameW, pos.y, ScoreBoxW, TeamBoxH);
-            var scoreRect2 = new RectangleF(pos.x + TeamNameW, pos.y + TeamBoxH + GameBoxH, ScoreBoxW, TeamBoxH);
-
-            if (scoreRect.Contains(fx, fy) || scoreRect2.Contains(fx, fy))
+            // Entire match bounding box is clickable (team rows + game info box + score boxes)
+            var matchRect = new RectangleF(pos.x, pos.y, TeamNameW + ScoreBoxW, MatchH);
+            if (matchRect.Contains(fx, fy))
             {
                 MatchClicked?.Invoke(this, m.Id);
                 return;

@@ -148,7 +148,7 @@ public class PlayoffSetupPanel : UserControl
         _gridDays.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Date (yyyy-mm-dd)", Name = "Date", Width = 140 });
         _gridDays.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Start", Name = "Start", Width = 80 });
         _gridDays.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "End", Name = "End", Width = 80 });
-        _gridDays.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Gap (mins)", Name = "Gap", Width = 90 });
+        _gridDays.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Match Length (mins)", Name = "Gap", Width = 130 });
         _gridDays.CellValueChanged += (_, _) => RefreshPreview();
         y += 170;
 
@@ -236,12 +236,22 @@ public class PlayoffSetupPanel : UserControl
 
         // Load teams
         _seasonTeams = db.Teams
-            .Include(t => t.Division)
+            .Include(t => t.Division).ThenInclude(d => d.DaySlot)
+            .Include(t => t.Division).ThenInclude(d => d.TimeSlot)
             .Where(t => t.Division.SeasonId == seasonId.Value && t.IsActive)
             .OrderBy(t => t.SortOrder)
-            .Select(t => new { t.Id, Name = t.EffectiveDisplayName })
             .AsEnumerable()
-            .Select(t => (t.Id, t.Name))
+            .Select(t =>
+            {
+                string slot = string.Join(" ", new[]
+                {
+                    t.Division.DaySlot?.DayAbbr,
+                    t.Division.TimeSlot?.Timeslot12h,
+                }.Where(s => !string.IsNullOrEmpty(s)));
+                string label = t.EffectiveDisplayName
+                             + (slot.Length > 0 ? $"    {slot}" : "");
+                return (t.Id, Name: label);
+            })
             .ToList();
 
         PopulateSeedingGrid(db, seasonId.Value, teamCount);
@@ -345,7 +355,7 @@ public class PlayoffSetupPanel : UserControl
                 dateStr,
                 dp?.StartTime.ToString("HH:mm") ?? "08:30",
                 dp?.EndTime.ToString("HH:mm")   ?? "18:00",
-                dp?.DurationBetweenRoundsMins.ToString() ?? "30"
+                dp?.MatchLengthMins.ToString() ?? "120"
             );
         }
     }
@@ -470,7 +480,7 @@ public class PlayoffSetupPanel : UserControl
                 GameDate                  = date,
                 StartTime                 = start,
                 EndTime                   = end,
-                DurationBetweenRoundsMins = gap,
+                MatchLengthMins = gap,
             });
         }
         return result;

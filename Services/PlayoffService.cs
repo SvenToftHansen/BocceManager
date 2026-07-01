@@ -49,11 +49,12 @@ public static class PlayoffService
     public record RoundSchedule(int Round, string Name, DateOnly Date, TimeOnly StartTime);
 
     /// <summary>
-    /// Assigns rounds to days/times based on day parameters and match duration.
+    /// Assigns rounds to days/times based on day parameters.
+    /// MatchLengthMins per day is the total slot per game (includes gap — no separate gap).
     /// </summary>
     public static List<RoundSchedule> ComputeRoundSchedule(
         int teamCount,
-        int matchDurationMins,
+        int matchDurationMins,      // kept for caller compatibility; now ignored in favour of per-day MatchLengthMins
         IReadOnlyList<PlayoffDayParams> days,
         int courtCount)
     {
@@ -65,14 +66,15 @@ public static class PlayoffService
 
         foreach (var day in days.OrderBy(d => d.DayNumber))
         {
-            var current = day.StartTime;
+            var current    = day.StartTime;
+            int matchSlot  = day.MatchLengthMins > 0 ? day.MatchLengthMins : matchDurationMins;
 
             while (round <= totalRounds)
             {
-                int games       = GetGamesInRound(teamCount, round);
-                int waves       = (int)Math.Ceiling((double)games / courtCount);
-                int roundMins   = waves * matchDurationMins;
-                var roundEnd    = current.AddMinutes(roundMins);
+                int games    = GetGamesInRound(teamCount, round);
+                int waves    = (int)Math.Ceiling((double)games / courtCount);
+                int roundMins = waves * matchSlot;
+                var roundEnd  = current.AddMinutes(roundMins);
 
                 // Would this round finish after the day's end time? Stop.
                 if (roundEnd > day.EndTime) break;
@@ -86,7 +88,8 @@ public static class PlayoffService
                 round++;
                 if (round > totalRounds) break;
 
-                current = current.AddMinutes(roundMins + day.DurationBetweenRoundsMins);
+                // Gap is built into MatchLengthMins — next round starts immediately after
+                current = current.AddMinutes(roundMins);
             }
 
             if (round > totalRounds) break;
@@ -192,7 +195,7 @@ public static class PlayoffService
             Seed1          = 0,
             Status         = "scheduled",
             ScheduledDate  = finalRound?.MatchDate,
-            ScheduledTime  = AssignTime(schedule, totalRounds, courts, 0, config.MatchDurationMins),
+            ScheduledTime  = AssignTime(schedule, totalRounds, courts, 0, config.MatchDurationMins, config.DayParams.ToList()),
             CourtId        = AssignCourt(courts, 0),
         };
         db.PlayoffMatches.Add(finalMatch);
@@ -224,7 +227,7 @@ public static class PlayoffService
                     NextMatchId    = parent.Id,
                     NextMatchIsTop = isTopOfParent,
                     ScheduledDate  = roundRow?.MatchDate,
-                    ScheduledTime  = AssignTime(schedule, r, courts, slot, config.MatchDurationMins),
+                    ScheduledTime  = AssignTime(schedule, r, courts, slot, config.MatchDurationMins, config.DayParams.ToList()),
                     CourtId        = AssignCourt(courts, slot),
                 };
                 db.PlayoffMatches.Add(match);
@@ -430,14 +433,17 @@ public static class PlayoffService
         courts.Count > 0 ? courts[slot % courts.Count].Id : null;
 
     private static TimeOnly? AssignTime(
-        List<RoundSchedule> schedule, int round, List<Court> courts, int slot, int matchDurationMins)
+        List<RoundSchedule> schedule, int round, List<Court> courts, int slot,
+        int fallbackMatchMins, IReadOnlyList<PlayoffDayParams> dayParams)
     {
         var rs = schedule.FirstOrDefault(s => s.Round == round);
         if (rs == null || rs.StartTime == TimeOnly.MinValue) return null;
 
+        var day        = dayParams.FirstOrDefault(d => d.GameDate == rs.Date);
+        int matchSlot  = day?.MatchLengthMins > 0 ? day.MatchLengthMins : fallbackMatchMins;
         int courtCount = Math.Max(1, courts.Count);
         int wave       = slot / courtCount;
-        return rs.StartTime.AddMinutes(wave * matchDurationMins);
+        return rs.StartTime.AddMinutes(wave * matchSlot);
     }
 
     // ── Utilities ─────────────────────────────────────────────────────────────
