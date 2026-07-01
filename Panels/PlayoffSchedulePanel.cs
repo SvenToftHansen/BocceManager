@@ -1,3 +1,4 @@
+using System.Drawing.Printing;
 using BocceManager.Data;
 using BocceManager.Data.Entities;
 using BocceManager.Services;
@@ -10,10 +11,11 @@ public class PlayoffSchedulePanel : UserControl
 {
     private int? _seasonId;
 
-    private TabControl                _tabs    = null!;
-    private DataGridView              _grid    = null!;
-    private BracketVisualizationControl _bracket = null!;
-    private Label                     _lblStatus = null!;
+    private TabControl                  _tabs        = null!;
+    private DataGridView                _grid        = null!;
+    private BracketVisualizationControl _bracket     = null!;
+    private Label                       _lblStatus   = null!;
+    private readonly List<int>          _matchIdByRow = [];   // grid row → matchId
 
     public PlayoffSchedulePanel()
     {
@@ -54,9 +56,20 @@ public class PlayoffSchedulePanel : UserControl
         btnRefresh.Click += (_, _) => LoadData();
         toolbar.Controls.Add(btnRefresh);
 
+        var btnPrint = new Button
+        {
+            Text = "Print", Location = new Point(110, 8), Size = new Size(80, 30),
+            Font = AppTheme.FontDefault,
+            BackColor = Color.FromArgb(60, 100, 60), ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+        };
+        btnPrint.FlatAppearance.BorderSize = 0;
+        btnPrint.Click += OnPrint;
+        toolbar.Controls.Add(btnPrint);
+
         _lblStatus = new Label
         {
-            Location = new Point(112, 15), AutoSize = true,
+            Location = new Point(200, 15), AutoSize = true,
             Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted,
         };
         toolbar.Controls.Add(_lblStatus);
@@ -99,6 +112,7 @@ public class PlayoffSchedulePanel : UserControl
         _grid.Columns.Add(Col("Score",   "Score",      80));
         _grid.Columns.Add(Col("Status",  "Status",     90));
 
+        _grid.CellDoubleClick += OnGridDoubleClick;
         tabList.Controls.Add(_grid);
 
         // ── Tab 2: Bracket Visualization ──────────────────────────────────────
@@ -162,6 +176,7 @@ public class PlayoffSchedulePanel : UserControl
             .ToDictionary(g => g.Key, g => (T1: g.Sum(x => x.Team1Score), T2: g.Sum(x => x.Team2Score)));
 
         _grid.Rows.Clear();
+        _matchIdByRow.Clear();
         int gameNum = 1;
         foreach (var m in matches)
         {
@@ -169,7 +184,7 @@ public class PlayoffSchedulePanel : UserControl
             string score = sc.T1 > 0 || sc.T2 > 0 ? $"{sc.T1} – {sc.T2}" : "";
             string court = m.Court != null ? $"Court {m.Court.CourtNumber}" : "";
             string date  = m.ScheduledDate?.ToString("ddd MMM d") ?? "";
-            string time  = m.ScheduledTime?.ToString("h:mm tt") ?? "";
+            string time  = m.ScheduledTime?.ToString("HHmm") ?? "";
 
             _grid.Rows.Add(
                 m.PlayoffRound?.RoundName ?? $"Round {m.PlayoffRound?.RoundNumber}",
@@ -178,18 +193,116 @@ public class PlayoffSchedulePanel : UserControl
                 m.Team2?.EffectiveDisplayName ?? "TBD",
                 court, date, time, score,
                 m.Status == "completed" ? "Done" : "Pending");
+            _matchIdByRow.Add(m.Id);
         }
     }
 
-    // ── Score entry via bracket click ─────────────────────────────────────────
+    // ── Score entry — bracket click or grid double-click ─────────────────────
 
-    private void OnBracketMatchClicked(object? sender, int matchId)
+    private void OnBracketMatchClicked(object? sender, int matchId) =>
+        OpenScoreEntry(matchId);
+
+    private void OnGridDoubleClick(object? sender, DataGridViewCellEventArgs e)
     {
-        using (var popup = new ScoreEntryPopup(matchId))
+        if (e.RowIndex < 0 || e.RowIndex >= _matchIdByRow.Count) return;
+        OpenScoreEntry(_matchIdByRow[e.RowIndex]);
+    }
+
+    private void OpenScoreEntry(int matchId)
+    {
+        using var popup = new ScoreEntryPopup(matchId);
+        if (popup.ShowDialog(this) == DialogResult.OK)
+            LoadData();
+    }
+
+    // ── Print ─────────────────────────────────────────────────────────────────
+
+    private void OnPrint(object? sender, EventArgs e)
+    {
+        if (_seasonId == null) { _lblStatus.Text = "No season selected."; return; }
+
+        using var db = new BocceDbContext();
+        if (!db.PlayoffConfigs.Any(c => c.SeasonId == _seasonId.Value && c.IsGenerated))
+        { _lblStatus.Text = "No bracket to print."; return; }
+
+        int page = 0;
+        var pd   = new PrintDocument { DocumentName = "Playoff Schedule" };
+        pd.DefaultPageSettings.Landscape = true;
+        pd.BeginPrint += (_, _) => page = 0;
+        pd.PrintPage  += (_, pe) =>
         {
-            if (popup.ShowDialog(this) == DialogResult.OK)
-                LoadData(); // refresh both tabs
+            if (page == 0) { DrawTextPage(pe.Graphics!, pe.MarginBounds); pe.HasMorePages = true; }
+            else           { DrawBracketPage(pe.Graphics!, pe.MarginBounds); pe.HasMorePages = false; }
+            page++;
+        };
+
+        PrintPreviewService.ShowPrintPreview(this, pd);
+    }
+
+    // Page 1: text schedule table
+    private void DrawTextPage(Graphics g, RectangleF bounds)
+    {
+        using var titleFont = new Font("Segoe UI", 12f, FontStyle.Bold);
+        using var hdrFont   = new Font("Segoe UI",  8f, FontStyle.Bold);
+        using var rowFont   = new Font("Segoe UI",  8f, FontStyle.Regular);
+        using var blackBr   = new SolidBrush(Color.Black);
+        using var hdrBr     = new SolidBrush(Color.FromArgb(35, 55, 80));
+        using var whiteBr   = new SolidBrush(Color.White);
+        using var altBr     = new SolidBrush(Color.FromArgb(240, 244, 250));
+        using var linePen   = new Pen(Color.FromArgb(180, 180, 180), 0.5f);
+        var ctr = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+        var lft = new StringFormat { Alignment = StringAlignment.Near,   LineAlignment = StringAlignment.Center };
+
+        float y = bounds.Top;
+        g.DrawString("Playoff Schedule", titleFont, blackBr, new PointF(bounds.Left, y));
+        y += 24;
+
+        float[] widths = [90, 45, 140, 140, 60, 80, 60, 70, 60];
+        string[] headers = ["Round", "Game", "Top Team", "Bot Team", "Court", "Date", "Time", "Score", "Status"];
+        float rowH = 18f;
+
+        // Header row
+        float x = bounds.Left;
+        for (int i = 0; i < headers.Length; i++)
+        {
+            g.FillRectangle(hdrBr, x, y, widths[i], rowH);
+            g.DrawString(headers[i], hdrFont, whiteBr, new RectangleF(x + 2, y, widths[i] - 4, rowH), lft);
+            x += widths[i];
         }
+        y += rowH;
+
+        // Data rows
+        for (int ri = 0; ri < _grid.Rows.Count; ri++)
+        {
+            var row = _grid.Rows[ri];
+            if (ri % 2 == 1) g.FillRectangle(altBr, bounds.Left, y, widths.Sum(), rowH);
+            x = bounds.Left;
+            for (int ci = 0; ci < widths.Length; ci++)
+            {
+                string val = row.Cells[ci].Value?.ToString() ?? "";
+                g.DrawString(val, rowFont, blackBr, new RectangleF(x + 2, y, widths[ci] - 4, rowH), lft);
+                x += widths[ci];
+            }
+            g.DrawLine(linePen, bounds.Left, y + rowH, x, y + rowH);
+            y += rowH;
+            if (y + rowH > bounds.Bottom) break;
+        }
+
+        ctr.Dispose(); lft.Dispose();
+    }
+
+    // Page 2: bracket visual rendered to bitmap then scaled to page
+    private void DrawBracketPage(Graphics g, RectangleF bounds)
+    {
+        if (_bracket.Width <= 0 || _bracket.Height <= 0) return;
+
+        using var bmp = new Bitmap(_bracket.Width, _bracket.Height);
+        _bracket.DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
+
+        float scale = Math.Min(bounds.Width / bmp.Width, bounds.Height / bmp.Height);
+        float w = bmp.Width * scale;
+        float h = bmp.Height * scale;
+        g.DrawImage(bmp, bounds.Left, bounds.Top, w, h);
     }
 
     // ── Grid column helper ────────────────────────────────────────────────────

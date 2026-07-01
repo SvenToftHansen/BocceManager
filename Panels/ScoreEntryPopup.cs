@@ -6,9 +6,8 @@ using Microsoft.EntityFrameworkCore;
 namespace BocceManager.Panels;
 
 /// <summary>
-/// Playoff match score popup. Text-box entry with auto-jump and auto-12-fill,
-/// matching the behaviour of the regular Score Entry panel.
-/// Box order: G1-Team1 → G1-Team2 → G2-Team1 → G2-Team2
+/// Playoff match score popup. Text-box entry with auto-jump and auto-12-fill.
+/// Tiebreaker section is hidden and the form compact until a tie is detected.
 /// </summary>
 public class ScoreEntryPopup : Form
 {
@@ -18,26 +17,32 @@ public class ScoreEntryPopup : Form
     private readonly TextBox[]     _boxes    = new TextBox[4];
     private readonly List<TextBox> _boxOrder = [];
 
-    // Tiebreaker
-    private Panel       _pnlTb     = null!;
-    private Label       _lblTbInfo = null!;
-    private RadioButton _rbTb1     = null!;
-    private RadioButton _rbTb2     = null!;
+    // Tiebreaker — hidden until totals are equal
+    private Panel       _pnlTb      = null!;
+    private Label       _lblTbInfo  = null!;
+    private RadioButton _rbTb1      = null!;
+    private RadioButton _rbTb2      = null!;
 
-    private Label _lblTeam1  = null!;
-    private Label _lblTeam2  = null!;
+    // Bottom section (status + buttons) — slides down when tiebreaker appears
+    private Panel _pnlBottom = null!;
     private Label _lblStatus = null!;
 
-    private static readonly Font  s_numFont  = new("Segoe UI", 11f, FontStyle.Bold);
-    private static readonly Color s_validGn  = Color.FromArgb(198, 239, 206);
+    private Label _lblTeam1 = null!;
+    private Label _lblTeam2 = null!;
+
+    private static readonly Font  s_numFont   = new("Segoe UI", 11f, FontStyle.Bold);
+    private static readonly Color s_validGn   = Color.FromArgb(198, 239, 206);
     private static readonly Color s_invalidRd = Color.FromArgb(255, 199, 206);
 
-    // Column positions
-    private const int ColLabel = 20;
-    private const int ColT1    = 155;
-    private const int ColT2    = 255;
-    private const int BoxW     = 80;
-    private const int BoxH     = 32;
+    private const int ColLabel  = 20;
+    private const int ColT1     = 155;
+    private const int ColT2     = 255;
+    private const int BoxW      = 80;
+    private const int BoxH      = 32;
+    private const int TbPanelH  = 70;   // tiebreaker panel height + gap below it
+
+    // Y of the first row after the separator — used to reposition bottom panel
+    private int _bottomBaseY;
 
     public ScoreEntryPopup(int matchId)
     {
@@ -47,7 +52,6 @@ public class ScoreEntryPopup : Form
         MaximizeBox     = false;
         MinimizeBox     = false;
         StartPosition   = FormStartPosition.CenterParent;
-        Size            = new Size(370, 330);
         BackColor       = AppTheme.ContentBackground;
         Font            = AppTheme.FontDefault;
 
@@ -84,12 +88,9 @@ public class ScoreEntryPopup : Form
         Controls.Add(_boxes[3]);
         y += BoxH + 10;
 
-        // Box navigation order
         _boxOrder.AddRange(_boxes);
-
-        // ── Wire pairs ────────────────────────────────────────────────────────
-        WirePair(_boxes[0], _boxes[1]); // Game 1
-        WirePair(_boxes[2], _boxes[3]); // Game 2
+        WirePair(_boxes[0], _boxes[1]);
+        WirePair(_boxes[2], _boxes[3]);
 
         // ── Separator ─────────────────────────────────────────────────────────
         Controls.Add(new Panel
@@ -99,68 +100,76 @@ public class ScoreEntryPopup : Form
             BackColor = AppTheme.Separator
         });
         y += 8;
+        _bottomBaseY = y;   // anchor: where bottom panel sits without tiebreaker
 
-        // ── Tiebreaker panel ──────────────────────────────────────────────────
+        // ── Tiebreaker panel (hidden until tie detected) ──────────────────────
         _pnlTb = new Panel
         {
             Location  = new Point(ColLabel, y),
-            Size      = new Size(320, 62),
-            BackColor = AppTheme.ContentBackground
+            Size      = new Size(320, TbPanelH - 8),
+            BackColor = AppTheme.ContentBackground,
+            Visible   = false,
         };
 
         _lblTbInfo = new Label
         {
             Location  = new Point(0, 0), Size = new Size(320, 20),
-            Font      = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted,
-            Text      = "Tiebreaker: not needed"
+            Font      = AppTheme.FontSmall, ForeColor = Color.DarkOrange,
         };
         _rbTb1 = new RadioButton
         {
             Location = new Point(0, 24), Size = new Size(155, 24),
             Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary,
-            Text = "Team 1 wins", Enabled = false
+            Text = "Team 1 wins",
         };
         _rbTb2 = new RadioButton
         {
             Location = new Point(160, 24), Size = new Size(155, 24),
             Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary,
-            Text = "Team 2 wins", Enabled = false
+            Text = "Team 2 wins",
         };
-
         _pnlTb.Controls.AddRange([_lblTbInfo, _rbTb1, _rbTb2]);
         Controls.Add(_pnlTb);
-        y += _pnlTb.Height + 6;
 
-        // ── Status + buttons ──────────────────────────────────────────────────
+        // ── Bottom panel: status + buttons ────────────────────────────────────
+        _pnlBottom = new Panel
+        {
+            Location  = new Point(ColLabel, y),
+            Size      = new Size(320, 68),
+            BackColor = AppTheme.ContentBackground,
+        };
+
         _lblStatus = new Label
         {
-            Location = new Point(ColLabel, y), Size = new Size(320, 20),
-            Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted
+            Location = new Point(0, 0), Size = new Size(320, 20),
+            Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted,
         };
-        Controls.Add(_lblStatus);
-        y += 28;
 
         var btnSave = new Button
         {
-            Text = "Save", Location = new Point(ColLabel, y),
+            Text = "Save", Location = new Point(0, 28),
             Size = new Size(100, 32), Font = AppTheme.FontDefault,
             BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand
+            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
         };
         btnSave.FlatAppearance.BorderSize = 0;
         btnSave.Click += OnSave;
-        Controls.Add(btnSave);
 
         var btnCancel = new Button
         {
-            Text = "Cancel", Location = new Point(ColLabel + 110, y),
+            Text = "Cancel", Location = new Point(110, 28),
             Size = new Size(90, 32), Font = AppTheme.FontDefault,
             BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
-            DialogResult = DialogResult.Cancel
+            DialogResult = DialogResult.Cancel,
         };
         btnCancel.FlatAppearance.BorderSize = 0;
-        Controls.Add(btnCancel);
+
+        _pnlBottom.Controls.AddRange([_lblStatus, btnSave, btnCancel]);
+        Controls.Add(_pnlBottom);
+
+        // Initial compact size (no tiebreaker)
+        ClientSize = new Size(370, _bottomBaseY + _pnlBottom.Height + 14);
     }
 
     // ── Score box wiring (mirrors ScoreEntryPanel.WirePair) ──────────────────
@@ -179,8 +188,6 @@ public class ScoreEntryPopup : Form
         b1.KeyDown += (_, e) => NavigateBox(b1, e);
         b2.KeyDown += (_, e) => NavigateBox(b2, e);
 
-        // When focus leaves b1 and b2 is still empty, auto-fill b2 with the
-        // winning score (12) — scorer enters the losing score, 12 fills in.
         b1.Leave += (_, _) =>
         {
             if (int.TryParse(b1.Text.Trim(), out int v) && v is >= 0 and <= 11
@@ -189,8 +196,6 @@ public class ScoreEntryPopup : Form
         };
     }
 
-    // Auto-advance to next box when entry is unambiguously complete.
-    // '1' waits (could start 10 or 11); all other single digits advance immediately.
     private void AutoAdvance(TextBox tb)
     {
         if (!tb.Focused) return;
@@ -202,7 +207,6 @@ public class ScoreEntryPopup : Form
             BeginInvoke(() => _boxOrder[idx + 1].Focus());
     }
 
-    // Digits only, 0-12, no forfeits.
     private void ScoreKeyPress(TextBox tb, KeyPressEventArgs e)
     {
         if (char.IsControl(e.KeyChar)) return;
@@ -213,12 +217,8 @@ public class ScoreEntryPopup : Form
             .Insert(tb.SelectionStart, e.KeyChar.ToString());
 
         if (!int.TryParse(proposed, out int v) || v < 0 || v > 12)
-        {
-            e.Handled = true;
-            return;
-        }
+        { e.Handled = true; return; }
 
-        // If proposed == current text (e.g. typing '0' again), TextChanged won't fire.
         if (proposed == tb.Text && proposed.Length == 1 && proposed[0] != '1')
         {
             e.Handled = true;
@@ -246,21 +246,15 @@ public class ScoreEntryPopup : Form
     private static void ColorPair(TextBox b1, TextBox b2)
     {
         if (string.IsNullOrWhiteSpace(b1.Text) || string.IsNullOrWhiteSpace(b2.Text))
-        {
-            b1.BackColor = b2.BackColor = Color.White;
-            return;
-        }
+        { b1.BackColor = b2.BackColor = Color.White; return; }
         if (!int.TryParse(b1.Text.Trim(), out int a) || !int.TryParse(b2.Text.Trim(), out int b))
-        {
-            b1.BackColor = b2.BackColor = Color.White;
-            return;
-        }
+        { b1.BackColor = b2.BackColor = Color.White; return; }
         bool valid = (a == 12 && b is >= 0 and <= 11) || (b == 12 && a is >= 0 and <= 11);
         Color c = valid ? s_validGn : s_invalidRd;
         b1.BackColor = b2.BackColor = c;
     }
 
-    // ── Tiebreaker dynamic state ──────────────────────────────────────────────
+    // ── Tiebreaker — show/hide based on total points ──────────────────────────
 
     private void UpdateTiebreaker()
     {
@@ -269,7 +263,7 @@ public class ScoreEntryPopup : Form
 
         if (t1g1 == null || t2g1 == null || t1g2 == null || t2g2 == null)
         {
-            _rbTb1.Enabled = _rbTb2.Enabled = false;
+            SetTiebreakerVisible(false);
             return;
         }
 
@@ -277,21 +271,33 @@ public class ScoreEntryPopup : Form
         int t2total = t2g1.Value + t2g2.Value;
         bool tied   = t1total == t2total;
 
-        _rbTb1.Enabled = _rbTb2.Enabled = tied;
-        if (!tied) { _rbTb1.Checked = _rbTb2.Checked = false; }
-
-        string totals = $"{_lblTeam1.Text}: {t1total}  –  {_lblTeam2.Text}: {t2total}";
-        if (tied)
+        if (!tied)
         {
-            _lblTbInfo.Text      = $"Tied {t1total}–{t2total} — select tiebreaker winner";
-            _lblTbInfo.ForeColor = Color.DarkOrange;
+            SetTiebreakerVisible(false);
+            string leader = t1total > t2total ? _lblTeam1.Text : _lblTeam2.Text;
+            _lblStatus.Text      = $"{_lblTeam1.Text}: {t1total}  –  {_lblTeam2.Text}: {t2total}  →  {leader} wins";
+            _lblStatus.ForeColor = AppTheme.TextSecondary;
         }
         else
         {
-            string leader = t1total > t2total ? _lblTeam1.Text : _lblTeam2.Text;
-            _lblTbInfo.Text      = $"{totals}  →  {leader} wins";
-            _lblTbInfo.ForeColor = AppTheme.TextMuted;
+            _lblTbInfo.Text = $"Tied {t1total}–{t2total} — select tiebreaker winner";
+            _rbTb1.Text     = $"{_lblTeam1.Text} wins";
+            _rbTb2.Text     = $"{_lblTeam2.Text} wins";
+            SetTiebreakerVisible(true);
+            _lblStatus.Text = "";
         }
+    }
+
+    private void SetTiebreakerVisible(bool visible)
+    {
+        if (_pnlTb.Visible == visible) return;
+
+        _pnlTb.Visible = visible;
+        if (!visible) { _rbTb1.Checked = _rbTb2.Checked = false; }
+
+        int bottomY = _bottomBaseY + (visible ? TbPanelH : 0);
+        _pnlBottom.Location = new Point(ColLabel, bottomY);
+        ClientSize = new Size(ClientSize.Width, bottomY + _pnlBottom.Height + 14);
     }
 
     // ── Data load ─────────────────────────────────────────────────────────────
@@ -312,17 +318,10 @@ public class ScoreEntryPopup : Form
             string t2 = match.Team2?.EffectiveDisplayName ?? "Team 2";
             _lblTeam1.Text = t1;
             _lblTeam2.Text = t2;
-            _rbTb1.Text    = $"{t1} wins";
-            _rbTb2.Text    = $"{t2} wins";
 
             if (match.PlayoffRound != null)
                 Text = $"Score — {match.PlayoffRound.RoundName}";
 
-            var config = db.PlayoffConfigs.FirstOrDefault(c => c.SeasonId == match.SeasonId);
-            if (config != null)
-                _lblTbInfo.Text = $"Tiebreaker: {config.TiebreakerBalls} ball(s) — select winner below";
-
-            // Restore existing scores
             var games = db.PlayoffGames
                 .Where(g => g.PlayoffMatchId == _matchId)
                 .OrderBy(g => g.GameNumber)
@@ -350,7 +349,6 @@ public class ScoreEntryPopup : Form
 
             UpdateTiebreaker();
 
-            // Focus first empty box
             var first = _boxOrder.FirstOrDefault(b => string.IsNullOrWhiteSpace(b.Text));
             if (first != null) BeginInvoke(() => first.Focus());
         }
@@ -375,7 +373,6 @@ public class ScoreEntryPopup : Form
 
             int? tbWinner = _rbTb1.Checked ? 1 : _rbTb2.Checked ? 2 : null;
 
-            // Winner = higher total points across both games
             if (t1g1.Value + t1g2.Value == t2g1.Value + t2g2.Value && tbWinner == null)
             {
                 _lblStatus.Text      = "Teams tied on total points — select a tiebreaker winner.";

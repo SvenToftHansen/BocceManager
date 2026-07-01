@@ -384,7 +384,8 @@ public class BracketVisualizationControl : UserControl
         {
             if (!positions.TryGetValue(m.Id, out var pos)) continue;
 
-            // Entire match bounding box is clickable (team rows + game info box + score boxes)
+            // Entire match bounding box is clickable — but only when both teams are known
+            if (string.IsNullOrEmpty(m.Team1Name) || string.IsNullOrEmpty(m.Team2Name)) continue;
             var matchRect = new RectangleF(pos.x, pos.y, TeamNameW + ScoreBoxW, MatchH);
             if (matchRect.Contains(fx, fy))
             {
