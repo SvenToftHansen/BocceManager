@@ -202,7 +202,7 @@ public class BracketVisualizationControl : UserControl
                 DrawMatch(g, m, positions[m.Id]);
 
         // Footer note — tiebreaker rule
-        string footer = $"* Each match: 2 games. Tie (1–1) → tiebreaker, {_tiebreakerBalls} ball(s), winner scores 1 point.";
+        string footer = $"* Each match: aggregate of 2 games total score.  Tie occurs when both teams score the same over both games → Tiebreaker: {_tiebreakerBalls} ball(s), winner scores 1 point.";
         using var footerFont  = new Font(AppTheme.FontSmall.FontFamily, 7.5f, FontStyle.Italic);
         using var footerBrush = new SolidBrush(AppTheme.TextMuted);
         g.DrawString(footer, footerFont, footerBrush, new PointF(LeftPad, _naturalH - 24));
@@ -404,7 +404,7 @@ public class BracketVisualizationControl : UserControl
             foreach (var m in rg.OrderBy(x => x.Slot))
                 DrawMatch(g, m, positions[m.Id]);
 
-        string footer = $"* Each match: 2 games. Tie → tiebreaker ({_tiebreakerBalls} ball(s)), winner scores 1 point.";
+        string footer = $"* Each match: aggregate of 2 games total score.  Tie occurs when both teams score the same over both games → Tiebreaker: {_tiebreakerBalls} ball(s), winner scores 1 point.";
         using var fFont  = new Font(AppTheme.FontSmall.FontFamily, InfoFontSize, FontStyle.Italic);
         using var fBrush = new SolidBrush(AppTheme.TextMuted);
         g.DrawString(footer, fFont, fBrush, new PointF(LeftPad, _naturalH - 16));
