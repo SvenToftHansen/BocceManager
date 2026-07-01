@@ -230,8 +230,8 @@ public class PlayoffSetupPanel : UserControl
                 .First(c => c.SeasonId == seasonId.Value);
         }
 
-        _numMatchDuration.Value        = _config.MatchDurationMins;
-        _numTiebreakerBalls.Value      = _config.TiebreakerBalls;
+        _numMatchDuration.Value        = Clamp(_config.MatchDurationMins,   _numMatchDuration.Minimum,   _numMatchDuration.Maximum);
+        _numTiebreakerBalls.Value      = Clamp(_config.TiebreakerBalls,     _numTiebreakerBalls.Minimum, _numTiebreakerBalls.Maximum);
         _cboDisplayMode.SelectedIndex  = _config.DisplayMode == "Scroll" ? 1 : 0;
 
         // Load teams
@@ -534,4 +534,7 @@ public class PlayoffSetupPanel : UserControl
         parent.Controls.Add(grid);
         return grid;
     }
+
+    private static decimal Clamp(int value, decimal min, decimal max) =>
+        Math.Max(min, Math.Min(max, value));
 }
