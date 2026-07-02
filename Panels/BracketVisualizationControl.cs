@@ -21,14 +21,14 @@ public class BracketVisualizationControl : UserControl
     private const int TeamNameW   = 540;  // width of team name area
     private const int GameBoxH    = 56;   // court/time info box (40% taller)
     private const int MatchH      = TeamBoxH + GameBoxH + TeamBoxH;
-    private const int MatchVGap   = 1;    // minimal gap between matches (halved)
+    private const int MatchVGap   = 0;    // minimal gap between matches (halved again — boxes touch)
     private const int ByeLabelH   = 14;   // "Bye N" label above bye team
     private const int LeftPad     = 10;   // minimal left padding
     private const int TopPad      = 12;   // minimal top padding
     private const int FooterH     = 40;   // space reserved for footer note at bottom
 
     private const float ScoreFontSize    = 36f;   // aggregate score — large and bold
-    private const float TeamNameFontSize = 36f;   // team names — bold for all teams
+    private const float TeamNameFontSize = 38f;   // team names — bold for all teams
     private const float InfoFontSize     = 24f;   // court/time info
 
     // ── Data ──────────────────────────────────────────────────────────────────
@@ -336,8 +336,9 @@ public class BracketVisualizationControl : UserControl
         using var nameFont  = new Font(AppTheme.FontDefault.FontFamily, TeamNameFontSize,
                                        FontStyle.Bold);
         using var textBrush = new SolidBrush(AppTheme.TextPrimary);
+        using var nameFmt   = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
         g.DrawString(name ?? "", nameFont, textBrush,
-            new RectangleF(x + 3, y + 2, TeamNameW - 6, TeamBoxH - 4));
+            new RectangleF(x + 3, y + 2, TeamNameW - 6, TeamBoxH - 4), nameFmt);
 
         // Score box — larger font, prominent
         int sx = x + TeamNameW;
