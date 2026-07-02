@@ -24,8 +24,9 @@ public class ScoreEntryPopup : Form
     private RadioButton _rbTb2      = null!;
 
     // Bottom section (status + buttons) — slides down when tiebreaker appears
-    private Panel _pnlBottom = null!;
-    private Label _lblStatus = null!;
+    private Panel  _pnlBottom = null!;
+    private Label  _lblStatus = null!;
+    private Button _btnReset  = null!;
 
     private Label _lblTeam1 = null!;
     private Label _lblTeam2 = null!;
@@ -165,7 +166,18 @@ public class ScoreEntryPopup : Form
         };
         btnCancel.FlatAppearance.BorderSize = 0;
 
-        _pnlBottom.Controls.AddRange([_lblStatus, btnSave, btnCancel]);
+        _btnReset = new Button
+        {
+            Text = "Reset", Location = new Point(210, 28),
+            Size = new Size(90, 32), Font = AppTheme.FontDefault,
+            BackColor = Color.FromArgb(220, 220, 220), ForeColor = AppTheme.TextPrimary,
+            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+            Visible = false, // shown only when a score already exists to clear
+        };
+        _btnReset.FlatAppearance.BorderSize = 0;
+        _btnReset.Click += OnReset;
+
+        _pnlBottom.Controls.AddRange([_lblStatus, btnSave, btnCancel, _btnReset]);
         Controls.Add(_pnlBottom);
 
         // Initial compact size (no tiebreaker)
@@ -347,6 +359,8 @@ public class ScoreEntryPopup : Form
                 _rbTb2.Checked = g3.Team2Score > 0;
             }
 
+            _btnReset.Visible = g1 != null || g2 != null;
+
             UpdateTiebreaker();
 
             // Defer focus until the form handle exists (Shown fires after ShowDialog creates the handle)
@@ -394,6 +408,35 @@ public class ScoreEntryPopup : Form
             _lblStatus.Text      = $"Error: {ex.Message}";
             _lblStatus.ForeColor = AppTheme.TextMuted;
             AppLogger.Error(ex, "ScoreEntryPopup.OnSave matchId={MatchId}", _matchId);
+        }
+    }
+
+    private void OnReset(object? sender, EventArgs e)
+    {
+        var confirm = MessageBox.Show(
+            "This clears the score for this match. If the winner had already advanced " +
+            "and later matches were played using that result, those matches will be reset too.\n\n" +
+            "This cannot be undone. Continue?",
+            "Reset Match Score",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+
+        if (confirm != DialogResult.Yes) return;
+
+        try
+        {
+            using var db = new BocceDbContext();
+            PlayoffService.ResetMatchScore(db, _matchId);
+
+            DialogResult = DialogResult.OK;
+            Close();
+        }
+        catch (Exception ex)
+        {
+            _lblStatus.Text      = $"Error: {ex.Message}";
+            _lblStatus.ForeColor = AppTheme.TextMuted;
+            AppLogger.Error(ex, "ScoreEntryPopup.OnReset matchId={MatchId}", _matchId);
         }
     }
 

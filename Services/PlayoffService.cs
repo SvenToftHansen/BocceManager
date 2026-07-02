@@ -481,6 +481,48 @@ public static class PlayoffService
         db.SaveChanges();
     }
 
+    /// <summary>
+    /// Clears a match's score/winner (e.g. entered in the wrong slot). If the winner had
+    /// already advanced into the next match's team slot, that slot is cleared too — and if
+    /// the next match had itself already been played using that team, it's reset first
+    /// (cascading forward through the bracket) so no match is left referencing a result
+    /// that no longer exists.
+    /// </summary>
+    public static void ResetMatchScore(BocceDbContext db, int matchId)
+    {
+        var match = db.PlayoffMatches.Find(matchId)
+            ?? throw new InvalidOperationException("Match not found.");
+
+        int? winnerId = match.WinnerId;
+
+        db.PlayoffGames.Where(g => g.PlayoffMatchId == matchId).ExecuteDelete();
+
+        match.WinnerId  = null;
+        match.Status    = "scheduled";
+        match.EnteredAt = null;
+
+        if (winnerId.HasValue && match.NextMatchId.HasValue)
+        {
+            var next = db.PlayoffMatches.Find(match.NextMatchId.Value);
+            if (next != null)
+            {
+                bool wasTop     = match.NextMatchIsTop;
+                int? assignedId = wasTop ? next.Team1Id : next.Team2Id;
+
+                if (assignedId == winnerId)
+                {
+                    if (next.Status == "completed")
+                        ResetMatchScore(db, next.Id);
+
+                    if (wasTop) next.Team1Id = null;
+                    else        next.Team2Id = null;
+                }
+            }
+        }
+
+        db.SaveChanges();
+    }
+
     // ── Court/time helpers ────────────────────────────────────────────────────
 
     private static int? AssignCourt(List<Court> courts, int slot) =>
