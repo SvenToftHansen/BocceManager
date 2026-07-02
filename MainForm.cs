@@ -13,7 +13,7 @@ public partial class MainForm : Form
         Leagues, Seasons, Divisions,
         Players, Teams, TeamApplicants, LookingForTeam,
         ScoreEntry, Schedule,
-        Standings, Playoffs, PlayoffSetup, PlayoffSchedule, PlayoffStandings,
+        Standings, Playoffs, PlayoffSetup, PlayoffSchedule,
         ReportTeamListing, ReportScheduleGeneric, ReportSpareLists,
         SpareLists, Announcements, Fees, EmailLists, EmailCompose, EmailHistory, Documents, Parameters, Courts, Utilities, Theme
     }
@@ -314,7 +314,6 @@ public partial class MainForm : Form
         AddGroup("PLAYOFFS", add => {
             add("Setup",       NavSection.PlayoffSetup);
             add("Schedule",    NavSection.PlayoffSchedule);
-            add("Standings",   NavSection.PlayoffStandings);
         });
 
         AddGroup("REPORTS", add => {
@@ -478,7 +477,6 @@ public partial class MainForm : Form
         NavSection.Playoffs           => "Playoffs",
         NavSection.PlayoffSetup       => "Playoff Setup",
         NavSection.PlayoffSchedule    => "Playoff Schedule",
-        NavSection.PlayoffStandings   => "Playoff Standings",
         NavSection.SpareLists    => "Spare Lists",
         NavSection.Announcements => "Announcements",
         NavSection.Fees          => "Fees",
@@ -565,7 +563,6 @@ public partial class MainForm : Form
                 sectionsToEnable.Add(NavSection.Playoffs);
                 sectionsToEnable.Add(NavSection.PlayoffSetup);
                 sectionsToEnable.Add(NavSection.PlayoffSchedule);
-                sectionsToEnable.Add(NavSection.PlayoffStandings);
                 sectionsToEnable.Add(NavSection.ReportTeamListing);
                 sectionsToEnable.Add(NavSection.ReportScheduleGeneric);
                 sectionsToEnable.Add(NavSection.ReportSpareLists);
