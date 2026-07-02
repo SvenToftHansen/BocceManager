@@ -15,20 +15,20 @@ public class BracketVisualizationControl : UserControl
 {
     // ── Layout constants (unscaled) ───────────────────────────────────────────
 
-    private const int ColWidth    = 170;  // horizontal gap between rounds (for connectors)
-    private const int TeamBoxH    = 34;   // height of one team name row
-    private const int ScoreBoxW   = 56;   // width of aggregate score area (fits "24")
-    private const int TeamNameW   = 148;  // width of team name area
-    private const int GameBoxH    = 24;   // court/time info box — 2 lines of 7pt text
+    private const int ColWidth    = 200;  // horizontal gap between rounds (for connectors)
+    private const int TeamBoxH    = 52;   // height of one team name row (increased for larger font)
+    private const int ScoreBoxW   = 70;   // width of aggregate score area (wider for visibility)
+    private const int TeamNameW   = 180;  // width of team name area (wider)
+    private const int GameBoxH    = 28;   // court/time info box — 2 lines of 7pt text
     private const int MatchH      = TeamBoxH + GameBoxH + TeamBoxH;
-    private const int MatchVGap   = 4;    // minimal gap between matches in same round
+    private const int MatchVGap   = 6;    // gap between matches in same round (slightly larger)
     private const int ByeLabelH   = 14;   // "Bye N" label above bye team
     private const int LeftPad     = 20;
     private const int TopPad      = 24;
 
-    private const float ScoreFontSize    = 12f;   // aggregate score — large and bold
-    private const float TeamNameFontSize = 9f;
-    private const float InfoFontSize     = 7f;    // court/time info
+    private const float ScoreFontSize    = 14f;   // aggregate score — large and bold (increased)
+    private const float TeamNameFontSize = 18f;   // team names (doubled from 9f)
+    private const float InfoFontSize     = 8f;    // court/time info (slightly larger)
 
     // ── Data ──────────────────────────────────────────────────────────────────
 
@@ -256,7 +256,7 @@ public class BracketVisualizationControl : UserControl
         IList<IGrouping<int, BracketMatch>> byRound,
         Dictionary<int, (int x, int y)> positions)
     {
-        using var pen = new Pen(Color.FromArgb(160, 160, 160), 2f);
+        using var pen = new Pen(Color.Black, 2f);
 
         foreach (var roundGroup in byRound)
         {
@@ -311,7 +311,7 @@ public class BracketVisualizationControl : UserControl
         DrawTeamRow(g, x, t2Y, m.Team2Name, m.Team2Score, m.IsCompleted && m.Team2Score > m.Team1Score);
 
         // ── Outer border ──────────────────────────────────────────────────────
-        using var borderPen = new Pen(Color.FromArgb(180, 180, 180), 1f);
+        using var borderPen = new Pen(Color.Black, 1.5f);
         g.DrawRectangle(borderPen, x, y, TeamNameW + ScoreBoxW, MatchH);
     }
 
@@ -324,7 +324,7 @@ public class BracketVisualizationControl : UserControl
         using var bgBrush = new SolidBrush(bg);
         g.FillRectangle(bgBrush, x, y, TeamNameW + ScoreBoxW, TeamBoxH);
 
-        using var borderPen = new Pen(Color.FromArgb(200, 200, 200), 1f);
+        using var borderPen = new Pen(Color.Black, 1.5f);
         g.DrawRectangle(borderPen, x, y, TeamNameW + ScoreBoxW, TeamBoxH);
 
         // Team name
@@ -339,7 +339,7 @@ public class BracketVisualizationControl : UserControl
         var scoreBgColor = isWinner ? Color.FromArgb(210, 235, 210) : Color.FromArgb(242, 242, 248);
         using var scoreBg = new SolidBrush(scoreBgColor);
         g.FillRectangle(scoreBg, sx, y, ScoreBoxW, TeamBoxH);
-        using var scoreBorder = new Pen(Color.FromArgb(160, 160, 180), 1f);
+        using var scoreBorder = new Pen(Color.Black, 1.5f);
         g.DrawRectangle(scoreBorder, sx, y, ScoreBoxW, TeamBoxH);
 
         if (score.HasValue)
@@ -356,7 +356,7 @@ public class BracketVisualizationControl : UserControl
     {
         using var boxBg = new SolidBrush(Color.FromArgb(230, 235, 242));
         g.FillRectangle(boxBg, x, y, TeamNameW + ScoreBoxW, GameBoxH);
-        using var borderPen = new Pen(Color.FromArgb(180, 190, 210), 1f);
+        using var borderPen = new Pen(Color.Black, 1.5f);
         g.DrawRectangle(borderPen, x, y, TeamNameW + ScoreBoxW, GameBoxH);
 
         // Combine court + day/time onto one or two compact lines
