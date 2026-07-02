@@ -16,12 +16,12 @@ public class BracketVisualizationControl : UserControl
     // ── Layout constants (unscaled) ───────────────────────────────────────────
 
     private const int ColWidth    = 180;  // horizontal gap between rounds (more space between columns)
-    private const int TeamBoxH    = 96;   // height of one team name row (50% increase for larger boxes)
-    private const int ScoreBoxW   = 210;  // width of aggregate score area (50% increase)
-    private const int TeamNameW   = 540;  // width of team name area (50% increase)
-    private const int GameBoxH    = 40;   // court/time info box — 40% taller, 2 lines of 8pt text
+    private const int TeamBoxH    = 134;  // height of one team name row (40% taller match boxes)
+    private const int ScoreBoxW   = 210;  // width of aggregate score area
+    private const int TeamNameW   = 540;  // width of team name area
+    private const int GameBoxH    = 56;   // court/time info box (40% taller)
     private const int MatchH      = TeamBoxH + GameBoxH + TeamBoxH;
-    private const int MatchVGap   = 3;    // minimal gap between matches (tighten layout)
+    private const int MatchVGap   = 2;    // minimal gap between matches (2px)
     private const int ByeLabelH   = 14;   // "Bye N" label above bye team
     private const int LeftPad     = 10;   // minimal left padding
     private const int TopPad      = 12;   // minimal top padding
