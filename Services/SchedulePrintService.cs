@@ -56,11 +56,13 @@ public static class SchedulePrintService
 
         var clubName = AppParameterService.GetAppParameter(db, "ClubName") ?? "Bocce League";
         string docHeader    = $"{clubName}  –  {season.League.Name}  –  {season.Name} - Generic Schedules";
-        string courtDisplay = AppParameterService.GetCourtDisplay(db, season.LeagueId);
+        string courtDisplay = season.CourtDisplayStyle;
 
-        var seasonCourts = db.Courts
-            .Where(c => c.IsActive)
-            .OrderBy(c => c.SortOrder)
+        var seasonCourts = db.SeasonCourts
+            .Where(sc => sc.SeasonId == seasonId && sc.Court.IsActive)
+            .Include(sc => sc.Court)
+            .OrderBy(sc => sc.SortOrder)
+            .Select(sc => sc.Court)
             .AsEnumerable()
             .Select(c => (Id: c.Id, Display: CourtLabel(c, courtDisplay)))
             .ToList();

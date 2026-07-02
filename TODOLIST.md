@@ -266,3 +266,4 @@ _Generated 2026-06-15 from TODO.md, memory files, and app state analysis_
 - [x] Navigation — sidebar with groups, indentation, white dot prefix
 - [x] Schema — Season.Status, GlAccount, JournalEntry, Finance entities, SeasonCourts
 - [x] Bug fix — Leagues panel boolean FormatException
+- [x] Season-level court selection — SeasonCourts now has SortOrder (priority); Season Panel Courts tab manages selection/order/display style; league schedule generation and playoff bracket generation both consult it (playoffs strictly inherit, no separate PlayoffCourt selection). Removed duplicate/inconsistent letter-display settings (global AppParameter + per-league) in favor of one setting on Season.CourtDisplayStyle.

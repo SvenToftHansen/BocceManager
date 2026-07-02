@@ -317,11 +317,13 @@ public class SchedulePanel : UserControl
                 var season = db.Seasons.Find(_selectedSeasonId.Value);
                 _seasonStartDate = season?.StartDate;
                 _seasonIsLocked  = season?.IsLocked ?? false;
-                _courtDisplay = AppParameterService.GetAppParameter(db, "CourtDisplay") ?? "number";
+                _courtDisplay = season?.CourtDisplayStyle ?? "number";
 
-                _seasonCourts = db.Courts
-                    .Where(c => c.IsActive)
-                    .OrderBy(c => c.CourtNumber)
+                _seasonCourts = db.SeasonCourts
+                    .Where(sc => sc.SeasonId == _selectedSeasonId.Value && sc.Court.IsActive)
+                    .Include(sc => sc.Court)
+                    .OrderBy(sc => sc.SortOrder)
+                    .Select(sc => sc.Court)
                     .AsEnumerable()
                     .Select(c => (c.Id, Display: CourtLabel(c, _courtDisplay)))
                     .ToList();
@@ -544,7 +546,7 @@ public class SchedulePanel : UserControl
         if (_seasonCourts.Count == 0)
         {
             MessageBox.Show(
-                "No active courts found.\n\nGo to Administration → Courts to add courts.",
+                "No courts selected for this season.\n\nGo to the Season screen to choose courts.",
                 "Generate Templates", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }

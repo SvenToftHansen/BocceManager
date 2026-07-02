@@ -77,7 +77,6 @@ public class BocceDbContext : DbContext
 
     // Playoffs
     public DbSet<PlayoffConfig>    PlayoffConfigs   => Set<PlayoffConfig>();
-    public DbSet<PlayoffCourt>     PlayoffCourts    => Set<PlayoffCourt>();
     public DbSet<PlayoffDayParams> PlayoffDayParams => Set<PlayoffDayParams>();
     public DbSet<PlayoffSeeding>   PlayoffSeedings  => Set<PlayoffSeeding>();
     public DbSet<PlayoffRound>     PlayoffRounds    => Set<PlayoffRound>();
@@ -247,11 +246,6 @@ model.Entity<SeasonCourt>().HasIndex(e => new { e.SeasonId, e.CourtId }).IsUniqu
         model.Entity<PlayoffConfig>()
             .HasOne(e => e.Season).WithMany()
             .HasForeignKey(e => e.SeasonId).OnDelete(DeleteBehavior.Cascade);
-
-        // PlayoffCourt: selected courts for playoff play
-        model.Entity<PlayoffCourt>()
-            .HasOne(e => e.Court).WithMany()
-            .HasForeignKey(e => e.CourtId).OnDelete(DeleteBehavior.Restrict);
 
         // PlayoffSeeding: unique seed per season
         model.Entity<PlayoffSeeding>()

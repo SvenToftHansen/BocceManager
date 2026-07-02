@@ -10,10 +10,8 @@ public class CourtPanel : UserControl
     private bool _isLoadingData = false;
     private int? _selectedCourtId;
     private List<(int Id, string Display, int SortOrder, bool IsActive, string Notes)> _allCourts = [];
-    private string _courtDisplay = "number";
 
     private ListBox _lstCourts = null!;
-    private ComboBox _cmbCourtDisplay = null!;
     private Button _btnNew = null!;
     private Button _btnUp = null!;
     private Button _btnDown = null!;
@@ -175,30 +173,6 @@ public class CourtPanel : UserControl
         _btnDelete.Enabled = false;
         toolbar.Controls.Add(_btnDelete);
 
-        // Court Display dropdown (right side)
-        var lblDisplay = new Label
-        {
-            Text = "Court Naming Style:",
-            Location = new Point(_btnDelete.Right + 20, 12),
-            Size = new Size(130, 20),
-            ForeColor = AppTheme.TextPrimary,
-            TextAlign = ContentAlignment.MiddleLeft
-        };
-        toolbar.Controls.Add(lblDisplay);
-
-        _cmbCourtDisplay = new ComboBox
-        {
-            Location = new Point(lblDisplay.Right + 4, 8),
-            Size = new Size(100, 24),
-            Font = AppTheme.FontDefault,
-            BackColor = AppTheme.ContentBackground,
-            ForeColor = AppTheme.TextPrimary,
-            DropDownStyle = ComboBoxStyle.DropDownList
-        };
-        _cmbCourtDisplay.Items.AddRange(new[] { "Number", "Letter" });
-        _cmbCourtDisplay.SelectedIndexChanged += OnCourtDisplayChanged;
-        toolbar.Controls.Add(_cmbCourtDisplay);
-
         layout.Controls.Add(toolbar, 0, 1);
         Controls.Add(layout);
     }
@@ -211,8 +185,6 @@ public class CourtPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
-            _courtDisplay = AppParameterService.GetAppParameter(db, "CourtDisplay") ?? "number";
-            _cmbCourtDisplay.SelectedItem = _courtDisplay == "letter" ? "Letter" : "Number";
 
             _allCourts = db.Courts
                 .OrderBy(c => c.SortOrder)
@@ -245,10 +217,13 @@ public class CourtPanel : UserControl
         }
     }
 
-    private string FormatCourtDisplay(Court court)
+    // Naming style (number vs. letter) is a season-level setting (Season screen) that
+    // controls how courts are labelled in schedules/brackets. This admin list always
+    // shows both so it's unambiguous regardless of any season's display choice.
+    private static string FormatCourtDisplay(Court court)
     {
-        string baseDisplay = _courtDisplay == "letter" && court.CourtLetter != ""
-            ? $"Court {court.CourtLetter}"
+        string baseDisplay = court.CourtLetter != ""
+            ? $"Court {court.CourtNumber} ({court.CourtLetter})"
             : $"Court {court.CourtNumber}";
 
         if (!court.IsActive)
@@ -258,27 +233,6 @@ public class CourtPanel : UserControl
             baseDisplay += " (* notes)";
 
         return baseDisplay;
-    }
-
-    private void OnCourtDisplayChanged(object? sender, EventArgs e)
-    {
-        if (_isLoadingData) return;
-
-        var newDisplay = _cmbCourtDisplay.SelectedItem?.ToString()?.ToLower() ?? "number";
-        newDisplay = newDisplay == "letter" ? "letter" : "number";
-
-        try
-        {
-            using var db = new BocceDbContext();
-            AppParameterService.SetAppParameter(db, "CourtDisplay", newDisplay);
-            _courtDisplay = newDisplay;
-            LoadCourts();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Error updating court display:\n\n{ex.Message}",
-                "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
     }
 
     private void OnCourtSelected(object? sender, EventArgs e)

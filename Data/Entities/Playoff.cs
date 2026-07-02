@@ -13,19 +13,6 @@ public class PlayoffConfig
 
     public Season   Season                   { get; set; } = null!;
     public ICollection<PlayoffDayParams> DayParams { get; set; } = [];
-    public ICollection<PlayoffCourt>     Courts    { get; set; } = [];
-}
-
-// ── Courts selected for playoff play (may differ from regular-season courts) ──
-public class PlayoffCourt
-{
-    public int Id             { get; set; }
-    public int PlayoffConfigId { get; set; }
-    public int CourtId        { get; set; }
-    public int SortOrder      { get; set; }
-
-    public PlayoffConfig PlayoffConfig { get; set; } = null!;
-    public Court         Court         { get; set; } = null!;
 }
 
 // ── Per-day scheduling parameters ─────────────────────────────────────────────

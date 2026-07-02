@@ -29,7 +29,6 @@ public class LeaguePanel : UserControl
     private ThemedNumericUpDown _numMin         = null!;
     private ThemedNumericUpDown _numMax         = null!;
     private ThemedNumericUpDown _numMaxTeams    = null!;
-    private ComboBox      _cmbCourtDisplay = null!;
     private Button        _btnAdd         = null!;
     private Button        _btnSave        = null!;
     private Button        _btnCancel      = null!;
@@ -252,20 +251,6 @@ public class LeaguePanel : UserControl
         var lblMaxTeamsHint = Hint("  Seasons and Divisions inherit this unless overridden. 0 = no limit.", inputX + 100, y + 4);
         y += 44;
 
-        // Court Display
-        var lblCourtDisplay = Lbl("Court Display", y);
-        _cmbCourtDisplay = new ComboBox
-        {
-            Location = new Point(inputX, y), Size = new Size(140, 26),
-            Font = AppTheme.FontDefault, BackColor = AppTheme.ContentBackground,
-            ForeColor = AppTheme.TextPrimary, DropDownStyle = ComboBoxStyle.DropDownList
-        };
-        _cmbCourtDisplay.Items.AddRange(["Number", "Letter"]);
-        _cmbCourtDisplay.SelectedIndex = 0;
-        _cmbCourtDisplay.SelectedIndexChanged += (_, _) => MarkDirty();
-        var lblCourtHint = Hint("  How courts appear in schedules: 'Court 3' or 'Court C'", inputX + 148, y + 4);
-        y += 44;
-
         // Active
         var lblActive = Lbl("Active", y);
         _chkActive = new CheckBox
@@ -289,7 +274,6 @@ public class LeaguePanel : UserControl
             lblMin, _numMin, lblMinHint,
             lblMax, _numMax, lblMaxHint,
             lblMaxTeams, _numMaxTeams, lblMaxTeamsHint,
-            lblCourtDisplay, _cmbCourtDisplay, lblCourtHint,
             lblActive, _chkActive, lblCreatedLbl, _lblCreatedAt
         ]);
 
@@ -537,8 +521,6 @@ public class LeaguePanel : UserControl
             _numMin.Value        = league.PlayersPerTeamMinimum ?? 0;
             _numMax.Value        = league.PlayersPerTeamMaximum ?? 0;
             _numMaxTeams.Value   = league.MaxTeamsInDivision;
-            string courtDisplay  = AppParameterService.GetCourtDisplay(db, leagueId);
-            _cmbCourtDisplay.SelectedIndex = courtDisplay == "letter" ? 1 : 0;
         }
         catch { }
         finally
@@ -564,7 +546,6 @@ public class LeaguePanel : UserControl
         _numMin.Value              = 0;
         _numMax.Value              = 0;
         _numMaxTeams.Value         = 0;
-        _cmbCourtDisplay.SelectedIndex = 0;
         _btnDelete.Enabled         = false;
         _btnCancel.Visible   = false;
         _seasonsGrid.Rows.Clear();
@@ -755,14 +736,6 @@ public class LeaguePanel : UserControl
             else AppLogger.Error(ex, "Autosave failed for league {Id}", _selectedLeagueId);
             return;
         }
-
-        try
-        {
-            string courtDisplayValue = _cmbCourtDisplay.SelectedIndex == 1 ? "letter" : "number";
-            using var db2 = new BocceDbContext();
-            AppParameterService.SetCourtDisplay(db2, savedId, courtDisplayValue);
-        }
-        catch { }
 
         _isCreatingNew = false;
         ClearDirty();

@@ -28,17 +28,17 @@ public static class ScheduleTemplateService
             throw new InvalidOperationException(
                 "Season must have Weeks in Season set before generating a template.");
 
-        var courtIds = db.Courts
-            .Where(c => c.IsActive)
-            .OrderBy(c => c.SortOrder)
-            .Select(c => c.Id)
+        var courtIds = db.SeasonCourts
+            .Where(sc => sc.SeasonId == seasonId && sc.Court.IsActive)
+            .OrderBy(sc => sc.SortOrder)
+            .Select(sc => sc.CourtId)
             .ToList();
 
         int courtsNeeded = teamCount / 2;
         if (courtIds.Count < courtsNeeded)
             throw new InvalidOperationException(
                 $"Season needs at least {courtsNeeded} courts for a {teamCount}-team template " +
-                $"(currently has {courtIds.Count}).");
+                $"(currently has {courtIds.Count} selected on the Season screen).");
 
         courtIds = courtIds.Take(courtsNeeded).ToList();
 

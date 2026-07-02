@@ -39,6 +39,9 @@ public class Season
     // none | 1b1p | 1b4p | 2b1p | 2b4p
     public string PlayoffTiebreakerFormat { get; set; } = "none";
 
+    // number | letter — how courts are labelled in schedules/brackets for this season
+    public string CourtDisplayStyle { get; set; } = "number";
+
     public bool IsCurrent { get; set; } = false;
     public int WeeksInSeason { get; set; } = 0;
     public int  MaxTeamsInDivision    { get; set; } = 0;
@@ -53,12 +56,15 @@ public class Season
     public ICollection<Division> Divisions { get; set; } = [];
 }
 
-// Courts activated for this season (drawn from the park's court list)
+// Courts activated for this season (drawn from the park's court list), in priority order.
+// Playoffs for this season use this same list/order — there is no separate playoff-level
+// court selection.
 public class SeasonCourt
 {
     public int Id { get; set; }
     public int SeasonId { get; set; }
     public int CourtId { get; set; }
+    public int SortOrder { get; set; }
 
     public Season Season { get; set; } = null!;
     public Court Court { get; set; } = null!;

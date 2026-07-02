@@ -76,11 +76,18 @@ public class SeasonPanel : UserControl
     private CheckedListBox _timesList = null!;
     private Button         _btnBuild  = null!;
 
+    // ── Courts tab ────────────────────────────────────────────────────────────
+    private CheckedListBox _courtsList      = null!;
+    private ComboBox       _cmbCourtDisplay = null!;
+    private Button         _btnCourtUp      = null!;
+    private Button         _btnCourtDown    = null!;
+
     // Tab references for lock-state show/hide
     private TabControl _tabs          = null!;
     private TabPage    _tabParameters = null!;
     private TabPage    _tabDivisions  = null!;
     private TabPage    _tabSlots      = null!;
+    private TabPage    _tabCourts     = null!;
 
     // All seasons for search filtering
     private List<(int Id, string Display)> _allSeasons = [];
@@ -248,6 +255,8 @@ public class SeasonPanel : UserControl
         tabs.TabPages.Add(_tabParameters);
         tabs.TabPages.Add(_tabDivisions);
         tabs.TabPages.Add(_tabSlots);
+        _tabCourts     = BuildCourtsTab();
+        tabs.TabPages.Add(_tabCourts);
         return tabs;
     }
 
@@ -645,6 +654,142 @@ public class SeasonPanel : UserControl
 
     // ── Courts Tab ────────────────────────────────────────────────────────────
 
+    private TabPage BuildCourtsTab()
+    {
+        var page = new TabPage("  Courts  ") { BackColor = AppTheme.ContentBackground };
+        var outer = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground, Padding = new Padding(16) };
+
+        var displayPanel = new Panel { Dock = DockStyle.Top, Height = 36 };
+        var lblDisplay = new Label
+        {
+            Text = "Court Display:", Location = new Point(0, 6), AutoSize = true,
+            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary
+        };
+        _cmbCourtDisplay = new ComboBox
+        {
+            Location = new Point(110, 2), Size = new Size(120, 26),
+            Font = AppTheme.FontDefault, BackColor = AppTheme.ContentBackground,
+            ForeColor = AppTheme.TextPrimary, DropDownStyle = ComboBoxStyle.DropDownList
+        };
+        _cmbCourtDisplay.Items.AddRange(["Number", "Letter"]);
+        _cmbCourtDisplay.SelectedIndex = 0;
+        _cmbCourtDisplay.SelectedIndexChanged += (_, _) => MarkDirty();
+        displayPanel.Controls.AddRange([lblDisplay, _cmbCourtDisplay]);
+
+        var hint = new Label
+        {
+            Text = "Checked courts are used for this season's league and playoff scheduling, " +
+                   "in the order listed (top = highest priority). Select a court and use Move Up/Down to reorder.",
+            Dock = DockStyle.Bottom, Height = 40,
+            Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted
+        };
+
+        var listPanel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1,
+            BackColor = AppTheme.ContentBackground
+        };
+        listPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 280));
+        listPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        listPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        _courtsList = new CheckedListBox
+        {
+            Dock = DockStyle.Fill, CheckOnClick = true,
+            Font = AppTheme.FontDefault, BackColor = AppTheme.Surface,
+            ForeColor = AppTheme.TextPrimary, BorderStyle = BorderStyle.FixedSingle
+        };
+        _courtsList.ItemCheck += (_, _) => MarkDirty();
+
+        var btnPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown,
+            Padding = new Padding(10, 0, 0, 0), BackColor = AppTheme.ContentBackground
+        };
+        _btnCourtUp = new Button
+        {
+            Text = "Move Up", Width = 84, Height = 30, Font = AppTheme.FontDefault,
+            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Margin = new Padding(0, 0, 0, 8)
+        };
+        _btnCourtDown = new Button
+        {
+            Text = "Move Down", Width = 84, Height = 30, Font = AppTheme.FontDefault,
+            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand
+        };
+        _btnCourtUp.Click   += (_, _) => MoveCourtItem(-1);
+        _btnCourtDown.Click += (_, _) => MoveCourtItem(1);
+        btnPanel.Controls.AddRange([_btnCourtUp, _btnCourtDown]);
+
+        listPanel.Controls.Add(_courtsList, 0, 0);
+        listPanel.Controls.Add(btnPanel, 1, 0);
+
+        outer.Controls.Add(listPanel);
+        outer.Controls.Add(hint);
+        outer.Controls.Add(displayPanel);
+        page.Controls.Add(outer);
+
+        return page;
+    }
+
+    private void MoveCourtItem(int direction)
+    {
+        int idx = _courtsList.SelectedIndex;
+        if (idx < 0) return;
+        int newIdx = idx + direction;
+        if (newIdx < 0 || newIdx >= _courtsList.Items.Count) return;
+
+        var item       = _courtsList.Items[idx];
+        var otherItem  = _courtsList.Items[newIdx];
+        bool itemChk   = _courtsList.GetItemChecked(idx);
+        bool otherChk  = _courtsList.GetItemChecked(newIdx);
+
+        _courtsList.Items[idx]    = otherItem;
+        _courtsList.Items[newIdx] = item;
+        _courtsList.SetItemChecked(idx, otherChk);
+        _courtsList.SetItemChecked(newIdx, itemChk);
+        _courtsList.SelectedIndex = newIdx;
+        MarkDirty();
+    }
+
+    private void LoadSeasonCourts(int? seasonId)
+    {
+        _courtsList.Items.Clear();
+        try
+        {
+            using var db = new BocceDbContext();
+
+            var allCourts = db.Courts.Where(c => c.IsActive).OrderBy(c => c.SortOrder).ToList();
+
+            var selectedIds = seasonId.HasValue
+                ? db.SeasonCourts.Where(sc => sc.SeasonId == seasonId.Value)
+                    .OrderBy(sc => sc.SortOrder)
+                    .Select(sc => sc.CourtId)
+                    .ToList()
+                : [];
+
+            // Selected courts first, in this season's priority order; then remaining unselected courts.
+            var ordered = selectedIds
+                .Select(id => allCourts.FirstOrDefault(c => c.Id == id))
+                .Where(c => c != null)
+                .Cast<Court>()
+                .Concat(allCourts.Where(c => !selectedIds.Contains(c.Id)))
+                .ToList();
+
+            var selectedSet = selectedIds.ToHashSet();
+            foreach (var c in ordered)
+            {
+                int idx = _courtsList.Items.Add(new CourtItem(c.Id, $"Court {c.CourtNumber}"));
+                _courtsList.SetItemChecked(idx, selectedSet.Contains(c.Id));
+            }
+
+            string displayStyle = "number";
+            if (seasonId.HasValue)
+                displayStyle = db.Seasons.Find(seasonId.Value)?.CourtDisplayStyle ?? "number";
+            _cmbCourtDisplay.SelectedIndex = displayStyle == "letter" ? 1 : 0;
+        }
+        catch { }
+    }
+
     // ── Data Loading ──────────────────────────────────────────────────────────
 
     private void LoadContext()
@@ -834,6 +979,7 @@ public class SeasonPanel : UserControl
 
         LoadDivisions(seasonId);
         LoadSeasonSlots(seasonId);
+        LoadSeasonCourts(seasonId);
         UpdateDeleteButtonState();
         _isCreatingNew = false;
         ClearDirty();
@@ -865,8 +1011,12 @@ public class SeasonPanel : UserControl
         _daysList.Enabled            = !isLocked;
         _timesList.Enabled           = !isLocked;
         _btnBuild.Enabled            = !isLocked;
+        _courtsList.Enabled          = !isLocked;
+        _cmbCourtDisplay.Enabled     = !isLocked;
+        _btnCourtUp.Enabled          = !isLocked;
+        _btnCourtDown.Enabled        = !isLocked;
 
-        // Hide Parameters/Divisions/Slots tabs when locked; restore when unlocked
+        // Hide Parameters/Divisions/Slots/Courts tabs when locked; restore when unlocked
         if (_tabs != null && _tabParameters != null)
         {
             if (isLocked)
@@ -874,12 +1024,14 @@ public class SeasonPanel : UserControl
                 if (_tabs.TabPages.Contains(_tabParameters)) _tabs.TabPages.Remove(_tabParameters);
                 if (_tabs.TabPages.Contains(_tabDivisions))  _tabs.TabPages.Remove(_tabDivisions);
                 if (_tabs.TabPages.Contains(_tabSlots))      _tabs.TabPages.Remove(_tabSlots);
+                if (_tabs.TabPages.Contains(_tabCourts))     _tabs.TabPages.Remove(_tabCourts);
             }
             else
             {
                 if (!_tabs.TabPages.Contains(_tabParameters)) _tabs.TabPages.Add(_tabParameters);
                 if (!_tabs.TabPages.Contains(_tabDivisions))  _tabs.TabPages.Add(_tabDivisions);
                 if (!_tabs.TabPages.Contains(_tabSlots))      _tabs.TabPages.Add(_tabSlots);
+                if (!_tabs.TabPages.Contains(_tabCourts))     _tabs.TabPages.Add(_tabCourts);
             }
         }
 
@@ -919,6 +1071,7 @@ public class SeasonPanel : UserControl
         _btnCancel.Visible = false;
         _divisionsGrid.Rows.Clear();
         LoadSeasonSlots(null);
+        LoadSeasonCourts(null);
         ClearDirty();
         ApplyEditorLockState(false);
     }
@@ -1193,6 +1346,8 @@ public class SeasonPanel : UserControl
             for (int i = 0; i < _timesList.Items.Count; i++)
                 if (_timesList.Items[i] is SlotItem ti)
                     _timesList.SetItemChecked(i, sourceTimes.Contains(ti.Id));
+
+            LoadSeasonCourts(source.Id);
         }
 
         _isCopied     = true;
@@ -1302,6 +1457,15 @@ public class SeasonPanel : UserControl
                 db.SeasonTimeSlots.Add(new SeasonTimeSlot { SeasonId = savedId, TimeSlotId = id });
             db.SaveChanges();
 
+            db.SeasonCourts.RemoveRange(db.SeasonCourts.Where(sc => sc.SeasonId == savedId));
+            int courtSort = 0;
+            for (int i = 0; i < _courtsList.Items.Count; i++)
+            {
+                if (_courtsList.GetItemChecked(i) && _courtsList.Items[i] is CourtItem ci)
+                    db.SeasonCourts.Add(new SeasonCourt { SeasonId = savedId, CourtId = ci.Id, SortOrder = courtSort++ });
+            }
+            db.SaveChanges();
+
             var feeParam = db.SeasonParameters
                 .FirstOrDefault(p => p.SeasonId == savedId && p.Key == "SeasonFeeAmount");
             if (feeParam == null)
@@ -1377,6 +1541,7 @@ public class SeasonPanel : UserControl
         SelectInList(savedId);
         LoadDivisions(savedId);
         LoadSeasonSlots(savedId);
+        LoadSeasonCourts(savedId);
         UpdateDeleteButtonState();
     }
 
@@ -1407,6 +1572,7 @@ public class SeasonPanel : UserControl
         s.PlayoffGamesPerMatch  = 2;
         s.PlayoffScoringMode    = "match_play";
         s.PlayoffTiebreakerFormat  = StrVal(_cmbPlayoffTiebreaker) ?? "none";
+        s.CourtDisplayStyle    = _cmbCourtDisplay.SelectedIndex == 1 ? "letter" : "number";
     }
 
     // ── Division helpers ──────────────────────────────────────────────────────
@@ -1813,6 +1979,7 @@ public class SeasonPanel : UserControl
             db.SeasonParameters.RemoveRange(db.SeasonParameters.Where(x => x.SeasonId == seasonId));
             db.SeasonDaySlots.RemoveRange(db.SeasonDaySlots.Where(x => x.SeasonId == seasonId));
             db.SeasonTimeSlots.RemoveRange(db.SeasonTimeSlots.Where(x => x.SeasonId == seasonId));
+            db.SeasonCourts.RemoveRange(db.SeasonCourts.Where(x => x.SeasonId == seasonId));
             db.SeasonFees.RemoveRange(db.SeasonFees.Where(x => x.SeasonId == seasonId));
 
             db.Seasons.Remove(season);
@@ -1927,4 +2094,5 @@ public class SeasonPanel : UserControl
     private sealed record ListItem(int Id, string Name)    { public override string ToString() => Name; }
     private sealed record StrItem(string Key, string Label) { public override string ToString() => Label; }
     private sealed record SlotItem(int Id, string Display)  { public override string ToString() => Display; }
+    private sealed record CourtItem(int Id, string Display) { public override string ToString() => Display; }
 }

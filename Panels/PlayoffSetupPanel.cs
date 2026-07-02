@@ -155,8 +155,8 @@ public class PlayoffSetupPanel : UserControl
         inner.Controls.Add(_cboDisplayMode);
         y += 44;
 
-        // Playoff Courts
-        y = AddSectionHeader(inner, "Playoff Courts", y);
+        // Courts — inherited from the season's court selection (Season screen), not editable here
+        y = AddSectionHeader(inner, "Courts (from Season)", y);
 
         _pnlCourts = new FlowLayoutPanel
         {
@@ -169,6 +169,17 @@ public class PlayoffSetupPanel : UserControl
             BackColor = AppTheme.ContentBackground,
         };
         inner.Controls.Add(_pnlCourts);
+        y += 40;
+
+        var courtsHint = new Label
+        {
+            Text      = "Court selection and priority are set on the Season screen and apply to both league and playoff scheduling.",
+            Location  = new Point(0, y),
+            Size      = new Size(680, 20),
+            Font      = AppTheme.FontSmall,
+            ForeColor = AppTheme.TextMuted,
+        };
+        inner.Controls.Add(courtsHint);
 
         return page;
     }
@@ -524,52 +535,40 @@ public class PlayoffSetupPanel : UserControl
     {
         _pnlCourts.Controls.Clear();
 
-        // Get court display preference (letter or number) - defaults to "number"
-        string courtDisplay = AppParameterService.GetCourtDisplay(db, season.LeagueId);
-
-        // All active courts available in the system, ordered by priority
-        var allCourts = db.Courts
-            .Where(c => c.IsActive)
-            .OrderBy(c => c.SortOrder)
+        // Season's courts, in the priority order configured on the Season screen.
+        var seasonCourts = db.SeasonCourts
+            .Where(sc => sc.SeasonId == season.Id)
+            .Include(sc => sc.Court)
+            .OrderBy(sc => sc.SortOrder)
+            .Select(sc => sc.Court)
             .ToList();
 
-        // Courts already selected for this playoff
-        var selected = _config == null
-            ? new HashSet<int>()
-            : db.PlayoffCourts
-                .Where(pc => pc.PlayoffConfigId == _config.Id)
-                .Select(pc => pc.CourtId)
-                .ToHashSet();
-
-        for (int i = 0; i < allCourts.Count; i++)
+        if (seasonCourts.Count == 0)
         {
-            var court = allCourts[i];
-            string courtLabel;
-
-            // Generate sequential labels based on position and naming style
-            if (courtDisplay == "letter")
+            _pnlCourts.Controls.Add(new Label
             {
-                // Use sequential letters: A, B, C, D, etc.
-                char letter = (char)('A' + i);
-                courtLabel = $"Court {letter}";
-            }
-            else
-            {
-                // Use sequential numbers: 1, 2, 3, 4, etc.
-                courtLabel = $"Court {i + 1}";
-            }
+                Text      = "No courts selected for this season — set them on the Season screen.",
+                Font      = AppTheme.FontDefault,
+                ForeColor = AppTheme.TextMuted,
+                AutoSize  = true,
+            });
+            return;
+        }
 
-            var chk = new CheckBox
+        for (int i = 0; i < seasonCourts.Count; i++)
+        {
+            string courtLabel = season.CourtDisplayStyle == "letter"
+                ? $"Court {(char)('A' + i)}"
+                : $"Court {i + 1}";
+
+            _pnlCourts.Controls.Add(new Label
             {
                 Text      = courtLabel,
-                Tag       = court.Id,
-                Checked   = selected.Contains(court.Id),
                 Font      = AppTheme.FontDefault,
                 ForeColor = AppTheme.TextPrimary,
                 AutoSize  = true,
                 Margin    = new Padding(0, 4, 16, 4),
-            };
-            _pnlCourts.Controls.Add(chk);
+            });
         }
     }
 
@@ -588,10 +587,7 @@ public class PlayoffSetupPanel : UserControl
         if (!dayParams.Any()) { _lblPreview.Text = "Enter day parameters above."; return; }
 
         using var db2 = new BocceDbContext();
-        // Use checked playoff courts; fall back to season courts if none checked yet
-        int courtCount = _pnlCourts.Controls.OfType<CheckBox>().Count(c => c.Checked);
-        if (courtCount == 0)
-            courtCount = db2.SeasonCourts.Count(sc => sc.SeasonId == _seasonId.Value);
+        int courtCount = db2.SeasonCourts.Count(sc => sc.SeasonId == _seasonId.Value && sc.Court.IsActive);
 
         var schedule = PlayoffService.ComputeRoundSchedule(
             teamCount, 0, dayParams, Math.Max(1, courtCount));
@@ -625,18 +621,6 @@ public class PlayoffSetupPanel : UserControl
             db.PlayoffDayParams.RemoveRange(cfg.DayParams);
             foreach (var dp in ParseDayGrid())
                 cfg.DayParams.Add(dp);
-
-            // Save playoff court selections
-            db.PlayoffCourts.Where(pc => pc.PlayoffConfigId == _config.Id).ExecuteDelete();
-            int sortOrder = 0;
-            foreach (Control ctrl in _pnlCourts.Controls)
-            {
-                if (ctrl is CheckBox chk && chk.Checked && chk.Tag is int courtId)
-                    db.PlayoffCourts.Add(new PlayoffCourt
-                    {
-                        PlayoffConfigId = _config.Id, CourtId = courtId, SortOrder = sortOrder++
-                    });
-            }
 
             // Save seedings
             db.PlayoffSeedings.Where(s => s.SeasonId == _seasonId.Value).ExecuteDelete();

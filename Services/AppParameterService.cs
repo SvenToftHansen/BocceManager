@@ -95,37 +95,6 @@ public static class AppParameterService
         return leagueId.HasValue && seasonId.HasValue;
     }
 
-    // ── League Parameters ──────────────────────────────────────────────────────
-
-    public static string GetCourtDisplay(BocceDbContext db, int leagueId)
-    {
-        var param = db.LeagueParameters
-            .FirstOrDefault(p => p.LeagueId == leagueId && p.Key == "court_display");
-        return param?.Value == "letter" ? "letter" : "number";
-    }
-
-    public static void SetCourtDisplay(BocceDbContext db, int leagueId, string value)
-    {
-        var normalized = value == "letter" ? "letter" : "number";
-        var param = db.LeagueParameters
-            .FirstOrDefault(p => p.LeagueId == leagueId && p.Key == "court_display");
-        if (param == null)
-        {
-            db.LeagueParameters.Add(new LeagueParameter
-            {
-                LeagueId    = leagueId,
-                Key         = "court_display",
-                Value       = normalized,
-                Description = "How courts are labelled in schedules: 'number' or 'letter'"
-            });
-        }
-        else
-        {
-            param.Value = normalized;
-        }
-        db.SaveChanges();
-    }
-
     public static string? GetAppParameter(BocceDbContext db, string key)
     {
         return db.AppParameters.FirstOrDefault(p => p.Key == key)?.Value;
