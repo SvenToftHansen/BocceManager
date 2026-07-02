@@ -16,19 +16,19 @@ public class BracketVisualizationControl : UserControl
     // ── Layout constants (unscaled) ───────────────────────────────────────────
 
     private const int ColWidth    = 200;  // horizontal gap between rounds (for connectors)
-    private const int TeamBoxH    = 52;   // height of one team name row (increased for larger font)
-    private const int ScoreBoxW   = 70;   // width of aggregate score area (wider for visibility)
-    private const int TeamNameW   = 180;  // width of team name area (wider)
-    private const int GameBoxH    = 28;   // court/time info box — 2 lines of 7pt text
+    private const int TeamBoxH    = 64;   // height of one team name row (increased for larger font and bold)
+    private const int ScoreBoxW   = 140;  // width of aggregate score area (doubled for width)
+    private const int TeamNameW   = 360;  // width of team name area (doubled for match box width)
+    private const int GameBoxH    = 40;   // court/time info box — 40% taller, 2 lines of 8pt text
     private const int MatchH      = TeamBoxH + GameBoxH + TeamBoxH;
-    private const int MatchVGap   = 6;    // gap between matches in same round (slightly larger)
+    private const int MatchVGap   = 8;    // gap between matches in same round (scaled up)
     private const int ByeLabelH   = 14;   // "Bye N" label above bye team
     private const int LeftPad     = 20;
     private const int TopPad      = 24;
 
-    private const float ScoreFontSize    = 14f;   // aggregate score — large and bold (increased)
-    private const float TeamNameFontSize = 18f;   // team names (doubled from 9f)
-    private const float InfoFontSize     = 8f;    // court/time info (slightly larger)
+    private const float ScoreFontSize    = 18f;   // aggregate score — large and bold (scaled up)
+    private const float TeamNameFontSize = 18f;   // team names (doubled from 9f, always bold)
+    private const float InfoFontSize     = 9f;    // court/time info (slightly larger)
 
     // ── Data ──────────────────────────────────────────────────────────────────
 
@@ -329,7 +329,7 @@ public class BracketVisualizationControl : UserControl
 
         // Team name
         using var nameFont  = new Font(AppTheme.FontDefault.FontFamily, TeamNameFontSize,
-                                       isWinner ? FontStyle.Bold : FontStyle.Regular);
+                                       FontStyle.Bold);
         using var textBrush = new SolidBrush(AppTheme.TextPrimary);
         g.DrawString(name ?? "TBD", nameFont, textBrush,
             new RectangleF(x + 3, y + 2, TeamNameW - 6, TeamBoxH - 4));
