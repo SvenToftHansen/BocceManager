@@ -486,6 +486,14 @@ public class PlayoffSetupPanel : UserControl
     {
         _pnlCourts.Controls.Clear();
 
+        if (_seasonId == null) return;
+
+        var season = db.Seasons.Find(_seasonId.Value);
+        if (season == null) return;
+
+        // Get court display preference (letter or number)
+        string courtDisplay = AppParameterService.GetCourtDisplay(db, season.LeagueId);
+
         // All active courts available in the system
         var allCourts = db.Courts
             .Where(c => c.IsActive)
@@ -502,9 +510,13 @@ public class PlayoffSetupPanel : UserControl
 
         foreach (var court in allCourts)
         {
+            string courtLabel = courtDisplay == "letter" && !string.IsNullOrEmpty(court.CourtLetter)
+                ? $"Court {court.CourtLetter}"
+                : $"Court {court.CourtNumber}";
+
             var chk = new CheckBox
             {
-                Text      = $"Court {court.CourtNumber}",
+                Text      = courtLabel,
                 Tag       = court.Id,
                 Checked   = selected.Contains(court.Id),
                 Font      = AppTheme.FontDefault,
