@@ -15,7 +15,7 @@ public class BracketVisualizationControl : UserControl
 {
     // ── Layout constants (unscaled) ───────────────────────────────────────────
 
-    private const int ColWidth    = 60;   // horizontal gap between rounds (minimal for connectors)
+    private const int ColWidth    = 180;  // horizontal gap between rounds (more space between columns)
     private const int TeamBoxH    = 96;   // height of one team name row (50% increase for larger boxes)
     private const int ScoreBoxW   = 210;  // width of aggregate score area (50% increase)
     private const int TeamNameW   = 540;  // width of team name area (50% increase)
