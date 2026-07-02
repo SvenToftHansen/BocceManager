@@ -176,17 +176,46 @@ public class PlayoffSetupPanel : UserControl
     private TabPage BuildSeedingTab()
     {
         var page = new TabPage("  Team Seeding  ") { BackColor = AppTheme.ContentBackground };
-        var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.ContentBackground };
 
-        var inner = new Panel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(20), BackColor = AppTheme.ContentBackground };
-        scroll.Controls.Add(inner);
-        page.Controls.Add(scroll);
+        // Layout: title at top, grid filling middle, button at bottom
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3,
+            Padding = new Padding(12), Margin = Padding.Empty,
+            CellBorderStyle = TableLayoutPanelCellBorderStyle.None,
+            BackColor = AppTheme.ContentBackground
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));  // Title
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // Grid (fills space)
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));  // Button
 
-        int y = 0;
+        // Title
+        var lblTitle = new Label
+        {
+            Text = "Team Seeding", Dock = DockStyle.Fill,
+            Font = AppTheme.FontDefaultBold, ForeColor = AppTheme.TextPrimary,
+            TextAlign = ContentAlignment.MiddleLeft
+        };
+        layout.Controls.Add(lblTitle, 0, 0);
 
-        y = AddSectionHeader(inner, "Team Seeding", y);
-
-        _gridSeeding = MakeGrid(inner, 0, y, 520, 300);
+        // Seeding grid - fill available space
+        _gridSeeding = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            Font = AppTheme.FontDefault,
+            BackgroundColor = AppTheme.Surface,
+            BorderStyle = BorderStyle.FixedSingle,
+            CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal,
+            ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing,
+            ColumnHeadersHeight = 28,
+            RowHeadersVisible = false,
+            AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None,
+            RowTemplate = { Height = 26 },
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            SelectionMode = DataGridViewSelectionMode.CellSelect,
+        };
         _gridSeeding.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Seed", Name = "Seed", Width = 60, ReadOnly = true });
         var teamCol = new DataGridViewComboBoxColumn { HeaderText = "Team", Name = "Team", Width = 440, DisplayStyleForCurrentCellOnly = true };
         _gridSeeding.Columns.Add(teamCol);
@@ -194,19 +223,23 @@ public class PlayoffSetupPanel : UserControl
         _gridSeeding.CurrentCellDirtyStateChanged += (_, _) => {
             if (_gridSeeding.IsCurrentCellDirty) _gridSeeding.CommitEdit(DataGridViewDataErrorContexts.Commit);
         };
-        y += 310;
+        layout.Controls.Add(_gridSeeding, 0, 1);
 
+        // Button panel
+        var btnPanel = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground };
         var btnReset = new Button
         {
-            Text = "Reset from Standings", Location = new Point(0, y),
+            Text = "Reset from Standings", Location = new Point(0, 4),
             Size = new Size(180, 28), Font = AppTheme.FontDefault,
             BackColor = Color.FromArgb(100, 110, 120), ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
         };
         btnReset.FlatAppearance.BorderSize = 0;
         btnReset.Click += OnResetFromStandings;
-        inner.Controls.Add(btnReset);
+        btnPanel.Controls.Add(btnReset);
+        layout.Controls.Add(btnPanel, 0, 2);
 
+        page.Controls.Add(layout);
         return page;
     }
 
@@ -341,7 +374,7 @@ public class PlayoffSetupPanel : UserControl
 
         PopulateSeedingGrid(db, seasonId.Value, teamCount);
         PopulateDayGrid(teamCount, season.PlayoffStartDate);
-        PopulateCourtCheckboxes(db);
+        PopulateCourtCheckboxes(db, season);
         RefreshPreview();
 
         _lblStatus.Text = _config.IsGenerated ? "Bracket already generated." : "";
@@ -487,19 +520,14 @@ public class PlayoffSetupPanel : UserControl
         }
     }
 
-    private void PopulateCourtCheckboxes(BocceDbContext db)
+    private void PopulateCourtCheckboxes(BocceDbContext db, Season season)
     {
         _pnlCourts.Controls.Clear();
 
-        if (_seasonId == null) return;
-
-        var season = db.Seasons.Find(_seasonId.Value);
-        if (season == null) return;
-
-        // Get court display preference (letter or number)
+        // Get court display preference (letter or number) - defaults to "number"
         string courtDisplay = AppParameterService.GetCourtDisplay(db, season.LeagueId);
 
-        // All active courts available in the system
+        // All active courts available in the system, ordered by priority
         var allCourts = db.Courts
             .Where(c => c.IsActive)
             .OrderBy(c => c.SortOrder)
@@ -518,6 +546,7 @@ public class PlayoffSetupPanel : UserControl
             var court = allCourts[i];
             string courtLabel;
 
+            // Generate sequential labels based on position and naming style
             if (courtDisplay == "letter")
             {
                 // Use sequential letters: A, B, C, D, etc.
