@@ -58,6 +58,7 @@ public class BracketVisualizationControl : UserControl
     private float _scale = 1f;
     private int   _naturalW;
     private int   _naturalH;
+    private Dictionary<int, (int x, int y)> _positions = new();
 
     // ── Public API ────────────────────────────────────────────────────────────
 
@@ -123,6 +124,7 @@ public class BracketVisualizationControl : UserControl
                 NextMatchIsTop: m.NextMatchIsTop);
         }).ToList();
 
+        _positions = ComputePositions(_matches.GroupBy(m => m.Round).OrderBy(g => g.Key).ToList());
         ComputeNaturalSize();
         UpdateScrollAndSize();
         Invalidate();
@@ -132,19 +134,14 @@ public class BracketVisualizationControl : UserControl
 
     private void ComputeNaturalSize()
     {
-        if (_totalRounds == 0) { _naturalW = 400; _naturalH = 200; return; }
+        if (_totalRounds == 0 || _positions.Count == 0) { _naturalW = 400; _naturalH = 200; return; }
         // Width: leftPad + each round's box width + (rounds-1) gaps between rounds + right pad
         _naturalW = LeftPad + _totalRounds * (TeamNameW + ScoreBoxW)
                   + (_totalRounds - 1) * ColWidth + 40;
-        // Height: top pad + all slots × (match height + gap) + footer space
-        _naturalH = TopPad + ContentHeight() + FooterH;
+        // Height: derived from actual computed match positions (not a nominal slot count),
+        // so byes don't inflate the canvas with unused space.
+        _naturalH = _positions.Values.Max(p => p.y) + MatchH + FooterH;
     }
-
-    private int TotalSlots() => (int)Math.Pow(2, _totalRounds - 1);
-
-    // Exact vertical space needed to pack round-1 matches edge-to-edge with MatchVGap
-    // between them — used (not _naturalH) so slot spacing isn't diluted by footer padding.
-    private int ContentHeight() => TotalSlots() * (MatchH + MatchVGap);
 
     private void UpdateScrollAndSize()
     {
@@ -195,16 +192,13 @@ public class BracketVisualizationControl : UserControl
 
         var byRound = _matches.GroupBy(m => m.Round).OrderBy(g2 => g2.Key).ToList();
 
-        // Compute match Y positions (indexed by round, slot)
-        var positions = ComputePositions(byRound);
-
         // Draw connecting lines first (behind boxes)
-        DrawConnectors(g, byRound, positions);
+        DrawConnectors(g, byRound, _positions);
 
         // Draw match boxes
         foreach (var roundGroup in byRound)
             foreach (var m in roundGroup.OrderBy(x => x.Slot))
-                DrawMatch(g, m, positions[m.Id]);
+                DrawMatch(g, m, _positions[m.Id]);
 
         // Footer note — tiebreaker rule
         string footer = $"* Each match: aggregate of 2 games total score.  Tie occurs when both teams score the same over both games → Tiebreaker: {_tiebreakerBalls} ball(s), winner scores 1 point.";
@@ -215,39 +209,67 @@ public class BracketVisualizationControl : UserControl
 
     // ── Position computation ──────────────────────────────────────────────────
 
+    /// <summary>
+    /// Positions matches by walking the actual NextMatchId/NextMatchIsTop relationships
+    /// instead of a nominal 2^(rounds-1) slot grid. Round 1 matches are packed edge-to-edge
+    /// (tight — only MatchVGap between them); every later round's match is centred on its
+    /// real child match(es), so bye slots don't reserve wasted vertical space.
+    /// </summary>
     private Dictionary<int, (int x, int y)> ComputePositions(
         IList<IGrouping<int, BracketMatch>> byRound)
     {
         var pos = new Dictionary<int, (int, int)>();
 
-        // Final is always rightmost
-        // Each round left of that has double the matches
-        // Y positions are computed by splitting the vertical space evenly
-
-        int finalX = LeftPad + (_totalRounds - 1) * (ColWidth + TeamNameW + ScoreBoxW);
-        int totalH = ContentHeight();
-
         foreach (var roundGroup in byRound)
         {
-            int round   = roundGroup.Key;
-            int colIdx  = round - 1;
-            int x       = LeftPad + colIdx * (ColWidth + TeamNameW + ScoreBoxW);
-            int count   = roundGroup.Count();
+            int round  = roundGroup.Key;
+            int colIdx = round - 1;
+            int x      = LeftPad + colIdx * (ColWidth + TeamNameW + ScoreBoxW);
 
-            // How many "slots" does this round span?
-            int slots    = TotalSlots();
-            int perMatch = (int)Math.Ceiling((double)slots / count);
-            int slotH    = (totalH / slots);
-
-            foreach (var m in roundGroup)
+            if (round == 1)
             {
-                // Centre the match within its slot group
-                int slotStart = m.Slot * perMatch;
-                int slotEnd   = slotStart + perMatch;
-                int centerY   = TopPad + (slotStart + slotEnd) / 2 * slotH - MatchH / 2;
-                // Add extra space for bye label if round > 1
-                int byeOffset  = round > 1 ? ByeLabelH : 0;
-                pos[m.Id] = (x, centerY + byeOffset);
+                int i = 0;
+                foreach (var m in roundGroup.OrderBy(mm => mm.Slot))
+                {
+                    pos[m.Id] = (x, TopPad + i * (MatchH + MatchVGap));
+                    i++;
+                }
+                continue;
+            }
+
+            foreach (var m in roundGroup.OrderBy(mm => mm.Slot))
+            {
+                var children = _matches.Where(c => c.NextMatchId == m.Id).ToList();
+                var topChild = children.FirstOrDefault(c => c.NextMatchIsTop);
+                var botChild = children.FirstOrDefault(c => !c.NextMatchIsTop);
+
+                int y;
+                if (topChild != null && botChild != null
+                    && pos.TryGetValue(topChild.Id, out var tp) && pos.TryGetValue(botChild.Id, out var bp))
+                {
+                    int topCenter = tp.Item2 + TeamBoxH / 2;
+                    int botCenter = bp.Item2 + TeamBoxH + GameBoxH + TeamBoxH / 2;
+                    y = (topCenter + botCenter) / 2 - MatchH / 2;
+                }
+                else if (botChild != null && pos.TryGetValue(botChild.Id, out var bp2))
+                {
+                    // Bye-entry round: only a bottom child feeds this match (top team is a
+                    // direct bye) — align this match's bottom row to the child's centre.
+                    int childCenter = bp2.Item2 + TeamBoxH + GameBoxH + TeamBoxH / 2;
+                    y = childCenter - (TeamBoxH + GameBoxH + TeamBoxH / 2);
+                }
+                else if (topChild != null && pos.TryGetValue(topChild.Id, out var tp2))
+                {
+                    int childCenter = tp2.Item2 + TeamBoxH / 2;
+                    y = childCenter - TeamBoxH / 2;
+                }
+                else
+                {
+                    y = TopPad;
+                }
+
+                int byeOffset = m.Team1IsBye ? ByeLabelH : 0;
+                pos[m.Id] = (x, y + byeOffset);
             }
         }
 
@@ -402,13 +424,12 @@ public class BracketVisualizationControl : UserControl
         g.TranslateTransform(bounds.Left, bounds.Top);
         g.ScaleTransform(scale, scale);
 
-        var byRound   = _matches.GroupBy(m => m.Round).OrderBy(gr => gr.Key).ToList();
-        var positions = ComputePositions(byRound);
+        var byRound = _matches.GroupBy(m => m.Round).OrderBy(gr => gr.Key).ToList();
 
-        DrawConnectors(g, byRound, positions);
+        DrawConnectors(g, byRound, _positions);
         foreach (var rg in byRound)
             foreach (var m in rg.OrderBy(x => x.Slot))
-                DrawMatch(g, m, positions[m.Id]);
+                DrawMatch(g, m, _positions[m.Id]);
 
         string footer = $"* Each match: aggregate of 2 games total score.  Tie occurs when both teams score the same over both games → Tiebreaker: {_tiebreakerBalls} ball(s), winner scores 1 point.";
         using var fFont  = new Font(AppTheme.FontSmall.FontFamily, InfoFontSize, FontStyle.Italic);
@@ -428,12 +449,9 @@ public class BracketVisualizationControl : UserControl
         float fx = (e.X + (_scaleToFit ? 0 : HorizontalScroll.Value)) / _scale;
         float fy = (e.Y + (_scaleToFit ? 0 : VerticalScroll.Value)) / _scale;
 
-        var byRound   = _matches.GroupBy(m => m.Round).OrderBy(g => g.Key).ToList();
-        var positions = ComputePositions(byRound);
-
         foreach (var m in _matches)
         {
-            if (!positions.TryGetValue(m.Id, out var pos)) continue;
+            if (!_positions.TryGetValue(m.Id, out var pos)) continue;
 
             // Entire match bounding box is clickable — but only when both teams are known
             if (string.IsNullOrEmpty(m.Team1Name) || string.IsNullOrEmpty(m.Team2Name)) continue;
