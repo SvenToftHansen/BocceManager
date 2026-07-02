@@ -59,9 +59,8 @@ public class SeasonPanel : UserControl
     private TextBox _txtSeasonFeeAmount = null!;
 
     // ── Editor – playoff settings ─────────────────────────────────────────────
-    private ThemedNumericUpDown _numTeamsPlayoffs     = null!;
+    private ComboBox      _cboTeamsPlayoffs     = null!;
     private CheckBox      _chkFirstPlace        = null!;
-    private ComboBox      _cmbPlayoffType       = null!;
     private ComboBox      _cmbPlayoffTiebreaker = null!;
 
     private Button _btnAdd    = null!;
@@ -435,21 +434,18 @@ public class SeasonPanel : UserControl
         Add(SecHdr("Playoff Settings", lx, y)); y += 34;
 
         Add(Lbl("Teams in Playoffs", lx, y));
-        _numTeamsPlayoffs = Num(ix, y, 0, 99, 0);
-        _numTeamsPlayoffs.ValueChanged += (_, _) => MarkDirty();
-        Add(_numTeamsPlayoffs, Hint("0 = no playoffs", ix + 100, y + 4)); y += 38;
+        _cboTeamsPlayoffs = new ComboBox
+        {
+            Location = new Point(ix, y), Width = 200, DropDownStyle = ComboBoxStyle.DropDownList,
+            Font = AppTheme.FontDefault
+        };
+        _cboTeamsPlayoffs.SelectedIndexChanged += (_, _) => MarkDirty();
+        Add(_cboTeamsPlayoffs, Hint("Ladder-only format: 4, 8, 12, 16, 24, 32, 48, 64, 96", ix + 210, y + 4)); y += 38;
 
         Add(Lbl("First Place Guaranteed", lx, y));
         _chkFirstPlace = new CheckBox { Location = new Point(ix, y), AutoSize = true, Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary, Checked = true };
         _chkFirstPlace.CheckedChanged += (_, _) => MarkDirty();
-        Add(_chkFirstPlace); y += 38;
-
-        Add(Lbl("Playoff Type", lx, y));
-        _cmbPlayoffType = StrCombo(ix, y, 200,
-            ("ladder",      "Ladder"),
-            ("round_robin", "Round Robin"));
-        _cmbPlayoffType.SelectedIndexChanged += (_, _) => MarkDirty();
-        Add(_cmbPlayoffType); y += 44;
+        Add(_chkFirstPlace); y += 44;
 
         Add(Lbl("Playoff Tiebreaker", lx, y));
         _cmbPlayoffTiebreaker = StrCombo(ix, y, 260,
@@ -820,9 +816,14 @@ public class SeasonPanel : UserControl
             _numForfeitPM.Value         = s.ForfeitPlusMinus;
             _numForfeitOpponentPM.Value = s.ForfeitOpponentPlusMinus;
 
-            _numTeamsPlayoffs.Value      = s.TeamsInPlayoffs;
+            int totalTeams = db.Teams.Count(t => t.Division.SeasonId == seasonId && t.IsActive);
+            PopulateTeamsPlayoffsDropdown(totalTeams);
+            if (s.TeamsInPlayoffs > 0)
+                _cboTeamsPlayoffs.SelectedItem = s.TeamsInPlayoffs.ToString();
+            else
+                _cboTeamsPlayoffs.SelectedIndex = 0;
+
             _chkFirstPlace.Checked       = s.FirstPlaceGuaranteed;
-            SelStr(_cmbPlayoffType, s.PlayoffType);
             SelStr(_cmbPlayoffTiebreaker, s.PlayoffTiebreakerFormat ?? "none");
         }
         catch { }
@@ -858,9 +859,8 @@ public class SeasonPanel : UserControl
         _cmbScoringMode.Enabled      = !isLocked;
         _numForfeitPM.Enabled         = !isLocked;
         _numForfeitOpponentPM.Enabled = !isLocked;
-        _numTeamsPlayoffs.Enabled    = !isLocked;
+        _cboTeamsPlayoffs.Enabled    = !isLocked;
         _chkFirstPlace.Enabled       = !isLocked;
-        _cmbPlayoffType.Enabled      = !isLocked;
         _cmbPlayoffTiebreaker.Enabled = !isLocked;
         _daysList.Enabled            = !isLocked;
         _timesList.Enabled           = !isLocked;
@@ -909,8 +909,10 @@ public class SeasonPanel : UserControl
         if (_cmbScoringMode.Items.Count > 0) _cmbScoringMode.SelectedIndex = 0;
         _numForfeitPM.Value = -6; _numForfeitOpponentPM.Value = 1;
 
-        _numTeamsPlayoffs.Value = 0; _chkFirstPlace.Checked = true;
-        if (_cmbPlayoffType.Items.Count > 0) _cmbPlayoffType.SelectedIndex = 0;
+        _cboTeamsPlayoffs.Items.Clear();
+        _cboTeamsPlayoffs.Items.Add("");
+        if (_cboTeamsPlayoffs.Items.Count > 0) _cboTeamsPlayoffs.SelectedIndex = 0;
+        _chkFirstPlace.Checked = true;
         if (_cmbPlayoffTiebreaker.Items.Count > 0) _cmbPlayoffTiebreaker.SelectedIndex = 0;
 
         _btnDelete.Enabled = false;
@@ -919,6 +921,19 @@ public class SeasonPanel : UserControl
         LoadSeasonSlots(null);
         ClearDirty();
         ApplyEditorLockState(false);
+    }
+
+    private void PopulateTeamsPlayoffsDropdown(int maxTeams)
+    {
+        // Valid playoff team counts: powers of 2 and 3x powers of 2
+        var validCounts = new[] { 4, 8, 12, 16, 24, 32, 48, 64, 96 };
+        _cboTeamsPlayoffs.Items.Clear();
+        _cboTeamsPlayoffs.Items.Add("");
+        foreach (var count in validCounts)
+        {
+            if (count <= maxTeams)
+                _cboTeamsPlayoffs.Items.Add(count.ToString());
+        }
     }
 
     private void LoadDivisions(int seasonId)
@@ -1149,13 +1164,18 @@ public class SeasonPanel : UserControl
         _numForfeitPM.Value         = source.ForfeitPlusMinus;
         _numForfeitOpponentPM.Value = source.ForfeitOpponentPlusMinus;
 
-        _numTeamsPlayoffs.Value      = source.TeamsInPlayoffs;
         _chkFirstPlace.Checked       = source.FirstPlaceGuaranteed;
-        SelStr(_cmbPlayoffType, source.PlayoffType);
         SelStr(_cmbPlayoffTiebreaker, source.PlayoffTiebreakerFormat ?? "none");
 
         using (var db = new BocceDbContext())
         {
+            int sourceTotalTeams = db.Teams.Count(t => t.Division.SeasonId == source.Id && t.IsActive);
+            PopulateTeamsPlayoffsDropdown(sourceTotalTeams);
+            if (source.TeamsInPlayoffs > 0)
+                _cboTeamsPlayoffs.SelectedItem = source.TeamsInPlayoffs.ToString();
+            else
+                _cboTeamsPlayoffs.SelectedIndex = 0;
+
             var sourceFeeParm = db.SeasonParameters
                 .FirstOrDefault(p => p.SeasonId == source.Id && p.Key == "SeasonFeeAmount");
             _txtSeasonFeeAmount.Text = sourceFeeParm?.Value ?? "0.00";
@@ -1381,9 +1401,9 @@ public class SeasonPanel : UserControl
         s.ScoringMode      = StrVal(_cmbScoringMode)   ?? "games_mode";
         s.ForfeitPlusMinus         = (int)_numForfeitPM.Value;
         s.ForfeitOpponentPlusMinus = (int)_numForfeitOpponentPM.Value;
-        s.TeamsInPlayoffs  = (int)_numTeamsPlayoffs.Value;
+        s.TeamsInPlayoffs  = int.TryParse(_cboTeamsPlayoffs.SelectedItem?.ToString(), out var count) ? count : 0;
         s.FirstPlaceGuaranteed  = _chkFirstPlace.Checked;
-        s.PlayoffType      = StrVal(_cmbPlayoffType)   ?? "ladder";
+        s.PlayoffType      = "ladder";
         s.PlayoffGamesPerMatch  = 2;
         s.PlayoffScoringMode    = "match_play";
         s.PlayoffTiebreakerFormat  = StrVal(_cmbPlayoffTiebreaker) ?? "none";
