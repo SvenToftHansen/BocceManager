@@ -21,7 +21,7 @@ public class BracketVisualizationControl : UserControl
     private const int TeamNameW   = 540;  // width of team name area
     private const int GameBoxH    = 56;   // court/time info box (40% taller)
     private const int MatchH      = TeamBoxH + GameBoxH + TeamBoxH;
-    private const int MatchVGap   = 0;    // minimal gap between matches (halved again — boxes touch)
+    private const int MatchVGap   = 10;   // gap between round-1 match boxes
     private const int ByeLabelH   = 14;   // "Bye N" label above bye team
     private const int LeftPad     = 10;   // minimal left padding
     private const int TopPad      = 12;   // minimal top padding
