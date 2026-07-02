@@ -465,19 +465,24 @@ public class PlayoffSetupPanel : UserControl
 
     private void DeleteDayRow()
     {
-        if (_gridDays.SelectedRows.Count == 0)
+        if (_gridDays.CurrentCell == null || _gridDays.CurrentCell.RowIndex < 0)
         {
-            MessageBox.Show("Select a day to delete.", "Delete Day", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show("Select a row to delete.", "Delete Day", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
-        int selectedIndex = _gridDays.SelectedRows[0].Index;
-        if (selectedIndex >= 0 && selectedIndex < _gridDays.Rows.Count)
+        int rowIndex = _gridDays.CurrentCell.RowIndex;
+        if (rowIndex >= 0 && rowIndex < _gridDays.Rows.Count)
         {
-            _gridDays.Rows.RemoveAt(selectedIndex);
+            _gridDays.Rows.RemoveAt(rowIndex);
             // Renumber remaining days
             for (int i = 0; i < _gridDays.Rows.Count; i++)
                 _gridDays.Rows[i].Cells["Day"].Value = (i + 1).ToString();
+
+            // Mark bracket as void since days changed
+            if (_config != null)
+                _config.IsGenerated = false;
+
             RefreshPreview();
         }
     }
@@ -508,11 +513,22 @@ public class PlayoffSetupPanel : UserControl
                 .Select(pc => pc.CourtId)
                 .ToHashSet();
 
-        foreach (var court in allCourts)
+        for (int i = 0; i < allCourts.Count; i++)
         {
-            string courtLabel = courtDisplay == "letter" && !string.IsNullOrEmpty(court.CourtLetter)
-                ? $"Court {court.CourtLetter}"
-                : $"Court {court.CourtNumber}";
+            var court = allCourts[i];
+            string courtLabel;
+
+            if (courtDisplay == "letter")
+            {
+                // Use sequential letters: A, B, C, D, etc.
+                char letter = (char)('A' + i);
+                courtLabel = $"Court {letter}";
+            }
+            else
+            {
+                // Use sequential numbers: 1, 2, 3, 4, etc.
+                courtLabel = $"Court {i + 1}";
+            }
 
             var chk = new CheckBox
             {

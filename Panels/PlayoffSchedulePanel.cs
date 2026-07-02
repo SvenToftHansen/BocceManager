@@ -56,16 +56,38 @@ public class PlayoffSchedulePanel : UserControl
         btnRefresh.Click += (_, _) => LoadData();
         toolbar.Controls.Add(btnRefresh);
 
-        var btnPrint = new Button
+        var btnPrintLadder = new Button
         {
-            Text = "Print", Location = new Point(110, 8), Size = new Size(80, 30),
+            Text = "Print Ladder", Location = new Point(110, 8), Size = new Size(110, 30),
             Font = AppTheme.FontDefault,
             BackColor = Color.FromArgb(60, 100, 60), ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
         };
-        btnPrint.FlatAppearance.BorderSize = 0;
-        btnPrint.Click += OnPrint;
-        toolbar.Controls.Add(btnPrint);
+        btnPrintLadder.FlatAppearance.BorderSize = 0;
+        btnPrintLadder.Click += (_, _) => OnPrint("bracket");
+        toolbar.Controls.Add(btnPrintLadder);
+
+        var btnPrintSchedule = new Button
+        {
+            Text = "Print Schedule", Location = new Point(230, 8), Size = new Size(120, 30),
+            Font = AppTheme.FontDefault,
+            BackColor = Color.FromArgb(60, 100, 60), ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+        };
+        btnPrintSchedule.FlatAppearance.BorderSize = 0;
+        btnPrintSchedule.Click += (_, _) => OnPrint("schedule");
+        toolbar.Controls.Add(btnPrintSchedule);
+
+        var btnPrintBoth = new Button
+        {
+            Text = "Print Both", Location = new Point(360, 8), Size = new Size(100, 30),
+            Font = AppTheme.FontDefault,
+            BackColor = Color.FromArgb(60, 100, 60), ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+        };
+        btnPrintBoth.FlatAppearance.BorderSize = 0;
+        btnPrintBoth.Click += (_, _) => OnPrint("both");
+        toolbar.Controls.Add(btnPrintBoth);
 
         _lblStatus = new Label
         {
@@ -220,7 +242,7 @@ public class PlayoffSchedulePanel : UserControl
     private const float DocHdrH   = 36f;
     private const float PrintMargin = 25f;  // hundredths-of-inch, matches other reports
 
-    private void OnPrint(object? sender, EventArgs e)
+    private void OnPrint(string printWhat)
     {
         if (_seasonId == null) { _lblStatus.Text = "No season selected."; return; }
 
@@ -233,11 +255,18 @@ public class PlayoffSchedulePanel : UserControl
             var season   = db.Seasons.Include(s => s.League).FirstOrDefault(s => s.Id == _seasonId.Value);
             var clubName = AppParameterService.GetAppParameter(db, "ClubName") ?? "";
             docHeader = string.Join("  —  ",
-                new[] { clubName, season?.League.Name, season?.Name, "Playoff Schedule" }
+                new[] { clubName, season?.League.Name, season?.Name, "Playoff " + (printWhat == "both" ? "Schedule" : printWhat == "bracket" ? "Ladder" : "Schedule") }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
         }
 
-        var pd = new PrintDocument { DocumentName = "Playoff Schedule" };
+        string documentName = printWhat switch
+        {
+            "bracket" => "Playoff Ladder",
+            "schedule" => "Playoff Schedule",
+            _ => "Playoff Schedule & Ladder"
+        };
+
+        var pd = new PrintDocument { DocumentName = documentName };
 
         // Slim margins matching other reports
         pd.QueryPageSettings += (_, qe) =>
@@ -260,27 +289,44 @@ public class PlayoffSchedulePanel : UserControl
 
             if (firstPage)
             {
-                float tableH   = MeasureTableHeight();
-                float bracketH = content.Height - tableH - 8;
-
-                if (bracketH / content.Height >= 0.35f)
+                if (printWhat == "bracket")
                 {
-                    // Both fit on one page
-                    DrawTextTable(g, new RectangleF(content.Left, content.Top, content.Width, tableH));
-                    _bracket.DrawTo(g, new RectangleF(content.Left, content.Top + tableH + 8,
-                                                       content.Width, bracketH));
+                    // Only bracket
+                    _bracket.DrawTo(g, content);
+                    pe.HasMorePages = false;
+                }
+                else if (printWhat == "schedule")
+                {
+                    // Only schedule
+                    DrawTextTable(g, content);
                     pe.HasMorePages = false;
                 }
                 else
                 {
-                    // Text page 1, bracket page 2
-                    DrawTextTable(g, content);
-                    pe.HasMorePages = true;
+                    // Both: try to fit on one page
+                    float tableH   = MeasureTableHeight();
+                    float bracketH = content.Height - tableH - 8;
+
+                    if (bracketH / content.Height >= 0.35f)
+                    {
+                        // Both fit on one page
+                        DrawTextTable(g, new RectangleF(content.Left, content.Top, content.Width, tableH));
+                        _bracket.DrawTo(g, new RectangleF(content.Left, content.Top + tableH + 8,
+                                                           content.Width, bracketH));
+                        pe.HasMorePages = false;
+                    }
+                    else
+                    {
+                        // Text page 1, bracket page 2
+                        DrawTextTable(g, content);
+                        pe.HasMorePages = true;
+                    }
                 }
                 firstPage = false;
             }
             else
             {
+                // Page 2+: only bracket (for "both" when it spans pages)
                 _bracket.DrawTo(g, content);
                 pe.HasMorePages = false;
             }
