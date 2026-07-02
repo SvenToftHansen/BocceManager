@@ -16,9 +16,9 @@ public class BracketVisualizationControl : UserControl
     // ── Layout constants (unscaled) ───────────────────────────────────────────
 
     private const int ColWidth    = 200;  // horizontal gap between rounds (for connectors)
-    private const int TeamBoxH    = 64;   // height of one team name row (increased for larger font and bold)
-    private const int ScoreBoxW   = 140;  // width of aggregate score area (doubled for width)
-    private const int TeamNameW   = 360;  // width of team name area (doubled for match box width)
+    private const int TeamBoxH    = 96;   // height of one team name row (50% increase for larger boxes)
+    private const int ScoreBoxW   = 210;  // width of aggregate score area (50% increase)
+    private const int TeamNameW   = 540;  // width of team name area (50% increase)
     private const int GameBoxH    = 40;   // court/time info box — 40% taller, 2 lines of 8pt text
     private const int MatchH      = TeamBoxH + GameBoxH + TeamBoxH;
     private const int MatchVGap   = 8;    // gap between matches in same round (scaled up)
@@ -26,9 +26,9 @@ public class BracketVisualizationControl : UserControl
     private const int LeftPad     = 20;
     private const int TopPad      = 24;
 
-    private const float ScoreFontSize    = 48f;   // aggregate score — large and bold (accounts for scale-down)
-    private const float TeamNameFontSize = 56f;   // team names — must be large to survive scale-down in display/print
-    private const float InfoFontSize     = 24f;   // court/time info (must account for scale-down)
+    private const float ScoreFontSize    = 36f;   // aggregate score — large and bold
+    private const float TeamNameFontSize = 36f;   // team names — bold for all teams
+    private const float InfoFontSize     = 24f;   // court/time info
 
     // ── Data ──────────────────────────────────────────────────────────────────
 
