@@ -12,7 +12,6 @@ public class StandingsPanel : UserControl
 
     private int?   _seasonId;
     private bool   _isGamesMode;
-    private bool   _h2hUsed;
     private bool   _firstPlaceGuaranteed;
     private int    _teamsInPlayoffs;
     private int    _maxWeek;                        // last week that has any scores
@@ -310,8 +309,6 @@ public class StandingsPanel : UserControl
                     _isGamesMode, _firstPlaceGuaranteed, fromWeek, toWeek);
             }
 
-            _h2hUsed = _currentRows.Any(r => r.H2HPlusMinus != 0 || r.H2HWins != 0);
-
             // Rebuild per-timeslot column data
             _timeColDivs = _timeCols.ToDictionary(
                 tc => tc.Id,
@@ -440,12 +437,11 @@ public class StandingsPanel : UserControl
     private const int ColGap   = 8;
     private const int CellGap  = 6;
 
-    private static int[] GetStatWidths(bool isGamesMode, bool h2hUsed)
+    private static int[] GetStatWidths(bool isGamesMode)
     {
         var ws = new List<int> { 40, 44, 44 };  // #(Seed), GP/MP, W
         if (!isGamesMode) ws.Add(44);            // T
         ws.AddRange([44, 44, 50, 54]);           // L, F, Pts, +/-
-        if (h2hUsed) ws.AddRange([64, 54]);      // H2H+/-, H2HW
         return ws.ToArray();
     }
 
@@ -458,7 +454,7 @@ public class StandingsPanel : UserControl
 
         if (_timeCols.Count == 0) { _allDivPanel = null; return; }
 
-        int[] statWs    = GetStatWidths(_isGamesMode, _h2hUsed);
+        int[] statWs    = GetStatWidths(_isGamesMode);
         int   statTotal = statWs.Sum();
         int[] colWs     = _teamColWidths.Select(tw => tw + statTotal).ToArray();
 
@@ -471,7 +467,7 @@ public class StandingsPanel : UserControl
         }).ToList();
 
         int[] colHs = visibleByCol.Select(divs =>
-            divs.Sum(d => CellHdrH + DgvHdrH + d.Rows.Count * DgvRowH + CellGap)
+            divs.Sum(d => CellHdrH + DgvHdrH + d.Rows.Count * DgvRowH + CellGap + NoteHeight(BuildH2HNote(d.Rows)))
         ).ToArray();
 
         int[] colXs = new int[_timeCols.Count];
@@ -502,9 +498,11 @@ public class StandingsPanel : UserControl
             int teamW = _teamColWidths[ci];
             foreach (var d in visibleByCol[ci])
             {
-                int rowsH = DgvHdrH + d.Rows.Count * DgvRowH + 2;
-                int cellH = CellHdrH + rowsH;
-                var cellPanel = BuildDivCell(d.Div, d.Rows, teamW, statWs, colWs[ci], cellH);
+                string? note  = BuildH2HNote(d.Rows);
+                int noteH     = NoteHeight(note);
+                int rowsH     = DgvHdrH + d.Rows.Count * DgvRowH + 2;
+                int cellH     = CellHdrH + rowsH + noteH;
+                var cellPanel = BuildDivCell(d.Div, d.Rows, teamW, statWs, colWs[ci], cellH, note);
                 cellPanel.Location = new Point(colXs[ci], y);
                 outer.Controls.Add(cellPanel);
                 _divCellPanels[d.Div.Id] = cellPanel;
@@ -518,7 +516,7 @@ public class StandingsPanel : UserControl
     }
 
     private Panel BuildDivCell(Division div, List<StandingView> rows,
-        int teamW, int[] statWs, int colW, int cellH)
+        int teamW, int[] statWs, int colW, int cellH, string? h2hNote)
     {
         var cell = new Panel { Size = new Size(colW, cellH), BackColor = AppTheme.ContentBackground };
         cell.Controls.Add(new Label
@@ -530,9 +528,22 @@ public class StandingsPanel : UserControl
             Padding = new Padding(6, 0, 0, 0)
         });
         var grid = BuildDivGrid(rows, teamW, statWs);
+        int gridH = DgvHdrH + rows.Count * DgvRowH + 2;
         grid.Location = new Point(0, CellHdrH);
-        grid.Size = new Size(colW, DgvHdrH + rows.Count * DgvRowH + 2);
+        grid.Size = new Size(colW, gridH);
         cell.Controls.Add(grid);
+
+        if (h2hNote != null)
+        {
+            cell.Controls.Add(new Label
+            {
+                Text = h2hNote, Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted,
+                TextAlign = ContentAlignment.TopLeft, AutoSize = false,
+                Location = new Point(0, CellHdrH + gridH + NotePadY),
+                Size = new Size(colW, cellH - CellHdrH - gridH - NotePadY)
+            });
+        }
+
         return cell;
     }
 
@@ -542,7 +553,7 @@ public class StandingsPanel : UserControl
         grid.ScrollBars = ScrollBars.None;
         grid.Columns.Add(Col("Team", "Team", teamW));
 
-        var defs = GetStatDefs(_isGamesMode, _h2hUsed);
+        var defs = GetStatDefs(_isGamesMode);
         for (int i = 0; i < defs.Count; i++)
         {
             var (name, hdr, mid, tip) = defs[i];
@@ -557,7 +568,6 @@ public class StandingsPanel : UserControl
             if (!_isGamesMode) vals.Add(r.Ties);
             vals.Add(r.Losses); vals.Add(r.Forfeits);
             vals.Add(r.StandingsPoints); vals.Add(PmStr(r.PlusMinus));
-            if (_h2hUsed) { vals.Add(PmStr(r.H2HPlusMinus)); vals.Add(r.H2HWins); }
 
             int idx = grid.Rows.Add(vals.Cast<object>().ToArray());
             ApplyRowStyle(grid.Rows[idx], idx);
@@ -566,7 +576,7 @@ public class StandingsPanel : UserControl
         return grid;
     }
 
-    private static List<(string Name, string Hdr, bool Mid, string Tip)> GetStatDefs(bool isGamesMode, bool h2hUsed)
+    private static List<(string Name, string Hdr, bool Mid, string Tip)> GetStatDefs(bool isGamesMode)
     {
         var d = new List<(string, string, bool, string)>
         {
@@ -580,9 +590,37 @@ public class StandingsPanel : UserControl
         d.Add(("F",   "F",   true, "Forfeit losses"));
         d.Add(("Pts", "Pts", true, "Standings points"));
         d.Add(("PM",  "+/-", true, "Plus/Minus"));
-        if (h2hUsed) { d.Add(("H2HPM", "H2H+/-", true, "H2H PM")); d.Add(("H2HW", "H2HW", true, "H2H Wins")); }
         return d;
     }
+
+    // ── Head-to-head tiebreaker note ──────────────────────────────────────────
+    // H2H columns are hidden from the grid (they confused users), but H2H still
+    // drives sort order (see the Standings SQL view). When it actually separates
+    // otherwise-tied teams, explain what happened in a note below the division.
+
+    private const int NoteLineH = 15;
+    private const int NotePadY  = 6;
+
+    private static string? BuildH2HNote(List<StandingView> rows)
+    {
+        var tieGroups = rows
+            .GroupBy(r => (r.StandingsPoints, r.PlusMinus, r.Wins))
+            .Where(g => g.Count() > 1 && g.Select(r => r.DivisionRank).Distinct().Count() > 1);
+
+        var lines = new List<string>();
+        foreach (var g in tieGroups)
+        {
+            var ordered = g.OrderBy(r => r.DivisionRank).ToList();
+            string teams = string.Join("  >  ", ordered.Select(r =>
+                $"{r.TeamName} ({r.H2HWins}W {PmStr(r.H2HPlusMinus)} H2H)"));
+            lines.Add($"Tie at {g.Key.StandingsPoints} pts / {PmStr(g.Key.PlusMinus)} / {g.Key.Wins}W broken by head-to-head: {teams}");
+        }
+
+        return lines.Count > 0 ? string.Join("\n", lines) : null;
+    }
+
+    private static int NoteHeight(string? note) =>
+        note == null ? 0 : NotePadY * 2 + note.Split('\n').Length * NoteLineH;
 
     // ── Season Seed two-column panel ──────────────────────────────────────────
 

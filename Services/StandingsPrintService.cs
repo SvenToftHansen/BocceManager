@@ -34,7 +34,6 @@ public static class StandingsPrintService
         List<(StandingView Row, string ShortDivName)> SeedRows,
         int  TeamsInPlayoffs,
         bool IsGamesMode,
-        bool H2hUsed,
         bool IsSeasonComplete,    // true when maxWeek >= WeeksInSeason
         string[] StatHeaders,
         float[]  StatWidths,
@@ -64,7 +63,6 @@ public static class StandingsPrintService
             .ToList();
 
         bool isGamesMode = season.ScoringMode == "games_mode";
-        bool h2hUsed     = allRows.Any(r => r.H2HPlusMinus != 0 || r.H2HWins != 0);
 
         int maxWeek = (int)(db.Scoring
             .Where(s => s.SeasonId == seasonId)
@@ -109,7 +107,7 @@ public static class StandingsPrintService
             .Select(r => (Row: r, Short: shortNames.TryGetValue(r.DivisionId, out var sn) ? sn : "?"))
             .ToList();
 
-        string[] statHdrs = BuildStatHeaders(isGamesMode, h2hUsed);
+        string[] statHdrs = BuildStatHeaders(isGamesMode);
 
         float[] statWidths, tcTeamW;
         using (var bmp = new Bitmap(1, 1))
@@ -146,18 +144,17 @@ public static class StandingsPrintService
         }
 
         var lay = new Layout(docHdr, timeCols, columnDivs, seedRows,
-            season.TeamsInPlayoffs, isGamesMode, h2hUsed, isSeasonComplete, statHdrs, statWidths, tcTeamW);
+            season.TeamsInPlayoffs, isGamesMode, isSeasonComplete, statHdrs, statWidths, tcTeamW);
 
         return CreatePrintDoc(lay, mode);
     }
 
     // "Seed" (SeasonSeed) appears first so readers see overall playoff position at a glance
-    private static string[] BuildStatHeaders(bool isGamesMode, bool h2hUsed)
+    private static string[] BuildStatHeaders(bool isGamesMode)
     {
         var h = new List<string> { "Seed", isGamesMode ? "GP" : "MP", "W" };
         if (!isGamesMode) h.Add("T");
         h.AddRange(["L", "F", "Pts", "+/-"]);
-        if (h2hUsed) h.AddRange(["H2H+/-", "H2HW"]);
         return h.ToArray();
     }
 
@@ -340,7 +337,7 @@ public static class StandingsPrintService
             g.DrawString(teamDisplay, rowF, Brushes.Black,
                 new RectangleF(x + PadX, y, teamW - PadX * 2, RowH), lsf);
 
-            var vals = GetStatValues(r, lay.IsGamesMode, lay.H2hUsed);
+            var vals = GetStatValues(r, lay.IsGamesMode);
             sx = x + teamW;
             for (int i = 0; i < vals.Length; i++)
             {
@@ -353,7 +350,7 @@ public static class StandingsPrintService
         g.DrawRectangle(linePen, x, yStart, colW - 1, y - yStart - 1);
     }
 
-    private static string[] GetStatValues(StandingView r, bool isGamesMode, bool h2hUsed)
+    private static string[] GetStatValues(StandingView r, bool isGamesMode)
     {
         var v = new List<string>
         {
@@ -364,7 +361,6 @@ public static class StandingsPrintService
         if (!isGamesMode) v.Add(r.Ties.ToString());
         v.Add(r.Losses.ToString()); v.Add(r.Forfeits.ToString());
         v.Add(r.StandingsPoints.ToString()); v.Add(PmStr(r.PlusMinus));
-        if (h2hUsed) { v.Add(PmStr(r.H2HPlusMinus)); v.Add(r.H2HWins.ToString()); }
         return v.ToArray();
     }
 
