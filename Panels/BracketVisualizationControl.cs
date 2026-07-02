@@ -15,16 +15,18 @@ public class BracketVisualizationControl : UserControl
 {
     // ── Layout constants (unscaled) ───────────────────────────────────────────
 
-    private const int ColWidth    = 200;  // horizontal gap between rounds (for connectors)
+    private const int ColWidth    = 60;   // horizontal gap between rounds (minimal for connectors)
     private const int TeamBoxH    = 96;   // height of one team name row (50% increase for larger boxes)
     private const int ScoreBoxW   = 210;  // width of aggregate score area (50% increase)
     private const int TeamNameW   = 540;  // width of team name area (50% increase)
     private const int GameBoxH    = 40;   // court/time info box — 40% taller, 2 lines of 8pt text
     private const int MatchH      = TeamBoxH + GameBoxH + TeamBoxH;
-    private const int MatchVGap   = 8;    // gap between matches in same round (scaled up)
+    private const int MatchVGap   = 3;    // minimal gap between matches (tighten layout)
     private const int ByeLabelH   = 14;   // "Bye N" label above bye team
-    private const int LeftPad     = 20;
-    private const int TopPad      = 24;
+    private const int LeftPad     = 10;   // minimal left padding
+    private const int TopPad      = 12;   // minimal top padding
+    private const int WinnerBoxH  = 96;   // champion display box height
+    private const int WinnerGap   = 20;   // space before winner box
 
     private const float ScoreFontSize    = 36f;   // aggregate score — large and bold
     private const float TeamNameFontSize = 36f;   // team names — bold for all teams
@@ -135,8 +137,8 @@ public class BracketVisualizationControl : UserControl
         // Width: leftPad + each round's box width + (rounds-1) gaps between rounds + right pad
         _naturalW = LeftPad + _totalRounds * (TeamNameW + ScoreBoxW)
                   + (_totalRounds - 1) * ColWidth + 40;
-        // Height: top pad + all slots × (match height + gap) + footer space
-        _naturalH = TopPad + TotalSlots() * (MatchH + MatchVGap) + 40;
+        // Height: top pad + all slots × (match height + gap) + winner box + footer space
+        _naturalH = TopPad + TotalSlots() * (MatchH + MatchVGap) + WinnerGap + WinnerBoxH + 40;
     }
 
     private int TotalSlots() => (int)Math.Pow(2, _totalRounds - 1);
@@ -200,6 +202,9 @@ public class BracketVisualizationControl : UserControl
         foreach (var roundGroup in byRound)
             foreach (var m in roundGroup.OrderBy(x => x.Slot))
                 DrawMatch(g, m, positions[m.Id]);
+
+        // Draw winner box (champion display)
+        DrawWinnerBox(g, byRound);
 
         // Footer note — tiebreaker rule
         string footer = $"* Each match: aggregate of 2 games total score.  Tie occurs when both teams score the same over both games → Tiebreaker: {_tiebreakerBalls} ball(s), winner scores 1 point.";
@@ -331,7 +336,7 @@ public class BracketVisualizationControl : UserControl
         using var nameFont  = new Font(AppTheme.FontDefault.FontFamily, TeamNameFontSize,
                                        FontStyle.Bold);
         using var textBrush = new SolidBrush(AppTheme.TextPrimary);
-        g.DrawString(name ?? "TBD", nameFont, textBrush,
+        g.DrawString(name ?? "", nameFont, textBrush,
             new RectangleF(x + 3, y + 2, TeamNameW - 6, TeamBoxH - 4));
 
         // Score box — larger font, prominent
@@ -378,6 +383,55 @@ public class BracketVisualizationControl : UserControl
             new RectangleF(x + 2, y, TeamNameW + ScoreBoxW - 4, GameBoxH), fmt);
     }
 
+    private void DrawWinnerBox(Graphics g, IList<IGrouping<int, BracketMatch>> byRound)
+    {
+        // Find final round match (winner)
+        var finalRound = byRound.LastOrDefault();
+        if (finalRound == null) return;
+
+        var finalMatch = finalRound.FirstOrDefault();
+        if (finalMatch == null) return;
+
+        // Determine winner
+        string? winnerName = null;
+        if (finalMatch.IsCompleted && finalMatch.Team1Score.HasValue && finalMatch.Team2Score.HasValue)
+        {
+            if (finalMatch.Team1Score > finalMatch.Team2Score)
+                winnerName = finalMatch.Team1Name;
+            else if (finalMatch.Team2Score > finalMatch.Team1Score)
+                winnerName = finalMatch.Team2Name;
+        }
+
+        // Only draw winner box if there's a winner
+        if (string.IsNullOrEmpty(winnerName)) return;
+
+        // Position winner box at bottom center
+        int winnerBoxW = TeamNameW + ScoreBoxW;
+        int winnerBoxX = LeftPad + (_totalRounds - 1) * (ColWidth + TeamNameW + ScoreBoxW) + (TeamNameW + ScoreBoxW - winnerBoxW) / 2;
+        int winnerBoxY = _naturalH - WinnerBoxH - 40;
+
+        // Draw winner box with gold background
+        using var winnerBg = new SolidBrush(Color.FromArgb(255, 215, 0));  // Gold
+        g.FillRectangle(winnerBg, winnerBoxX, winnerBoxY, winnerBoxW, WinnerBoxH);
+
+        using var winnerBorder = new Pen(Color.FromArgb(184, 134, 11), 3f);  // Dark gold border
+        g.DrawRectangle(winnerBorder, winnerBoxX, winnerBoxY, winnerBoxW, WinnerBoxH);
+
+        // Draw "CHAMPION" title
+        using var titleFont = new Font(AppTheme.FontDefault.FontFamily, 14f, FontStyle.Bold);
+        using var titleBrush = new SolidBrush(Color.FromArgb(184, 134, 11));  // Dark gold text
+        using var titleFmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Near };
+        g.DrawString("CHAMPION", titleFont, titleBrush,
+            new RectangleF(winnerBoxX, winnerBoxY + 8, winnerBoxW, 20), titleFmt);
+
+        // Draw winner name
+        using var nameFont = new Font(AppTheme.FontDefault.FontFamily, TeamNameFontSize, FontStyle.Bold);
+        using var nameBrush = new SolidBrush(Color.FromArgb(50, 50, 50));  // Dark text
+        using var nameFmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+        g.DrawString(winnerName, nameFont, nameBrush,
+            new RectangleF(winnerBoxX + 10, winnerBoxY + 36, winnerBoxW - 20, WinnerBoxH - 50), nameFmt);
+    }
+
     // ── Public print API — vector-quality direct render ───────────────────────
 
     /// <summary>
@@ -403,6 +457,8 @@ public class BracketVisualizationControl : UserControl
         foreach (var rg in byRound)
             foreach (var m in rg.OrderBy(x => x.Slot))
                 DrawMatch(g, m, positions[m.Id]);
+
+        DrawWinnerBox(g, byRound);
 
         string footer = $"* Each match: aggregate of 2 games total score.  Tie occurs when both teams score the same over both games → Tiebreaker: {_tiebreakerBalls} ball(s), winner scores 1 point.";
         using var fFont  = new Font(AppTheme.FontSmall.FontFamily, InfoFontSize, FontStyle.Italic);
