@@ -26,9 +26,9 @@ public class BracketVisualizationControl : UserControl
     private const int LeftPad     = 20;
     private const int TopPad      = 24;
 
-    private const float ScoreFontSize    = 18f;   // aggregate score — large and bold (scaled up)
-    private const float TeamNameFontSize = 18f;   // team names (doubled from 9f, always bold)
-    private const float InfoFontSize     = 9f;    // court/time info (slightly larger)
+    private const float ScoreFontSize    = 48f;   // aggregate score — large and bold (accounts for scale-down)
+    private const float TeamNameFontSize = 56f;   // team names — must be large to survive scale-down in display/print
+    private const float InfoFontSize     = 24f;   // court/time info (must account for scale-down)
 
     // ── Data ──────────────────────────────────────────────────────────────────
 
