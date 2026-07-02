@@ -539,7 +539,7 @@ public class PlayoffSetupPanel : UserControl
         var seasonCourts = db.SeasonCourts
             .Where(sc => sc.SeasonId == season.Id)
             .Include(sc => sc.Court)
-            .OrderBy(sc => sc.SortOrder)
+            .OrderBy(sc => sc.SortOrder).ThenBy(sc => sc.Court.CourtNumber)
             .Select(sc => sc.Court)
             .ToList();
 

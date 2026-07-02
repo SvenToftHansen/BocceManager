@@ -61,7 +61,7 @@ public static class SchedulePrintService
         var seasonCourts = db.SeasonCourts
             .Where(sc => sc.SeasonId == seasonId && sc.Court.IsActive)
             .Include(sc => sc.Court)
-            .OrderBy(sc => sc.SortOrder)
+            .OrderBy(sc => sc.SortOrder).ThenBy(sc => sc.Court.CourtNumber)
             .Select(sc => sc.Court)
             .AsEnumerable()
             .Select(c => (Id: c.Id, Display: CourtLabel(c, courtDisplay)))

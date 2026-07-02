@@ -30,7 +30,7 @@ public static class ScheduleTemplateService
 
         var courtIds = db.SeasonCourts
             .Where(sc => sc.SeasonId == seasonId && sc.Court.IsActive)
-            .OrderBy(sc => sc.SortOrder)
+            .OrderBy(sc => sc.SortOrder).ThenBy(sc => sc.Court.CourtNumber)
             .Select(sc => sc.CourtId)
             .ToList();
 

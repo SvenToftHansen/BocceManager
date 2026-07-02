@@ -762,7 +762,7 @@ public class SeasonPanel : UserControl
 
             var selectedIds = seasonId.HasValue
                 ? db.SeasonCourts.Where(sc => sc.SeasonId == seasonId.Value)
-                    .OrderBy(sc => sc.SortOrder)
+                    .OrderBy(sc => sc.SortOrder).ThenBy(sc => sc.Court.CourtNumber)
                     .Select(sc => sc.CourtId)
                     .ToList()
                 : [];

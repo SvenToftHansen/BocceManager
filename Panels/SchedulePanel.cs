@@ -322,7 +322,7 @@ public class SchedulePanel : UserControl
                 _seasonCourts = db.SeasonCourts
                     .Where(sc => sc.SeasonId == _selectedSeasonId.Value && sc.Court.IsActive)
                     .Include(sc => sc.Court)
-                    .OrderBy(sc => sc.SortOrder)
+                    .OrderBy(sc => sc.SortOrder).ThenBy(sc => sc.Court.CourtNumber)
                     .Select(sc => sc.Court)
                     .AsEnumerable()
                     .Select(c => (c.Id, Display: CourtLabel(c, _courtDisplay)))
