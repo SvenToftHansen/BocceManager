@@ -16,7 +16,7 @@ public class PlayoffSetupPanel : UserControl
 
     // ── Controls ──────────────────────────────────────────────────────────────
 
-    private NumericUpDown _numMatchDuration   = null!;
+    private TabControl    _tabs             = null!;
     private NumericUpDown _numTiebreakerBalls = null!;
     private ComboBox      _cboDisplayMode     = null!;
     private Label         _lblByeCount      = null!;
@@ -53,39 +53,85 @@ public class PlayoffSetupPanel : UserControl
 
     private void BuildUi()
     {
-        var scroll = new Panel
+        // Main layout: tabs on top, buttons on bottom
+        var layout = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.ContentBackground
+            Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2,
+            Padding = Padding.Empty, Margin = Padding.Empty,
+            CellBorderStyle = TableLayoutPanelCellBorderStyle.None
         };
-        Controls.Add(scroll);
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
 
-        var inner = new Panel
+        // Build tabs
+        _tabs = new TabControl
         {
-            AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Padding  = new Padding(20), BackColor = AppTheme.ContentBackground
+            Dock = DockStyle.Fill, Font = AppTheme.FontDefault, Padding = new Point(10, 6)
         };
+        _tabs.TabPages.Add(BuildConfigTab());
+        _tabs.TabPages.Add(BuildSeedingTab());
+        _tabs.TabPages.Add(BuildDaysTab());
+        _tabs.TabPages.Add(BuildPreviewTab());
+        layout.Controls.Add(_tabs, 0, 0);
+
+        // Bottom toolbar
+        var toolbar = new Panel
+        {
+            Dock = DockStyle.Fill, BackColor = AppTheme.Surface, Padding = new Padding(12, 10, 12, 10)
+        };
+
+        var btnSave = new Button
+        {
+            Text = "Save Config", Location = new Point(0, 0),
+            Size = new Size(120, 32), Font = AppTheme.FontDefault,
+            BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+        };
+        btnSave.FlatAppearance.BorderSize = 0;
+        btnSave.Click += OnSaveConfig;
+        toolbar.Controls.Add(btnSave);
+
+        _btnGenerate = new Button
+        {
+            Text = "Generate Bracket", Location = new Point(134, 0),
+            Size = new Size(150, 32), Font = AppTheme.FontDefault,
+            BackColor = Color.FromArgb(60, 110, 180), ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+        };
+        _btnGenerate.FlatAppearance.BorderSize = 0;
+        _btnGenerate.Click += OnGenerateBracket;
+        toolbar.Controls.Add(_btnGenerate);
+
+        _lblStatus = new Label
+        {
+            Location = new Point(300, 8), AutoSize = true,
+            Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted,
+        };
+        toolbar.Controls.Add(_lblStatus);
+
+        layout.Controls.Add(toolbar, 0, 1);
+        Controls.Add(layout);
+    }
+
+    private TabPage BuildConfigTab()
+    {
+        var page = new TabPage("  Configuration  ") { BackColor = AppTheme.ContentBackground };
+        var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.ContentBackground };
+
+        var inner = new Panel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(20), BackColor = AppTheme.ContentBackground };
         scroll.Controls.Add(inner);
+        page.Controls.Add(scroll);
 
         int y = 0;
 
-        // ── Section: Parameters ───────────────────────────────────────────────
+        // Playoff Parameters
         y = AddSectionHeader(inner, "Playoff Parameters", y);
 
         AddLabel(inner, "Teams in Playoffs:", 0, y);
         _lblTeamCount = AddReadonlyLabel(inner, "—", 200, y);
         AddLabel(inner, "Byes:", 370, y);
         _lblByeCount = AddReadonlyLabel(inner, "—", 430, y);
-        y += 34;
-
-        AddLabel(inner, "Match Duration (mins):", 0, y);
-        _numMatchDuration = new NumericUpDown
-        {
-            Location = new Point(200, y), Size = new Size(80, 28),
-            Minimum = 30, Maximum = 240, Value = 90,
-            Font = AppTheme.FontDefault, TextAlign = HorizontalAlignment.Center,
-        };
-        _numMatchDuration.ValueChanged += (_, _) => RefreshPreview();
-        inner.Controls.Add(_numMatchDuration);
         y += 34;
 
         AddLabel(inner, "Tiebreaker Balls:", 0, y);
@@ -109,25 +155,46 @@ public class PlayoffSetupPanel : UserControl
         inner.Controls.Add(_cboDisplayMode);
         y += 44;
 
-        // ── Section: Team Seeding ─────────────────────────────────────────────
+        // Playoff Courts
+        y = AddSectionHeader(inner, "Playoff Courts", y);
+
+        _pnlCourts = new FlowLayoutPanel
+        {
+            Location = new Point(0, y),
+            Size = new Size(680, 36),
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            BackColor = AppTheme.ContentBackground,
+        };
+        inner.Controls.Add(_pnlCourts);
+
+        return page;
+    }
+
+    private TabPage BuildSeedingTab()
+    {
+        var page = new TabPage("  Team Seeding  ") { BackColor = AppTheme.ContentBackground };
+        var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.ContentBackground };
+
+        var inner = new Panel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(20), BackColor = AppTheme.ContentBackground };
+        scroll.Controls.Add(inner);
+        page.Controls.Add(scroll);
+
+        int y = 0;
+
         y = AddSectionHeader(inner, "Team Seeding", y);
 
-        _gridSeeding = MakeGrid(inner, 0, y, 520, 200);
-        _gridSeeding.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            HeaderText = "Seed", Name = "Seed", Width = 60, ReadOnly = true,
-        });
-        var teamCol = new DataGridViewComboBoxColumn
-        {
-            HeaderText = "Team", Name = "Team", Width = 440, DisplayStyleForCurrentCellOnly = true,
-        };
+        _gridSeeding = MakeGrid(inner, 0, y, 520, 300);
+        _gridSeeding.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Seed", Name = "Seed", Width = 60, ReadOnly = true });
+        var teamCol = new DataGridViewComboBoxColumn { HeaderText = "Team", Name = "Team", Width = 440, DisplayStyleForCurrentCellOnly = true };
         _gridSeeding.Columns.Add(teamCol);
-        _gridSeeding.CellValueChanged   += OnSeedingChanged;
-        _gridSeeding.CurrentCellDirtyStateChanged += (_, _) =>
-        {
+        _gridSeeding.CellValueChanged += OnSeedingChanged;
+        _gridSeeding.CurrentCellDirtyStateChanged += (_, _) => {
             if (_gridSeeding.IsCurrentCellDirty) _gridSeeding.CommitEdit(DataGridViewDataErrorContexts.Commit);
         };
-        y += 210;
+        y += 310;
 
         var btnReset = new Button
         {
@@ -139,19 +206,31 @@ public class PlayoffSetupPanel : UserControl
         btnReset.FlatAppearance.BorderSize = 0;
         btnReset.Click += OnResetFromStandings;
         inner.Controls.Add(btnReset);
-        y += 38;
 
-        // ── Section: Day Parameters ───────────────────────────────────────────
+        return page;
+    }
+
+    private TabPage BuildDaysTab()
+    {
+        var page = new TabPage("  Day / Round Parameters  ") { BackColor = AppTheme.ContentBackground };
+        var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.ContentBackground };
+
+        var inner = new Panel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(20), BackColor = AppTheme.ContentBackground };
+        scroll.Controls.Add(inner);
+        page.Controls.Add(scroll);
+
+        int y = 0;
+
         y = AddSectionHeader(inner, "Day / Round Parameters", y);
 
-        _gridDays = MakeGrid(inner, 0, y, 680, 160);
+        _gridDays = MakeGrid(inner, 0, y, 680, 200);
         _gridDays.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Day", Name = "Day", Width = 40, ReadOnly = true });
         _gridDays.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Date (yyyy-mm-dd)", Name = "Date", Width = 140 });
         _gridDays.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Start", Name = "Start", Width = 80 });
         _gridDays.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "End", Name = "End", Width = 80 });
         _gridDays.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Match Length (mins)", Name = "Gap", Width = 130 });
         _gridDays.CellValueChanged += (_, _) => RefreshPreview();
-        y += 170;
+        y += 210;
 
         var btnAddDay = new Button
         {
@@ -163,25 +242,32 @@ public class PlayoffSetupPanel : UserControl
         btnAddDay.FlatAppearance.BorderSize = 0;
         btnAddDay.Click += (_, _) => AddDayRow();
         inner.Controls.Add(btnAddDay);
-        y += 36;
 
-        // ── Section: Playoff Courts ───────────────────────────────────────────
-        y = AddSectionHeader(inner, "Playoff Courts", y);
-
-        _pnlCourts = new FlowLayoutPanel
+        var btnDeleteDay = new Button
         {
-            Location    = new Point(0, y),
-            Size        = new Size(680, 36),
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents  = false,
-            AutoSize      = true,
-            AutoSizeMode  = AutoSizeMode.GrowAndShrink,
-            BackColor     = AppTheme.ContentBackground,
+            Text = "- Delete Day", Location = new Point(110, y),
+            Size = new Size(100, 26), Font = AppTheme.FontDefault,
+            BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
         };
-        inner.Controls.Add(_pnlCourts);
-        y += 46;
+        btnDeleteDay.FlatAppearance.BorderSize = 0;
+        btnDeleteDay.Click += (_, _) => DeleteDayRow();
+        inner.Controls.Add(btnDeleteDay);
 
-        // ── Section: Schedule Preview ─────────────────────────────────────────
+        return page;
+    }
+
+    private TabPage BuildPreviewTab()
+    {
+        var page = new TabPage("  Schedule Preview  ") { BackColor = AppTheme.ContentBackground };
+        var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = AppTheme.ContentBackground };
+
+        var inner = new Panel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(20), BackColor = AppTheme.ContentBackground };
+        scroll.Controls.Add(inner);
+        page.Controls.Add(scroll);
+
+        int y = 0;
+
         y = AddSectionHeader(inner, "Schedule Preview", y);
 
         _lblPreview = new Label
@@ -191,37 +277,8 @@ public class PlayoffSetupPanel : UserControl
             MaximumSize = new Size(700, 0),
         };
         inner.Controls.Add(_lblPreview);
-        y += 60;
 
-        // ── Actions ───────────────────────────────────────────────────────────
-        var btnSave = new Button
-        {
-            Text = "Save Config", Location = new Point(0, y),
-            Size = new Size(120, 32), Font = AppTheme.FontDefault,
-            BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
-        };
-        btnSave.FlatAppearance.BorderSize = 0;
-        btnSave.Click += OnSaveConfig;
-        inner.Controls.Add(btnSave);
-
-        _btnGenerate = new Button
-        {
-            Text = "Generate Bracket", Location = new Point(134, y),
-            Size = new Size(150, 32), Font = AppTheme.FontDefault,
-            BackColor = Color.FromArgb(60, 110, 180), ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
-        };
-        _btnGenerate.FlatAppearance.BorderSize = 0;
-        _btnGenerate.Click += OnGenerateBracket;
-        inner.Controls.Add(_btnGenerate);
-
-        _lblStatus = new Label
-        {
-            Location = new Point(0, y + 40), AutoSize = true,
-            Font = AppTheme.FontSmall, ForeColor = AppTheme.TextMuted,
-        };
-        inner.Controls.Add(_lblStatus);
+        return page;
     }
 
     // ── Data loading ──────────────────────────────────────────────────────────
@@ -259,7 +316,6 @@ public class PlayoffSetupPanel : UserControl
                 .First(c => c.SeasonId == seasonId.Value);
         }
 
-        _numMatchDuration.Value        = Clamp(_config.MatchDurationMins,   _numMatchDuration.Minimum,   _numMatchDuration.Maximum);
         _numTiebreakerBalls.Value      = Clamp(_config.TiebreakerBalls,     _numTiebreakerBalls.Minimum, _numTiebreakerBalls.Maximum);
         _cboDisplayMode.SelectedIndex  = _config.DisplayMode == "Scroll" ? 1 : 0;
 
@@ -407,6 +463,25 @@ public class PlayoffSetupPanel : UserControl
         RefreshPreview();
     }
 
+    private void DeleteDayRow()
+    {
+        if (_gridDays.SelectedRows.Count == 0)
+        {
+            MessageBox.Show("Select a day to delete.", "Delete Day", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        int selectedIndex = _gridDays.SelectedRows[0].Index;
+        if (selectedIndex >= 0 && selectedIndex < _gridDays.Rows.Count)
+        {
+            _gridDays.Rows.RemoveAt(selectedIndex);
+            // Renumber remaining days
+            for (int i = 0; i < _gridDays.Rows.Count; i++)
+                _gridDays.Rows[i].Cells["Day"].Value = (i + 1).ToString();
+            RefreshPreview();
+        }
+    }
+
     private void PopulateCourtCheckboxes(BocceDbContext db)
     {
         _pnlCourts.Controls.Clear();
@@ -462,7 +537,7 @@ public class PlayoffSetupPanel : UserControl
             courtCount = db2.SeasonCourts.Count(sc => sc.SeasonId == _seasonId.Value);
 
         var schedule = PlayoffService.ComputeRoundSchedule(
-            teamCount, (int)_numMatchDuration.Value, dayParams, Math.Max(1, courtCount));
+            teamCount, 0, dayParams, Math.Max(1, courtCount));
 
         var lines = schedule
             .GroupBy(s => s.Date == DateOnly.MinValue ? "Unscheduled" : $"Day {dayParams.FirstOrDefault(d => d.GameDate == s.Date)?.DayNumber} — {s.Date:ddd MMM d}")
@@ -486,7 +561,6 @@ public class PlayoffSetupPanel : UserControl
             var cfg = db.PlayoffConfigs.Include(c => c.DayParams)
                 .First(c => c.Id == _config.Id);
 
-            cfg.MatchDurationMins  = (int)_numMatchDuration.Value;
             cfg.TiebreakerBalls    = (int)_numTiebreakerBalls.Value;
             cfg.DisplayMode        = _cboDisplayMode.SelectedIndex == 1 ? "Scroll" : "ScaleToFit";
 
