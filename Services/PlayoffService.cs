@@ -129,6 +129,15 @@ public static class PlayoffService
         int teamCount = season.TeamsInPlayoffs;
         if (teamCount < 2) throw new InvalidOperationException("Need at least 2 playoff teams.");
 
+        // Validate clean bracket size: must be a power of 2 (no byes) or 3× a power of 2
+        // (exactly one bye per bye-seed in every R2 match).
+        // 20 or 28 teams cause some R2 games to be bye-vs-bye — unfair double advantage.
+        if (!IsCleanBracketSize(teamCount))
+            throw new InvalidOperationException(
+                $"{teamCount} teams produces an unbalanced bracket where some teams receive " +
+                $"a double-bye advantage. Valid playoff sizes: 4, 8, 12, 16, 24, 32, 48, 64. " +
+                $"Please adjust Season → Teams in Playoffs.");
+
         // Use playoff-specific courts if configured; fall back to season courts.
         var courts = db.PlayoffCourts
             .Where(pc => pc.PlayoffConfigId == config.Id)
@@ -342,25 +351,41 @@ public static class PlayoffService
         db.SaveChanges();
     }
 
-    // Bye ordering for N byes: produces the top-to-bottom sequence of bye seeds.
-    // For 4 byes: [1, 4, 3, 2]
-    // This ensures: #1 and #2 are in opposite halves; #1 meets #4 in SF worst case.
+    // Bye ordering — top-to-bottom bracket slot assignment for N bye seeds.
+    // Uses the standard seeded-bracket recursive doubling rule:
+    //   Start [1,2]. Double: even-index pairs expand as (seed, complement);
+    //   odd-index pairs expand as (complement, seed). Repeat until size≥byeCount.
+    //
+    // Results:
+    //   4 byes → [1, 4, 3, 2]        (old code gave [1,3,4,2] — WRONG)
+    //   8 byes → [1, 8, 5, 4, 3, 6, 7, 2]
+    //
+    // Guarantees: seeds 1 & 2 in opposite halves (Final only);
+    //             seeds 1 & 4 in same half (SF worst-case).
     private static List<int> BuildByeOrder(int byeCount)
     {
-        if (byeCount == 0) return [];
-        // Build recursively: seed 1 top, seed 2 bottom, fill inward
-        var order = new int[byeCount];
-        int lo = 0, hi = byeCount - 1;
-        int seed = 1;
-        bool top = true;
-        while (seed <= byeCount)
+        if (byeCount <= 0) return [];
+
+        var slots = new List<int> { 1, 2 };
+        int size  = 2;
+
+        while (size < byeCount)
         {
-            if (top) order[lo++] = seed;
-            else     order[hi--] = seed;
-            seed++;
-            top = !top;
+            size *= 2;
+            var expanded = new List<int>(size);
+            for (int i = 0; i < slots.Count; i++)
+            {
+                int s          = slots[i];
+                int complement = size + 1 - s;
+                if (i % 2 == 0)          // even index: keep seed first
+                { expanded.Add(s); expanded.Add(complement); }
+                else                     // odd index: complement first
+                { expanded.Add(complement); expanded.Add(s); }
+            }
+            slots = expanded;
         }
-        return [.. order];
+
+        return slots.Take(byeCount).ToList();
     }
 
     // Pair R1 seeds to match each bye opponent correctly.
@@ -483,5 +508,23 @@ public static class PlayoffService
         int p = 1;
         while (p < n) p <<= 1;
         return p;
+    }
+
+    // A "clean" bracket size produces exactly one bye per bye-seed in every R2 match:
+    //   power of 2  (no byes)         → 4, 8, 16, 32, 64
+    //   3 × power of 2  (clean byes)  → 12, 24, 48, 96
+    // 20, 28, 40, etc. produce R2 games where two bye-seeds play each other (unfair).
+    public static bool IsCleanBracketSize(int n)
+    {
+        if (n <= 0) return false;
+        // Is n a power of 2?
+        if ((n & (n - 1)) == 0) return true;
+        // Is n/3 a power of 2?
+        if (n % 3 == 0)
+        {
+            int m = n / 3;
+            return (m & (m - 1)) == 0;
+        }
+        return false;
     }
 }
