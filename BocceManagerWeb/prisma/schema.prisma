@@ -1,0 +1,869 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Announcements {
+  Id          Int       @id(map: "PK_Announcements") @default(autoincrement())
+  LeagueId    Int?
+  Title       String
+  Body        String
+  PublishedAt DateTime? @db.Timestamptz(6)
+  ExpiresAt   DateTime? @db.Timestamptz(6)
+  IsActive    Boolean
+  CreatedBy   String?
+  CreatedAt   DateTime  @db.Timestamptz(6)
+  Leagues     Leagues?  @relation(fields: [LeagueId], references: [Id], onDelete: NoAction, onUpdate: NoAction, map: "FK_Announcements_Leagues_LeagueId")
+
+  @@index([LeagueId], map: "IX_Announcements_LeagueId")
+}
+
+model AppParameters {
+  Id          Int     @id(map: "PK_AppParameters") @default(autoincrement())
+  Key         String  @unique(map: "IX_AppParameters_Key")
+  Value       String
+  Description String?
+  IsActive    Boolean
+}
+
+model ClubDocuments {
+  Id            Int      @id(map: "PK_ClubDocuments") @default(autoincrement())
+  Title         String
+  FileName      String
+  DocType       String
+  GoogleDocsUrl String?
+  LeagueId      Int?
+  UploadedAt    DateTime @db.Timestamptz(6)
+  Notes         String?
+}
+
+model Courts {
+  Id                      Int                       @id(map: "PK_Courts") @default(autoincrement())
+  CourtLetter             String
+  Notes                   String?
+  IsActive                Boolean
+  CourtNumber             Int                       @default(0)
+  SortOrder               Int                       @default(0)
+  Matches                 Matches[]
+  PlayoffMatches          PlayoffMatches[]
+  ScheduleDivisions       ScheduleDivisions[]
+  ScheduleTemplateMatches ScheduleTemplateMatches[]
+  SeasonCourts            SeasonCourts[]
+}
+
+model DaySlots {
+  Id                          Int                           @id(map: "PK_DaySlots") @default(autoincrement())
+  DayName                     String
+  DayAbbr                     String
+  DayNbr                      Int
+  IsActive                    Boolean
+  Divisions                   Divisions[]
+  LookingForTeamPreferredDays LookingForTeamPreferredDays[]
+  SeasonDaySlots              SeasonDaySlots[]
+}
+
+model Divisions {
+  Id                      Int                       @id(map: "PK_Divisions") @default(autoincrement())
+  SeasonId                Int
+  Name                    String
+  ShortName               String
+  SortName                String
+  PlayersPerTeamMinimum   Int?
+  PlayersPerTeamMaximum   Int?
+  TeamsInDivision         Int
+  DaySlotId               Int?
+  TimeSlotId              Int?
+  IsActive                Boolean
+  DaySlots                DaySlots?                 @relation(fields: [DaySlotId], references: [Id], onDelete: NoAction, onUpdate: NoAction, map: "FK_Divisions_DaySlots_DaySlotId")
+  Seasons                 Seasons                   @relation(fields: [SeasonId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_Divisions_Seasons_SeasonId")
+  TimeSlots               TimeSlots?                @relation(fields: [TimeSlotId], references: [Id], onDelete: NoAction, onUpdate: NoAction, map: "FK_Divisions_TimeSlots_TimeSlotId")
+  LookingForTeamDivisions LookingForTeamDivisions[]
+  ScheduleDivisions       ScheduleDivisions[]
+  ScheduleWeeks           ScheduleWeeks[]
+  TeamApplicants          TeamApplicants[]
+  TeamStandings           TeamStandings[]
+  Teams                   Teams[]
+
+  @@index([DaySlotId], map: "IX_Divisions_DaySlotId")
+  @@index([SeasonId], map: "IX_Divisions_SeasonId")
+  @@index([TimeSlotId], map: "IX_Divisions_TimeSlotId")
+}
+
+model EmailListMembers {
+  Id          Int        @id(map: "PK_EmailListMembers") @default(autoincrement())
+  EmailListId Int
+  PlayerId    Int
+  IsActive    Boolean
+  EmailLists  EmailLists @relation(fields: [EmailListId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_EmailListMembers_EmailLists_EmailListId")
+  Players     Players    @relation(fields: [PlayerId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_EmailListMembers_Players_PlayerId")
+
+  @@unique([EmailListId, PlayerId], map: "IX_EmailListMembers_EmailListId_PlayerId")
+  @@index([PlayerId], map: "IX_EmailListMembers_PlayerId")
+}
+
+model EmailLists {
+  Id               Int                @id(map: "PK_EmailLists") @default(autoincrement())
+  LeagueId         Int
+  Name             String
+  Description      String?
+  IsActive         Boolean
+  EmailListMembers EmailListMembers[]
+  Leagues          Leagues            @relation(fields: [LeagueId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_EmailLists_Leagues_LeagueId")
+
+  @@index([LeagueId], map: "IX_EmailLists_LeagueId")
+}
+
+model EmailLogs {
+  Id             Int      @id(map: "PK_EmailLogs") @default(autoincrement())
+  SentBy         String?
+  LeagueId       Int?
+  Subject        String
+  Body           String?
+  RecipientCount Int?
+  SentAt         DateTime @db.Timestamptz(6)
+  Leagues        Leagues? @relation(fields: [LeagueId], references: [Id], onDelete: NoAction, onUpdate: NoAction, map: "FK_EmailLogs_Leagues_LeagueId")
+
+  @@index([LeagueId], map: "IX_EmailLogs_LeagueId")
+}
+
+model Games {
+  Id         Int       @id(map: "PK_Games") @default(autoincrement())
+  MatchId    Int
+  GameNumber Int
+  Team1Score Int
+  Team2Score Int
+  IsForfeit  Boolean
+  EnteredBy  String?
+  EnteredAt  DateTime? @db.Timestamptz(6)
+  Matches    Matches   @relation(fields: [MatchId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_Games_Matches_MatchId")
+
+  @@index([MatchId], map: "IX_Games_MatchId")
+}
+
+model InitiationFees {
+  Id          Int       @id(map: "PK_InitiationFees") @default(autoincrement())
+  PlayerId    Int
+  AmountOwing Decimal   @db.Decimal
+  AmountPaid  Decimal   @db.Decimal
+  PaidDate    DateTime? @db.Date
+  Notes       String?
+  CreatedAt   DateTime  @db.Timestamptz(6)
+  Players     Players   @relation(fields: [PlayerId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_InitiationFees_Players_PlayerId")
+
+  @@index([PlayerId], map: "IX_InitiationFees_PlayerId")
+}
+
+model LeagueParameters {
+  Id          Int     @id(map: "PK_LeagueParameters") @default(autoincrement())
+  LeagueId    Int
+  Key         String
+  Value       String
+  Description String?
+  IsActive    Boolean
+  Leagues     Leagues @relation(fields: [LeagueId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_LeagueParameters_Leagues_LeagueId")
+
+  @@unique([LeagueId, Key], map: "IX_LeagueParameters_LeagueId_Key")
+}
+
+model Leagues {
+  Id                    Int                    @id(map: "PK_Leagues") @default(autoincrement())
+  Name                  String
+  Description           String?
+  RulesText             String?
+  IsActive              Boolean
+  CreatedAt             DateTime               @db.Timestamptz(6)
+  PlayersPerTeamMinimum Int?
+  PlayersPerTeamMaximum Int?
+  MaxTeamsInDivision    Int
+  Announcements         Announcements[]
+  EmailLists            EmailLists[]
+  EmailLogs             EmailLogs[]
+  LeagueParameters      LeagueParameters[]
+  LookingForTeamGroups  LookingForTeamGroups[]
+  LookingForTeams       LookingForTeams[]
+  Seasons               Seasons[]
+  SpareLists            SpareLists[]
+  TeamApplicants        TeamApplicants[]
+}
+
+model LookingForTeamDivisions {
+  Id               Int             @id(map: "PK_LookingForTeamDivisions") @default(autoincrement())
+  LookingForTeamId Int
+  DivisionId       Int
+  Divisions        Divisions       @relation(fields: [DivisionId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_LookingForTeamDivisions_Divisions_DivisionId")
+  LookingForTeams  LookingForTeams @relation(fields: [LookingForTeamId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_LookingForTeamDivisions_LookingForTeams_LookingForTeamId")
+
+  @@unique([LookingForTeamId, DivisionId], map: "IX_LookingForTeamDivisions_LookingForTeamId_DivisionId")
+  @@index([DivisionId], map: "IX_LookingForTeamDivisions_DivisionId")
+}
+
+model LookingForTeamGroups {
+  Id                                                                          Int               @id(map: "PK_LookingForTeamGroups") @default(autoincrement())
+  LeagueId                                                                    Int
+  SeasonId                                                                    Int
+  CreatedAt                                                                   DateTime          @db.Timestamptz(6)
+  Name                                                                        String?
+  GroupLeaderId                                                               Int?
+  Leagues                                                                     Leagues           @relation(fields: [LeagueId], references: [Id], onUpdate: NoAction, map: "FK_LookingForTeamGroups_Leagues_LeagueId")
+  LookingForTeams_LookingForTeamGroups_GroupLeaderIdToLookingForTeams         LookingForTeams?  @relation("LookingForTeamGroups_GroupLeaderIdToLookingForTeams", fields: [GroupLeaderId], references: [Id], onUpdate: NoAction, map: "FK_LookingForTeamGroups_LookingForTeams_GroupLeaderId")
+  Seasons                                                                     Seasons           @relation(fields: [SeasonId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_LookingForTeamGroups_Seasons_SeasonId")
+  LookingForTeams_LookingForTeams_LookingForTeamGroupIdToLookingForTeamGroups LookingForTeams[] @relation("LookingForTeams_LookingForTeamGroupIdToLookingForTeamGroups")
+
+  @@unique([LeagueId, SeasonId, Name], map: "IX_LookingForTeamGroups_LeagueId_SeasonId_Name")
+  @@index([GroupLeaderId], map: "IX_LookingForTeamGroups_GroupLeaderId")
+  @@index([SeasonId], map: "IX_LookingForTeamGroups_SeasonId")
+}
+
+model LookingForTeamPreferredDays {
+  Id               Int             @id(map: "PK_LookingForTeamPreferredDays") @default(autoincrement())
+  LookingForTeamId Int
+  DaySlotId        Int
+  DaySlots         DaySlots        @relation(fields: [DaySlotId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_LookingForTeamPreferredDays_DaySlots_DaySlotId")
+  LookingForTeams  LookingForTeams @relation(fields: [LookingForTeamId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_LookingForTeamPreferredDays_LookingForTeams_LookingForTeamId")
+
+  @@unique([LookingForTeamId, DaySlotId], map: "IX_LookingForTeamPreferredDays_LookingForTeamId_DaySlotId")
+  @@index([DaySlotId], map: "IX_LookingForTeamPreferredDays_DaySlotId")
+}
+
+model LookingForTeamPreferredTimes {
+  Id               Int             @id(map: "PK_LookingForTeamPreferredTimes") @default(autoincrement())
+  LookingForTeamId Int
+  TimeSlotId       Int
+  LookingForTeams  LookingForTeams @relation(fields: [LookingForTeamId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_LookingForTeamPreferredTimes_LookingForTeams_LookingForTeam~")
+  TimeSlots        TimeSlots       @relation(fields: [TimeSlotId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_LookingForTeamPreferredTimes_TimeSlots_TimeSlotId")
+
+  @@unique([LookingForTeamId, TimeSlotId], map: "IX_LookingForTeamPreferredTimes_LookingForTeamId_TimeSlotId")
+  @@index([TimeSlotId], map: "IX_LookingForTeamPreferredTimes_TimeSlotId")
+}
+
+model LookingForTeams {
+  Id                                                                               Int                            @id(map: "PK_LookingForTeams") @default(autoincrement())
+  LeagueId                                                                         Int
+  PlayerId                                                                         Int
+  TeamId                                                                           Int?
+  SeasonId                                                                         Int?
+  Notes                                                                            String?
+  PreferredTeamId                                                                  Int?
+  RegisteredDate                                                                   DateTime?                      @db.Date
+  LookingForTeamGroupId                                                            Int?
+  LookingForTeamDivisions                                                          LookingForTeamDivisions[]
+  LookingForTeamGroups_LookingForTeamGroups_GroupLeaderIdToLookingForTeams         LookingForTeamGroups[]         @relation("LookingForTeamGroups_GroupLeaderIdToLookingForTeams")
+  LookingForTeamPreferredDays                                                      LookingForTeamPreferredDays[]
+  LookingForTeamPreferredTimes                                                     LookingForTeamPreferredTimes[]
+  Leagues                                                                          Leagues                        @relation(fields: [LeagueId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_LookingForTeams_Leagues_LeagueId")
+  LookingForTeamGroups_LookingForTeams_LookingForTeamGroupIdToLookingForTeamGroups LookingForTeamGroups?          @relation("LookingForTeams_LookingForTeamGroupIdToLookingForTeamGroups", fields: [LookingForTeamGroupId], references: [Id], onUpdate: NoAction, map: "FK_LookingForTeams_LookingForTeamGroups_LookingForTeamGroupId")
+  Players                                                                          Players                        @relation(fields: [PlayerId], references: [Id], onUpdate: NoAction, map: "FK_LookingForTeams_Players_PlayerId")
+  Seasons                                                                          Seasons?                       @relation(fields: [SeasonId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_LookingForTeams_Seasons_SeasonId")
+  Teams_LookingForTeams_PreferredTeamIdToTeams                                     Teams?                         @relation("LookingForTeams_PreferredTeamIdToTeams", fields: [PreferredTeamId], references: [Id], onUpdate: NoAction, map: "FK_LookingForTeams_Teams_PreferredTeamId")
+  Teams_LookingForTeams_TeamIdToTeams                                              Teams?                         @relation("LookingForTeams_TeamIdToTeams", fields: [TeamId], references: [Id], onUpdate: NoAction, map: "FK_LookingForTeams_Teams_TeamId")
+
+  @@unique([LeagueId, PlayerId, SeasonId], map: "IX_LookingForTeams_LeagueId_PlayerId_SeasonId")
+  @@index([LookingForTeamGroupId], map: "IX_LookingForTeams_LookingForTeamGroupId")
+  @@index([PlayerId], map: "IX_LookingForTeams_PlayerId")
+  @@index([PreferredTeamId], map: "IX_LookingForTeams_PreferredTeamId")
+  @@index([SeasonId], map: "IX_LookingForTeams_SeasonId")
+  @@index([TeamId], map: "IX_LookingForTeams_TeamId")
+}
+
+model MatchTeamResults {
+  Id              Int     @id(map: "PK_MatchTeamResults") @default(autoincrement())
+  MatchId         Int
+  TeamId          Int
+  Wins            Int
+  Losses          Int
+  Ties            Int
+  NoShows         Int
+  StandingsPoints Int
+  PointsFor       Int
+  PointsAgainst   Int
+  PlusMinus       Int
+  Matches         Matches @relation(fields: [MatchId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_MatchTeamResults_Matches_MatchId")
+  Teams           Teams   @relation(fields: [TeamId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_MatchTeamResults_Teams_TeamId")
+
+  @@index([MatchId], map: "IX_MatchTeamResults_MatchId")
+  @@index([TeamId], map: "IX_MatchTeamResults_TeamId")
+}
+
+model Matches {
+  Id                           Int                @id(map: "PK_Matches") @default(autoincrement())
+  ScheduleWeekId               Int
+  Team1Id                      Int
+  Team2Id                      Int
+  CourtId                      Int?
+  ScheduledDate                DateTime?          @db.Date
+  ScheduledTime                DateTime?          @db.Time(6)
+  GamesPlayed                  Int
+  Status                       String
+  EnteredBy                    String?
+  EnteredAt                    DateTime?          @db.Timestamptz(6)
+  Games                        Games[]
+  MatchTeamResults             MatchTeamResults[]
+  Courts                       Courts?            @relation(fields: [CourtId], references: [Id], onDelete: NoAction, onUpdate: NoAction, map: "FK_Matches_Courts_CourtId")
+  ScheduleWeeks                ScheduleWeeks      @relation(fields: [ScheduleWeekId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_Matches_ScheduleWeeks_ScheduleWeekId")
+  Teams_Matches_Team1IdToTeams Teams              @relation("Matches_Team1IdToTeams", fields: [Team1Id], references: [Id], onUpdate: NoAction, map: "FK_Matches_Teams_Team1Id")
+  Teams_Matches_Team2IdToTeams Teams              @relation("Matches_Team2IdToTeams", fields: [Team2Id], references: [Id], onUpdate: NoAction, map: "FK_Matches_Teams_Team2Id")
+
+  @@index([CourtId], map: "IX_Matches_CourtId")
+  @@index([ScheduleWeekId], map: "IX_Matches_ScheduleWeekId")
+  @@index([Team1Id], map: "IX_Matches_Team1Id")
+  @@index([Team2Id], map: "IX_Matches_Team2Id")
+}
+
+model NewIdeas {
+  Id            Int       @id(map: "PK_NewIdeas") @default(autoincrement())
+  Idea          String
+  DateCreated   DateTime  @db.Timestamptz(6)
+  DateCollected DateTime? @db.Timestamptz(6)
+}
+
+model Players {
+  Id                                                                 Int                    @id(map: "PK_Players") @default(autoincrement())
+  FirstName                                                          String
+  LastName                                                           String
+  Email                                                              String?
+  Phone                                                              String?
+  LotNumber                                                          String?
+  IsActive                                                           Boolean
+  CreatedAt                                                          DateTime               @db.Timestamptz(6)
+  PartnerPlayerId                                                    Int?
+  EmailListMembers                                                   EmailListMembers[]
+  InitiationFees                                                     InitiationFees[]
+  LookingForTeams                                                    LookingForTeams[]
+  Players                                                            Players?               @relation("PlayersToPlayers", fields: [PartnerPlayerId], references: [Id], onUpdate: NoAction, map: "FK_Players_Players_PartnerPlayerId")
+  other_Players                                                      Players[]              @relation("PlayersToPlayers")
+  SeasonFees                                                         SeasonFees[]
+  SpareLists                                                         SpareLists[]
+  TeamApplicantMembers_TeamApplicantMembers_CreatedPlayerIdToPlayers TeamApplicantMembers[] @relation("TeamApplicantMembers_CreatedPlayerIdToPlayers")
+  TeamApplicantMembers_TeamApplicantMembers_PlayerIdToPlayers        TeamApplicantMembers[] @relation("TeamApplicantMembers_PlayerIdToPlayers")
+  TeamPlayers                                                        TeamPlayers[]
+  Teams                                                              Teams[]
+
+  @@index([PartnerPlayerId], map: "IX_Players_PartnerPlayerId")
+}
+
+model PlayoffConfigs {
+  Id                Int                @id(map: "PK_PlayoffConfigs") @default(autoincrement())
+  SeasonId          Int
+  MatchDurationMins Int
+  DisplayMode       String
+  IsGenerated       Boolean
+  TiebreakerBalls   Int                @default(0)
+  Seasons           Seasons            @relation(fields: [SeasonId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_PlayoffConfigs_Seasons_SeasonId")
+  PlayoffDayParams  PlayoffDayParams[]
+
+  @@index([SeasonId], map: "IX_PlayoffConfigs_SeasonId")
+}
+
+model PlayoffDayParams {
+  Id              Int            @id(map: "PK_PlayoffDayParams") @default(autoincrement())
+  PlayoffConfigId Int
+  DayNumber       Int
+  GameDate        DateTime       @db.Date
+  StartTime       DateTime       @db.Time(6)
+  EndTime         DateTime       @db.Time(6)
+  MatchLengthMins Int
+  PlayoffConfigs  PlayoffConfigs @relation(fields: [PlayoffConfigId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_PlayoffDayParams_PlayoffConfigs_PlayoffConfigId")
+
+  @@index([PlayoffConfigId], map: "IX_PlayoffDayParams_PlayoffConfigId")
+}
+
+model PlayoffGames {
+  Id             Int            @id(map: "PK_PlayoffGames") @default(autoincrement())
+  PlayoffMatchId Int
+  GameNumber     Int
+  Team1Score     Int
+  Team2Score     Int
+  IsForfeit      Boolean
+  EnteredBy      String?
+  EnteredAt      DateTime?      @db.Timestamptz(6)
+  PlayoffMatches PlayoffMatches @relation(fields: [PlayoffMatchId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_PlayoffGames_PlayoffMatches_PlayoffMatchId")
+
+  @@index([PlayoffMatchId], map: "IX_PlayoffGames_PlayoffMatchId")
+}
+
+model PlayoffMatches {
+  Id                                   Int              @id(map: "PK_PlayoffMatches") @default(autoincrement())
+  SeasonId                             Int
+  PlayoffRoundId                       Int?
+  Seed1                                Int
+  Seed2                                Int?
+  Team1Id                              Int?
+  Team2Id                              Int?
+  CourtId                              Int?
+  ScheduledDate                        DateTime?        @db.Date
+  ScheduledTime                        DateTime?        @db.Time(6)
+  Status                               String
+  WinnerId                             Int?
+  EnteredBy                            String?
+  EnteredAt                            DateTime?        @db.Timestamptz(6)
+  BracketSlot                          Int              @default(0)
+  IsBye                                Boolean          @default(false)
+  NextMatchId                          Int?
+  NextMatchIsTop                       Boolean          @default(false)
+  PlayoffGames                         PlayoffGames[]
+  Courts                               Courts?          @relation(fields: [CourtId], references: [Id], onDelete: NoAction, onUpdate: NoAction, map: "FK_PlayoffMatches_Courts_CourtId")
+  PlayoffMatches                       PlayoffMatches?  @relation("PlayoffMatchesToPlayoffMatches", fields: [NextMatchId], references: [Id], onUpdate: NoAction, map: "FK_PlayoffMatches_PlayoffMatches_NextMatchId")
+  other_PlayoffMatches                 PlayoffMatches[] @relation("PlayoffMatchesToPlayoffMatches")
+  PlayoffRounds                        PlayoffRounds?   @relation(fields: [PlayoffRoundId], references: [Id], onDelete: NoAction, onUpdate: NoAction, map: "FK_PlayoffMatches_PlayoffRounds_PlayoffRoundId")
+  Seasons                              Seasons          @relation(fields: [SeasonId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_PlayoffMatches_Seasons_SeasonId")
+  Teams_PlayoffMatches_Team1IdToTeams  Teams?           @relation("PlayoffMatches_Team1IdToTeams", fields: [Team1Id], references: [Id], onDelete: Restrict, onUpdate: NoAction, map: "FK_PlayoffMatches_Teams_Team1Id")
+  Teams_PlayoffMatches_Team2IdToTeams  Teams?           @relation("PlayoffMatches_Team2IdToTeams", fields: [Team2Id], references: [Id], onDelete: Restrict, onUpdate: NoAction, map: "FK_PlayoffMatches_Teams_Team2Id")
+  Teams_PlayoffMatches_WinnerIdToTeams Teams?           @relation("PlayoffMatches_WinnerIdToTeams", fields: [WinnerId], references: [Id], onDelete: Restrict, onUpdate: NoAction, map: "FK_PlayoffMatches_Teams_WinnerId")
+
+  @@index([CourtId], map: "IX_PlayoffMatches_CourtId")
+  @@index([NextMatchId], map: "IX_PlayoffMatches_NextMatchId")
+  @@index([PlayoffRoundId], map: "IX_PlayoffMatches_PlayoffRoundId")
+  @@index([SeasonId], map: "IX_PlayoffMatches_SeasonId")
+  @@index([Team1Id], map: "IX_PlayoffMatches_Team1Id")
+  @@index([Team2Id], map: "IX_PlayoffMatches_Team2Id")
+  @@index([WinnerId], map: "IX_PlayoffMatches_WinnerId")
+}
+
+model PlayoffRounds {
+  Id                        Int              @id(map: "PK_PlayoffRounds") @default(autoincrement())
+  SeasonId                  Int
+  RoundNumber               Int
+  RoundName                 String?
+  MatchDate                 DateTime?        @db.Date
+  DurationBetweenRoundsMins Int              @default(0)
+  EndTime                   DateTime?        @db.Time(6)
+  StartTime                 DateTime?        @db.Time(6)
+  PlayoffMatches            PlayoffMatches[]
+  Seasons                   Seasons          @relation(fields: [SeasonId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_PlayoffRounds_Seasons_SeasonId")
+
+  @@index([SeasonId], map: "IX_PlayoffRounds_SeasonId")
+}
+
+model PlayoffSeedings {
+  Id       Int     @id(map: "PK_PlayoffSeedings") @default(autoincrement())
+  SeasonId Int
+  Seed     Int
+  TeamId   Int
+  Seasons  Seasons @relation(fields: [SeasonId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_PlayoffSeedings_Seasons_SeasonId")
+  Teams    Teams   @relation(fields: [TeamId], references: [Id], onUpdate: NoAction, map: "FK_PlayoffSeedings_Teams_TeamId")
+
+  @@unique([SeasonId, Seed], map: "IX_PlayoffSeedings_SeasonId_Seed")
+  @@index([TeamId], map: "IX_PlayoffSeedings_TeamId")
+}
+
+model ReportParameters {
+  Id             Int     @id @default(autoincrement())
+  ReportId       Int
+  ParameterName  String
+  ParameterLabel String
+  IsRequired     Boolean
+  DefaultSource  String
+  DisplayOrder   Int
+  Reports        Reports @relation(fields: [ReportId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_ReportParameters_Reports_ReportId")
+
+  @@unique([ReportId, ParameterName])
+}
+
+model Reports {
+  Id               Int                @id @default(autoincrement())
+  Name             String             @unique(map: "IX_Reports_Name")
+  ReportPath       String
+  Description      String
+  DisplayOrder     Int
+  IsActive         Boolean            @default(true)
+  CreatedDate      DateTime           @db.Timestamptz(6)
+  ModifiedDate     DateTime           @db.Timestamptz(6)
+  ReportParameters ReportParameters[]
+}
+
+model ScheduleDivisions {
+  Id                                     Int               @id(map: "PK_ScheduleDivisions") @default(autoincrement())
+  DivisionId                             Int
+  TemplateId                             Int
+  TemplateWeekNumber                     Int
+  MatchDate                              DateTime          @db.Date
+  Team1Id                                Int
+  Team2Id                                Int
+  CourtId                                Int?
+  CreatedDate                            DateTime          @db.Timestamptz(6)
+  Team1Score1                            Int?              @default(0)
+  Team1Score2                            Int?              @default(0)
+  Team2Score1                            Int?              @default(0)
+  Team2Score2                            Int?              @default(0)
+  Courts                                 Courts?           @relation(fields: [CourtId], references: [Id], onDelete: NoAction, onUpdate: NoAction, map: "FK_ScheduleDivisions_Courts_CourtId")
+  Divisions                              Divisions         @relation(fields: [DivisionId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_ScheduleDivisions_Divisions_DivisionId")
+  ScheduleTemplates                      ScheduleTemplates @relation(fields: [TemplateId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_ScheduleDivisions_ScheduleTemplates_TemplateId")
+  Teams_ScheduleDivisions_Team1IdToTeams Teams             @relation("ScheduleDivisions_Team1IdToTeams", fields: [Team1Id], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_ScheduleDivisions_Teams_Team1Id")
+  Teams_ScheduleDivisions_Team2IdToTeams Teams             @relation("ScheduleDivisions_Team2IdToTeams", fields: [Team2Id], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_ScheduleDivisions_Teams_Team2Id")
+
+  @@index([CourtId], map: "IX_ScheduleDivisions_CourtId")
+  @@index([DivisionId], map: "IX_ScheduleDivisions_DivisionId")
+  @@index([Team1Id], map: "IX_ScheduleDivisions_Team1Id")
+  @@index([Team2Id], map: "IX_ScheduleDivisions_Team2Id")
+  @@index([TemplateId], map: "IX_ScheduleDivisions_TemplateId")
+}
+
+model ScheduleTemplateMatches {
+  Id                    Int                   @id @default(autoincrement())
+  TemplateWeekId        Int
+  Slot1                 String
+  Slot2                 String
+  CourtId               Int
+  Courts                Courts                @relation(fields: [CourtId], references: [Id], onUpdate: NoAction)
+  ScheduleTemplateWeeks ScheduleTemplateWeeks @relation(fields: [TemplateWeekId], references: [Id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([CourtId], map: "IX_ScheduleTemplateMatches_CourtId")
+  @@index([TemplateWeekId], map: "IX_ScheduleTemplateMatches_TemplateWeekId")
+}
+
+model ScheduleTemplateWeeks {
+  Id                      Int                       @id @default(autoincrement())
+  TemplateId              Int
+  WeekNumber              Int
+  ScheduleTemplateMatches ScheduleTemplateMatches[]
+  ScheduleTemplates       ScheduleTemplates         @relation(fields: [TemplateId], references: [Id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([TemplateId], map: "IX_ScheduleTemplateWeeks_TemplateId")
+}
+
+model ScheduleTemplates {
+  Id                    Int                     @id @default(autoincrement())
+  SeasonId              Int
+  TeamCount             Int
+  WeekCount             Int
+  GeneratedAt           DateTime                @db.Timestamptz(6)
+  IsLocked              Boolean                 @default(false)
+  ScheduleDivisions     ScheduleDivisions[]
+  ScheduleTemplateWeeks ScheduleTemplateWeeks[]
+  Seasons               Seasons                 @relation(fields: [SeasonId], references: [Id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([SeasonId, TeamCount], map: "IX_ScheduleTemplates_SeasonId_TeamCount")
+}
+
+model ScheduleWeeks {
+  Id         Int       @id(map: "PK_ScheduleWeeks") @default(autoincrement())
+  DivisionId Int
+  WeekNumber Int
+  MatchDate  DateTime? @db.Date
+  Matches    Matches[]
+  Divisions  Divisions @relation(fields: [DivisionId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_ScheduleWeeks_Divisions_DivisionId")
+
+  @@index([DivisionId], map: "IX_ScheduleWeeks_DivisionId")
+}
+
+model SeasonCourts {
+  Id        Int     @id(map: "PK_SeasonCourts") @default(autoincrement())
+  SeasonId  Int
+  CourtId   Int
+  SortOrder Int     @default(0)
+  Courts    Courts  @relation(fields: [CourtId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_SeasonCourts_Courts_CourtId")
+  Seasons   Seasons @relation(fields: [SeasonId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_SeasonCourts_Seasons_SeasonId")
+
+  @@unique([SeasonId, CourtId], map: "IX_SeasonCourts_SeasonId_CourtId")
+  @@index([CourtId], map: "IX_SeasonCourts_CourtId")
+}
+
+model SeasonDaySlots {
+  Id        Int      @id(map: "PK_SeasonDaySlots") @default(autoincrement())
+  SeasonId  Int
+  DaySlotId Int
+  DaySlots  DaySlots @relation(fields: [DaySlotId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_SeasonDaySlots_DaySlots_DaySlotId")
+  Seasons   Seasons  @relation(fields: [SeasonId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_SeasonDaySlots_Seasons_SeasonId")
+
+  @@unique([SeasonId, DaySlotId], map: "IX_SeasonDaySlots_SeasonId_DaySlotId")
+  @@index([DaySlotId], map: "IX_SeasonDaySlots_DaySlotId")
+}
+
+model SeasonFees {
+  Id          Int       @id(map: "PK_SeasonFees") @default(autoincrement())
+  PlayerId    Int
+  SeasonId    Int
+  AmountOwing Decimal   @db.Decimal
+  AmountPaid  Decimal   @db.Decimal
+  PaidDate    DateTime? @db.Date
+  Notes       String?
+  CreatedAt   DateTime  @db.Timestamptz(6)
+  Players     Players   @relation(fields: [PlayerId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_SeasonFees_Players_PlayerId")
+  Seasons     Seasons   @relation(fields: [SeasonId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_SeasonFees_Seasons_SeasonId")
+
+  @@unique([PlayerId, SeasonId], map: "IX_SeasonFees_PlayerId_SeasonId")
+  @@index([SeasonId], map: "IX_SeasonFees_SeasonId")
+}
+
+model SeasonParameters {
+  Id          Int     @id(map: "PK_SeasonParameters") @default(autoincrement())
+  SeasonId    Int
+  Key         String
+  Value       String
+  Description String?
+  IsActive    Boolean
+  Seasons     Seasons @relation(fields: [SeasonId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_SeasonParameters_Seasons_SeasonId")
+
+  @@unique([SeasonId, Key], map: "IX_SeasonParameters_SeasonId_Key")
+}
+
+model SeasonTimeSlots {
+  Id         Int       @id(map: "PK_SeasonTimeSlots") @default(autoincrement())
+  SeasonId   Int
+  TimeSlotId Int
+  Seasons    Seasons   @relation(fields: [SeasonId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_SeasonTimeSlots_Seasons_SeasonId")
+  TimeSlots  TimeSlots @relation(fields: [TimeSlotId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_SeasonTimeSlots_TimeSlots_TimeSlotId")
+
+  @@unique([SeasonId, TimeSlotId], map: "IX_SeasonTimeSlots_SeasonId_TimeSlotId")
+  @@index([TimeSlotId], map: "IX_SeasonTimeSlots_TimeSlotId")
+}
+
+model Seasons {
+  Id                       Int                    @id(map: "PK_Seasons") @default(autoincrement())
+  LeagueId                 Int
+  Name                     String
+  StartDate                DateTime?              @db.Date
+  EndDate                  DateTime?              @db.Date
+  GamesPerSeason           Int
+  PlayersPerTeamMinimum    Int?
+  PlayersPerTeamMaximum    Int?
+  PointsForWin             Int
+  PointsForTie             Int
+  PointsForLoss            Int
+  PointsForNoShow          Int
+  PointsToWinGame          Int
+  GamesPerMatch            Int
+  ScoringMode              String
+  TeamsInPlayoffs          Int
+  FirstPlaceGuaranteed     Boolean
+  PlayoffType              String
+  PlayoffGamesPerMatch     Int
+  PlayoffScoringMode       String
+  IsCurrent                Boolean
+  WeeksInSeason            Int
+  MaxTeamsInDivision       Int
+  Status                   String
+  PlayoffStartDate         DateTime?              @db.Date
+  PlayoffEndDate           DateTime?              @db.Date
+  CreatedAt                DateTime               @db.Timestamptz(6)
+  IsLocked                 Boolean                @default(false)
+  PlayoffTiebreakerFormat  String                 @default("")
+  ForfeitOpponentPlusMinus Int                    @default(0)
+  ForfeitPlusMinus         Int                    @default(0)
+  CourtDisplayStyle        String                 @default("number")
+  Divisions                Divisions[]
+  LookingForTeamGroups     LookingForTeamGroups[]
+  LookingForTeams          LookingForTeams[]
+  PlayoffConfigs           PlayoffConfigs[]
+  PlayoffMatches           PlayoffMatches[]
+  PlayoffRounds            PlayoffRounds[]
+  PlayoffSeedings          PlayoffSeedings[]
+  ScheduleTemplates        ScheduleTemplates[]
+  SeasonCourts             SeasonCourts[]
+  SeasonDaySlots           SeasonDaySlots[]
+  SeasonFees               SeasonFees[]
+  SeasonParameters         SeasonParameters[]
+  SeasonTimeSlots          SeasonTimeSlots[]
+  Leagues                  Leagues                @relation(fields: [LeagueId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_Seasons_Leagues_LeagueId")
+  TeamApplicants           TeamApplicants[]
+
+  @@index([LeagueId], map: "IX_Seasons_LeagueId")
+}
+
+model SpareLists {
+  Id       Int     @id(map: "PK_SpareLists") @default(autoincrement())
+  LeagueId Int
+  PlayerId Int
+  IsActive Boolean
+  Notes    String?
+  Leagues  Leagues @relation(fields: [LeagueId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_SpareLists_Leagues_LeagueId")
+  Players  Players @relation(fields: [PlayerId], references: [Id], onUpdate: NoAction, map: "FK_SpareLists_Players_PlayerId")
+
+  @@unique([LeagueId, PlayerId], map: "IX_SpareLists_LeagueId_PlayerId")
+  @@index([PlayerId], map: "IX_SpareLists_PlayerId")
+}
+
+model TeamApplicantMembers {
+  Id                                                    Int            @id(map: "PK_TeamApplicantMembers") @default(autoincrement())
+  TeamApplicantId                                       Int
+  PlayerId                                              Int?
+  FirstName                                             String
+  LastName                                              String
+  Email                                                 String?
+  Phone                                                 String?
+  Notes                                                 String?
+  CreatedPlayerId                                       Int?
+  Players_TeamApplicantMembers_CreatedPlayerIdToPlayers Players?       @relation("TeamApplicantMembers_CreatedPlayerIdToPlayers", fields: [CreatedPlayerId], references: [Id], onUpdate: NoAction, map: "FK_TeamApplicantMembers_Players_CreatedPlayerId")
+  Players_TeamApplicantMembers_PlayerIdToPlayers        Players?       @relation("TeamApplicantMembers_PlayerIdToPlayers", fields: [PlayerId], references: [Id], onDelete: Restrict, onUpdate: NoAction, map: "FK_TeamApplicantMembers_Players_PlayerId")
+  TeamApplicants                                        TeamApplicants @relation(fields: [TeamApplicantId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_TeamApplicantMembers_TeamApplicants_TeamApplicantId")
+
+  @@index([CreatedPlayerId], map: "IX_TeamApplicantMembers_CreatedPlayerId")
+  @@index([PlayerId], map: "IX_TeamApplicantMembers_PlayerId")
+  @@index([TeamApplicantId], map: "IX_TeamApplicantMembers_TeamApplicantId")
+}
+
+model TeamApplicants {
+  Id                   Int                    @id(map: "PK_TeamApplicants") @default(autoincrement())
+  LeagueId             Int
+  SeasonId             Int
+  GroupName            String
+  ContactEmail         String?
+  ContactPhone         String?
+  PreferredDivisionId  Int?
+  Notes                String?
+  Status               String
+  PlacedTeamId         Int?
+  CreatedAt            DateTime               @db.Timestamptz(6)
+  TeamApplicantMembers TeamApplicantMembers[]
+  Divisions            Divisions?             @relation(fields: [PreferredDivisionId], references: [Id], onUpdate: NoAction, map: "FK_TeamApplicants_Divisions_PreferredDivisionId")
+  Leagues              Leagues                @relation(fields: [LeagueId], references: [Id], onUpdate: NoAction, map: "FK_TeamApplicants_Leagues_LeagueId")
+  Seasons              Seasons                @relation(fields: [SeasonId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_TeamApplicants_Seasons_SeasonId")
+  Teams                Teams?                 @relation(fields: [PlacedTeamId], references: [Id], onUpdate: NoAction, map: "FK_TeamApplicants_Teams_PlacedTeamId")
+
+  @@index([LeagueId], map: "IX_TeamApplicants_LeagueId")
+  @@index([PlacedTeamId], map: "IX_TeamApplicants_PlacedTeamId")
+  @@index([PreferredDivisionId], map: "IX_TeamApplicants_PreferredDivisionId")
+  @@index([SeasonId], map: "IX_TeamApplicants_SeasonId")
+}
+
+model TeamPlayers {
+  Id         Int      @id(map: "PK_TeamPlayers") @default(autoincrement())
+  TeamId     Int
+  PlayerId   Int
+  Role       String
+  IsActive   Boolean
+  JoinedDate DateTime @db.Date
+  Players    Players  @relation(fields: [PlayerId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_TeamPlayers_Players_PlayerId")
+  Teams      Teams    @relation(fields: [TeamId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_TeamPlayers_Teams_TeamId")
+
+  @@unique([TeamId, PlayerId], map: "IX_TeamPlayers_TeamId_PlayerId")
+  @@index([PlayerId], map: "IX_TeamPlayers_PlayerId")
+}
+
+model TeamStandings {
+  Id              Int       @id(map: "PK_TeamStandings") @default(autoincrement())
+  TeamId          Int
+  DivisionId      Int
+  Wins            Int
+  Losses          Int
+  Ties            Int
+  NoShows         Int
+  StandingsPoints Int
+  PointsFor       Int
+  PointsAgainst   Int
+  PlusMinus       Int
+  DivisionRank    Int?
+  PlayoffSeed     Int?
+  Divisions       Divisions @relation(fields: [DivisionId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_TeamStandings_Divisions_DivisionId")
+  Teams           Teams     @relation(fields: [TeamId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_TeamStandings_Teams_TeamId")
+
+  @@unique([TeamId, DivisionId], map: "IX_TeamStandings_TeamId_DivisionId")
+  @@index([DivisionId], map: "IX_TeamStandings_DivisionId")
+}
+
+model Teams {
+  Id                                                     Int                 @id(map: "PK_Teams") @default(autoincrement())
+  DivisionId                                             Int
+  TeamLetter                                             String
+  SystemName                                             String
+  DisplayName                                            String?
+  CaptainPlayerId                                        Int?
+  IsActive                                               Boolean
+  CreatedAt                                              DateTime            @db.Timestamptz(6)
+  SortOrder                                              String              @default("")
+  LookingForTeams_LookingForTeams_PreferredTeamIdToTeams LookingForTeams[]   @relation("LookingForTeams_PreferredTeamIdToTeams")
+  LookingForTeams_LookingForTeams_TeamIdToTeams          LookingForTeams[]   @relation("LookingForTeams_TeamIdToTeams")
+  MatchTeamResults                                       MatchTeamResults[]
+  Matches_Matches_Team1IdToTeams                         Matches[]           @relation("Matches_Team1IdToTeams")
+  Matches_Matches_Team2IdToTeams                         Matches[]           @relation("Matches_Team2IdToTeams")
+  PlayoffMatches_PlayoffMatches_Team1IdToTeams           PlayoffMatches[]    @relation("PlayoffMatches_Team1IdToTeams")
+  PlayoffMatches_PlayoffMatches_Team2IdToTeams           PlayoffMatches[]    @relation("PlayoffMatches_Team2IdToTeams")
+  PlayoffMatches_PlayoffMatches_WinnerIdToTeams          PlayoffMatches[]    @relation("PlayoffMatches_WinnerIdToTeams")
+  PlayoffSeedings                                        PlayoffSeedings[]
+  ScheduleDivisions_ScheduleDivisions_Team1IdToTeams     ScheduleDivisions[] @relation("ScheduleDivisions_Team1IdToTeams")
+  ScheduleDivisions_ScheduleDivisions_Team2IdToTeams     ScheduleDivisions[] @relation("ScheduleDivisions_Team2IdToTeams")
+  TeamApplicants                                         TeamApplicants[]
+  TeamPlayers                                            TeamPlayers[]
+  TeamStandings                                          TeamStandings[]
+  Divisions                                              Divisions           @relation(fields: [DivisionId], references: [Id], onDelete: Cascade, onUpdate: NoAction, map: "FK_Teams_Divisions_DivisionId")
+  Players                                                Players?            @relation(fields: [CaptainPlayerId], references: [Id], onDelete: Restrict, onUpdate: NoAction, map: "FK_Teams_Players_CaptainPlayerId")
+
+  @@unique([DivisionId, TeamLetter], map: "IX_Teams_DivisionId_TeamLetter")
+  @@index([CaptainPlayerId], map: "IX_Teams_CaptainPlayerId")
+}
+
+model TimeSlots {
+  Id                           Int                            @id(map: "PK_TimeSlots") @default(autoincrement())
+  Timeslot12h                  String
+  Timeslot24h                  String
+  SortOrder                    Int?
+  IsActive                     Boolean
+  Divisions                    Divisions[]
+  LookingForTeamPreferredTimes LookingForTeamPreferredTimes[]
+  SeasonTimeSlots              SeasonTimeSlots[]
+}
+
+model EFMigrationsHistory {
+  MigrationId    String @id(map: "PK___EFMigrationsHistory") @db.VarChar(150)
+  ProductVersion String @db.VarChar(32)
+
+  @@map("__EFMigrationsHistory")
+}
+
+enum GameInterval {
+  weekly
+  schedule_determined
+}
+
+enum GlAccountType {
+  asset
+  income
+  expense
+  liability
+  equity
+}
+
+enum MatchStatus {
+  scheduled
+  completed
+  no_show_team1
+  no_show_team2
+  postponed
+  bye
+}
+
+enum PendingStatus {
+  pending
+  approved
+  rejected
+}
+
+enum PlayoffMatchStatus {
+  scheduled
+  completed
+  bye
+}
+
+enum PlayoffType {
+  ladder
+  round_robin
+}
+
+enum ScoringMode {
+  games_mode
+  match_score_mode
+  match_play
+}
+
+enum SeasonStatus {
+  building
+  regular_season
+  playoffs
+  complete
+}
+
+enum SpareRequestStatus {
+  pending
+  accepted
+  declined
+  cancelled
+}
+
+enum TeamPlayerRole {
+  captain
+  player
+}
