@@ -5,8 +5,30 @@ namespace BocceManager.Data;
 
 public class BocceDbContext : DbContext
 {
-    // PostgreSQL connection string
-    private const string PostgresConnString = "Host=localhost;Port=5432;Database=bocce_league;Username=postgres;Password=7720";
+    // PostgreSQL connection string. Resolution order:
+    //   1. BOCCE_DB_CONNECTION env var (dev override)
+    //   2. db.config file next to the .exe (how this is distributed to other admins —
+    //      not committed to git; copy it alongside the .exe on each new install)
+    //   3. Local Postgres fallback (this machine's dev database)
+    private const string LocalPostgresConnString = "Host=localhost;Port=5432;Database=bocce_league;Username=postgres;Password=7720";
+
+    private static string PostgresConnString
+    {
+        get
+        {
+            var envConn = Environment.GetEnvironmentVariable("BOCCE_DB_CONNECTION");
+            if (!string.IsNullOrWhiteSpace(envConn)) return envConn;
+
+            var configPath = Path.Combine(AppContext.BaseDirectory, "db.config");
+            if (File.Exists(configPath))
+            {
+                var fileConn = File.ReadAllText(configPath).Trim();
+                if (!string.IsNullOrWhiteSpace(fileConn)) return fileConn;
+            }
+
+            return LocalPostgresConnString;
+        }
+    }
 
     // Test mode support
     public static string? DbPath { get; set; }

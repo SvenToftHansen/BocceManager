@@ -16,6 +16,10 @@ obj/
 # Postgres backups (contain real player/contact data, not for source control)
 db_backups/
 
+# Database connection config (contains Neon credentials — distributed manually
+# alongside the .exe, never committed)
+db.config
+
 # Theme preference (local setting, not shared)
 bocce-theme.txt
 
