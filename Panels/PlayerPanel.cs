@@ -32,6 +32,13 @@ public class PlayerPanel : UserControl
         public override string ToString() => Name;
     }
 
+    private sealed class FilterItem
+    {
+        public int? Id { get; set; }
+        public string Name { get; set; } = "";
+        public override string ToString() => Name;
+    }
+
     private sealed class PlayerLookup
     {
         public int Id { get; set; }
@@ -60,18 +67,26 @@ public class PlayerPanel : UserControl
     private const int PreferredLookupWidth = 330;
 
     private int? _selectedPlayerId;
-    private int? _previousPlayerId;
     private PlayerMode _mode = PlayerMode.View;
     private bool _isDirty = false;
     private bool _isCreatingNew = false;
     private bool _isLoadingData = false;
-    private bool _isSavingAndReloading = false;
-    private bool _seasonIsLocked = false;
     private bool _isSearching = false;
-    private readonly System.Windows.Forms.Timer _autoSaveTimer = new() { Interval = 1500 };
+    private bool _isLoadingFilters = false;
+
+    private List<(int PlayerId, int TeamId, int DivisionId, int SeasonId)> _teamMemberships = [];
+    private HashSet<int> _sparePlayerIds = [];
+    private List<(int PlayerId, int? SeasonId)> _lookingForEntries = [];
 
     private SearchBoxControl _txtSearch = null!;
     private ListBox _lstPlayers = null!;
+
+    private ComboBox _cmbFilterSeason = null!;
+    private ComboBox _cmbFilterDivision = null!;
+    private ComboBox _cmbFilterTeam = null!;
+    private ComboBox _cmbFilterOnTeam = null!;
+    private ComboBox _cmbFilterSpare = null!;
+    private ComboBox _cmbFilterLookingForTeam = null!;
 
     private TextBox _txtFirstName = null!;
     private TextBox _txtLastName = null!;
@@ -81,7 +96,6 @@ public class PlayerPanel : UserControl
     private CheckBox _chkIsActive = null!;
     private ComboBox _cmbPartner = null!;
     private ComboBox _cmbRole = null!;
-    private Label _lblCreatedAt = null!;
     private Label _lblModeHint = null!;
     private Label _lblLeagueContext = null!;
 
@@ -90,10 +104,11 @@ public class PlayerPanel : UserControl
     private ListBox _lstTeams = null!;
     private Label _lblTeamsContent = null!;
 
+    private List<Control> _fieldControls = [];
+
     private Button _btnNew = null!;
-    private Button _btnEdit = null!;
     private Button _btnSave = null!;
-    private Button _btnCancel = null!;
+    private Button _btnClear = null!;
     private Button _btnDelete = null!;
 
     public PlayerPanel()
@@ -102,9 +117,19 @@ public class PlayerPanel : UserControl
         Dock = DockStyle.Fill;
 
         BuildUi();
-        _autoSaveTimer.Tick += (_, _) => { _autoSaveTimer.Stop(); if (_isDirty && !_isCreatingNew) SavePlayer(silent: true); };
         LoadRoleOptions();
+
+        _isLoadingFilters = true;
+        try
+        {
+            LoadSeasonFilterOptions();
+            LoadDivisionFilterOptions();
+            LoadTeamFilterOptions();
+        }
+        finally { _isLoadingFilters = false; }
+
         LoadPlayerLookup();
+        SetFieldsVisible(false);
         SetMode(PlayerMode.View);
     }
 
@@ -167,6 +192,26 @@ public class PlayerPanel : UserControl
             _mainSplit.SplitterDistance = clamped;
     }
 
+    private static Panel MakeFilterRow(string labelText, ComboBox combo)
+    {
+        var row = new Panel { Dock = DockStyle.Top, Height = 24 };
+        var lbl = new Label
+        {
+            Text = labelText,
+            Dock = DockStyle.Left,
+            Width = 90,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = AppTheme.FontSmall,
+            ForeColor = AppTheme.TextSecondary
+        };
+        combo.Dock = DockStyle.Fill;
+        combo.Font = AppTheme.FontSmall;
+        combo.DropDownStyle = ComboBoxStyle.DropDownList;
+        row.Controls.Add(combo);
+        row.Controls.Add(lbl);
+        return row;
+    }
+
     private Control BuildLookupPanel()
     {
         var panel = new Panel
@@ -185,12 +230,45 @@ public class PlayerPanel : UserControl
             ForeColor = AppTheme.TextPrimary
         };
 
-        _txtSearch = new SearchBoxControl("Search name, email, phone, lot")
+        _cmbFilterSeason = new ComboBox();
+        _cmbFilterDivision = new ComboBox();
+        _cmbFilterTeam = new ComboBox();
+        _cmbFilterOnTeam = new ComboBox();
+        _cmbFilterOnTeam.Items.AddRange(["All", "On Team", "Off Team"]);
+        _cmbFilterOnTeam.SelectedIndex = 0;
+        _cmbFilterSpare = new ComboBox();
+        _cmbFilterSpare.Items.AddRange(["All", "Spare List", "Not Spare"]);
+        _cmbFilterSpare.SelectedIndex = 0;
+        _cmbFilterLookingForTeam = new ComboBox();
+        _cmbFilterLookingForTeam.Items.AddRange(["All", "Looking For Team", "Not Looking"]);
+        _cmbFilterLookingForTeam.SelectedIndex = 0;
+
+        _cmbFilterSeason.SelectedIndexChanged += (_, _) => OnSeasonFilterChanged();
+        _cmbFilterDivision.SelectedIndexChanged += (_, _) => OnDivisionFilterChanged();
+        _cmbFilterTeam.SelectedIndexChanged += (_, _) => { if (!_isLoadingFilters) ApplySearchFilter(); };
+        _cmbFilterOnTeam.SelectedIndexChanged += (_, _) => { if (!_isLoadingFilters) ApplySearchFilter(); };
+        _cmbFilterSpare.SelectedIndexChanged += (_, _) => { if (!_isLoadingFilters) ApplySearchFilter(); };
+        _cmbFilterLookingForTeam.SelectedIndexChanged += (_, _) => { if (!_isLoadingFilters) ApplySearchFilter(); };
+
+        var rowLft = MakeFilterRow("Looking For:", _cmbFilterLookingForTeam);
+        var rowSpare = MakeFilterRow("Spare List:", _cmbFilterSpare);
+        var rowOnTeam = MakeFilterRow("Team Status:", _cmbFilterOnTeam);
+        var rowTeam = MakeFilterRow("Team:", _cmbFilterTeam);
+        var rowDivision = MakeFilterRow("Division:", _cmbFilterDivision);
+        var rowSeason = MakeFilterRow("Season:", _cmbFilterSeason);
+
+        var filtersHeader = new Label
         {
+            Text = "Filters",
             Dock = DockStyle.Top,
-            Height = 30
+            Height = 18,
+            Font = AppTheme.FontSmallBold,
+            ForeColor = AppTheme.TextPrimary
         };
-        _txtSearch.SearchTextChanged += (_, _) => ApplySearchFilter();
+
+        var filterPanel = new Panel { Dock = DockStyle.Top, Height = 24 * 6 + 18 };
+        filterPanel.Controls.AddRange([rowLft, rowSpare, rowOnTeam, rowTeam, rowDivision, rowSeason]);
+        filterPanel.Controls.Add(filtersHeader);
 
         var searchHint = new Label
         {
@@ -201,6 +279,13 @@ public class PlayerPanel : UserControl
             ForeColor = AppTheme.TextMuted,
             Padding = new Padding(1, 2, 0, 0)
         };
+
+        _txtSearch = new SearchBoxControl("Search name, email, phone, lot")
+        {
+            Dock = DockStyle.Top,
+            Height = 30
+        };
+        _txtSearch.SearchTextChanged += (_, _) => ApplySearchFilter();
 
         _btnNew = new Button
         {
@@ -232,6 +317,8 @@ public class PlayerPanel : UserControl
         panel.Controls.Add(searchHint);
         panel.Controls.Add(_txtSearch);
         panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 8, BackColor = AppTheme.Surface });
+        panel.Controls.Add(filterPanel);
+        panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 8, BackColor = AppTheme.Surface });
         panel.Controls.Add(title);
 
         return panel;
@@ -253,21 +340,18 @@ public class PlayerPanel : UserControl
             Padding = new Padding(12, 10, 12, 10)
         };
 
-        _btnEdit = MakeButton("Edit Player", AppTheme.Accent, Color.White, new Point(12, 10), 120);
-        // Edit button hidden - all fields always editable
-
         _btnSave = MakeButton("Save Player", AppTheme.Accent, Color.White, new Point(12, 10), 120);
         _btnSave.Click += (_, _) => SavePlayer();
 
-        _btnCancel = MakeButton("Cancel", AppTheme.Surface, AppTheme.TextPrimary, new Point(140, 10), 100);
-        _btnCancel.FlatAppearance.BorderSize = 1;
-        _btnCancel.FlatAppearance.BorderColor = AppTheme.Separator;
-        _btnCancel.Click += (_, _) => CancelEdit();
+        _btnClear = MakeButton("Clear", AppTheme.Surface, AppTheme.TextPrimary, new Point(140, 10), 100);
+        _btnClear.FlatAppearance.BorderSize = 1;
+        _btnClear.FlatAppearance.BorderColor = AppTheme.Separator;
+        _btnClear.Click += (_, _) => ReturnToEmptyState();
 
         _btnDelete = MakeButton("Delete Player", AppTheme.ButtonDanger, Color.White, new Point(250, 10), 130);
         _btnDelete.Click += (_, _) => DeletePlayer();
 
-        toolbar.Controls.AddRange([_btnEdit, _btnSave, _btnCancel, _btnDelete]);
+        toolbar.Controls.AddRange([_btnSave, _btnClear, _btnDelete]);
 
         var scroll = new Panel
         {
@@ -359,16 +443,6 @@ public class PlayerPanel : UserControl
             Checked = true
         };
         _chkIsActive.CheckedChanged += (_, _) => MarkDirty();
-        y += 38;
-
-        var lblCreated = MakeLabel("Created", y);
-        _lblCreatedAt = new Label
-        {
-            Location = new Point(inputX, y + 4),
-            AutoSize = true,
-            Font = AppTheme.FontDefault,
-            ForeColor = AppTheme.TextSecondary
-        };
         y += 40;
 
         // Teams section
@@ -478,11 +552,24 @@ public class PlayerPanel : UserControl
             lblPartner, _cmbPartner,
             lblRole, _cmbRole,
             lblActive, _chkIsActive,
-            lblCreated, _lblCreatedAt,
             _lblTeamsContent,
             _lblLookingForTeamsContent,
             _lblSpareListContent
         ]);
+
+        _fieldControls =
+        [
+            lblFirstName, _txtFirstName,
+            lblLastName, _txtLastName,
+            lblEmail, _txtEmail,
+            lblPhone, _txtPhone,
+            lblLot, _txtLotNumber,
+            lblPartner, _cmbPartner,
+            lblRole, _cmbRole,
+            lblActive, _chkIsActive,
+            lblTeamsHeader, _lstTeams, _lblTeamsContent,
+            lblLftHeader, lblSpareHeader, _lblLookingForTeamsContent, _lblSpareListContent
+        ];
 
         root.Controls.Add(scroll);
         root.Controls.Add(toolbar);
@@ -516,6 +603,12 @@ public class PlayerPanel : UserControl
         return btn;
     }
 
+    private void SetFieldsVisible(bool visible)
+    {
+        foreach (var c in _fieldControls)
+            c.Visible = visible;
+    }
+
     private void LoadRoleOptions()
     {
         using var db = new BocceDbContext();
@@ -545,6 +638,176 @@ public class PlayerPanel : UserControl
         }
     }
 
+    // ── Filter option loading (Season / Division / Team cascading dropdowns) ──
+
+    private void LoadSeasonFilterOptions()
+    {
+        using var db = new BocceDbContext();
+        var leagueId = AppParameterService.GetDefaultLeagueId(db);
+
+        var items = new List<FilterItem> { new() { Id = null, Name = "All Seasons" } };
+        if (leagueId.HasValue)
+        {
+            items.AddRange(db.Seasons
+                .Where(s => s.LeagueId == leagueId.Value)
+                .OrderByDescending(s => s.StartDate)
+                .Select(s => new { s.Id, s.Name })
+                .AsEnumerable()
+                .Select(s => new FilterItem { Id = s.Id, Name = s.Name }));
+        }
+
+        _cmbFilterSeason.DataSource = items;
+        _cmbFilterSeason.DisplayMember = nameof(FilterItem.Name);
+        _cmbFilterSeason.ValueMember = nameof(FilterItem.Id);
+        _cmbFilterSeason.SelectedIndex = 0;
+    }
+
+    private void LoadDivisionFilterOptions()
+    {
+        int? seasonId = (_cmbFilterSeason.SelectedItem as FilterItem)?.Id;
+
+        using var db = new BocceDbContext();
+        var items = new List<FilterItem> { new() { Id = null, Name = "All Divisions" } };
+        if (seasonId.HasValue)
+        {
+            items.AddRange(db.Divisions
+                .Where(d => d.SeasonId == seasonId.Value)
+                .OrderBy(d => d.SortName).ThenBy(d => d.Name)
+                .Select(d => new { d.Id, d.Name })
+                .AsEnumerable()
+                .Select(d => new FilterItem { Id = d.Id, Name = d.Name }));
+        }
+
+        _cmbFilterDivision.DataSource = items;
+        _cmbFilterDivision.DisplayMember = nameof(FilterItem.Name);
+        _cmbFilterDivision.ValueMember = nameof(FilterItem.Id);
+        _cmbFilterDivision.SelectedIndex = 0;
+        _cmbFilterDivision.Enabled = seasonId.HasValue;
+    }
+
+    private void LoadTeamFilterOptions()
+    {
+        int? divisionId = (_cmbFilterDivision.SelectedItem as FilterItem)?.Id;
+
+        using var db = new BocceDbContext();
+        var items = new List<FilterItem> { new() { Id = null, Name = "All Teams" } };
+        if (divisionId.HasValue)
+        {
+            items.AddRange(db.Teams
+                .Where(t => t.DivisionId == divisionId.Value)
+                .OrderBy(t => t.TeamLetter)
+                .Select(t => new { t.Id, t.TeamLetter, t.DisplayName, t.SystemName })
+                .AsEnumerable()
+                .Select(t => new FilterItem { Id = t.Id, Name = t.DisplayName ?? t.SystemName }));
+        }
+
+        _cmbFilterTeam.DataSource = items;
+        _cmbFilterTeam.DisplayMember = nameof(FilterItem.Name);
+        _cmbFilterTeam.ValueMember = nameof(FilterItem.Id);
+        _cmbFilterTeam.SelectedIndex = 0;
+        _cmbFilterTeam.Enabled = divisionId.HasValue;
+    }
+
+    private void OnSeasonFilterChanged()
+    {
+        if (_isLoadingFilters) return;
+        _isLoadingFilters = true;
+        try
+        {
+            LoadDivisionFilterOptions();
+            LoadTeamFilterOptions();
+        }
+        finally { _isLoadingFilters = false; }
+        ApplySearchFilter();
+    }
+
+    private void OnDivisionFilterChanged()
+    {
+        if (_isLoadingFilters) return;
+        _isLoadingFilters = true;
+        try
+        {
+            LoadTeamFilterOptions();
+        }
+        finally { _isLoadingFilters = false; }
+        ApplySearchFilter();
+    }
+
+    private void LoadFilterContextData()
+    {
+        using var db = new BocceDbContext();
+        var leagueId = AppParameterService.GetDefaultLeagueId(db);
+
+        _teamMemberships.Clear();
+        _sparePlayerIds.Clear();
+        _lookingForEntries.Clear();
+        if (!leagueId.HasValue) return;
+
+        _teamMemberships = db.TeamPlayers
+            .Where(tp => tp.Team.Division.Season.LeagueId == leagueId.Value)
+            .Select(tp => new { tp.PlayerId, tp.TeamId, DivisionId = tp.Team.DivisionId, SeasonId = tp.Team.Division.SeasonId })
+            .AsEnumerable()
+            .Select(x => (x.PlayerId, x.TeamId, x.DivisionId, x.SeasonId))
+            .ToList();
+
+        _sparePlayerIds = db.SpareLists
+            .Where(s => s.LeagueId == leagueId.Value && s.IsActive)
+            .Select(s => s.PlayerId)
+            .ToHashSet();
+
+        _lookingForEntries = db.LookingForTeams
+            .Where(l => l.LeagueId == leagueId.Value)
+            .Select(l => new { l.PlayerId, l.SeasonId })
+            .AsEnumerable()
+            .Select(x => (x.PlayerId, x.SeasonId))
+            .ToList();
+    }
+
+    private bool PassesFilters(PlayerLookup p)
+    {
+        int? seasonId = (_cmbFilterSeason.SelectedItem as FilterItem)?.Id;
+        int? divisionId = (_cmbFilterDivision.SelectedItem as FilterItem)?.Id;
+        int? teamId = (_cmbFilterTeam.SelectedItem as FilterItem)?.Id;
+        int onTeamIdx = _cmbFilterOnTeam.SelectedIndex;       // 0 All, 1 On Team, 2 Off Team
+        int spareIdx = _cmbFilterSpare.SelectedIndex;         // 0 All, 1 Spare List, 2 Not Spare
+        int lftIdx = _cmbFilterLookingForTeam.SelectedIndex;  // 0 All, 1 Looking, 2 Not Looking
+
+        if (teamId.HasValue)
+        {
+            if (!_teamMemberships.Any(m => m.PlayerId == p.Id && m.TeamId == teamId.Value)) return false;
+        }
+        else if (divisionId.HasValue)
+        {
+            if (!_teamMemberships.Any(m => m.PlayerId == p.Id && m.DivisionId == divisionId.Value)) return false;
+        }
+        else if (onTeamIdx != 0)
+        {
+            bool onTeam = seasonId.HasValue
+                ? _teamMemberships.Any(m => m.PlayerId == p.Id && m.SeasonId == seasonId.Value)
+                : _teamMemberships.Any(m => m.PlayerId == p.Id);
+            if (onTeamIdx == 1 && !onTeam) return false;
+            if (onTeamIdx == 2 && onTeam) return false;
+        }
+
+        if (spareIdx != 0)
+        {
+            bool isSpare = _sparePlayerIds.Contains(p.Id);
+            if (spareIdx == 1 && !isSpare) return false;
+            if (spareIdx == 2 && isSpare) return false;
+        }
+
+        if (lftIdx != 0)
+        {
+            bool isLooking = seasonId.HasValue
+                ? _lookingForEntries.Any(e => e.PlayerId == p.Id && e.SeasonId == seasonId.Value)
+                : _lookingForEntries.Any(e => e.PlayerId == p.Id);
+            if (lftIdx == 1 && !isLooking) return false;
+            if (lftIdx == 2 && isLooking) return false;
+        }
+
+        return true;
+    }
+
     private void LoadPlayerLookup(int? selectPlayerId = null)
     {
         using var db = new BocceDbContext();
@@ -566,9 +829,8 @@ public class PlayerPanel : UserControl
             })
             .ToList());
 
+        LoadFilterContextData();
         ApplySearchFilter(selectPlayerId);
-        PopulatePartnerLookup(_selectedPlayerId, GetSelectedPartnerId());
-        RefreshLeagueContextAndStatus(_selectedPlayerId);
     }
 
     private int? GetSelectedPartnerId()
@@ -587,6 +849,7 @@ public class PlayerPanel : UserControl
             var query = _txtSearch.SearchText;
 
             var filtered = _allPlayers
+                .Where(PassesFilters)
                 .Where(p => SearchQueryService.MatchesAnyTerm($"{p.DisplayName} {p.FullName} {p.Email} {p.Phone} {p.LotNumber}", query))
                 .Select(p => new PlayerListItem
                 {
@@ -607,22 +870,10 @@ public class PlayerPanel : UserControl
                     if (_lstPlayers.Items[i] is PlayerListItem item && item.Id == currentId.Value)
                     {
                         _lstPlayers.SelectedIndex = i;
-                        ClearDirty();
-                        PopulatePartnerLookup(_selectedPlayerId, GetSelectedPartnerId());
-                        return;
+                        break;
                     }
                 }
             }
-
-            if (_lstPlayers.Items.Count > 0)
-            {
-                _lstPlayers.SelectedIndex = 0;
-                ClearDirty();
-            }
-            else
-                ClearEditor();
-
-            PopulatePartnerLookup(_selectedPlayerId, GetSelectedPartnerId());
         }
         finally
         {
@@ -633,17 +884,9 @@ public class PlayerPanel : UserControl
     private void OnPlayerSelectedFromLookup()
     {
         if (_mode == PlayerMode.Create) return;
-        if (_isSavingAndReloading) return;  // Skip check during save reload
-        if (_isSearching) return;  // Skip check during search filter
+        if (_isSearching) return;
         if (_lstPlayers.SelectedItem is not PlayerListItem item) return;
 
-        if (_isDirty && !_isCreatingNew)
-        {
-            _autoSaveTimer.Stop();
-            SavePlayer(silent: true);
-        }
-
-        _previousPlayerId = _selectedPlayerId;
         LoadPlayerForView(item.Id);
     }
 
@@ -657,6 +900,7 @@ public class PlayerPanel : UserControl
             if (p == null) return;
 
             _selectedPlayerId = p.Id;
+            SetFieldsVisible(true);
             _txtFirstName.Text = p.FirstName;
             _txtLastName.Text = p.LastName;
             _txtEmail.Text = p.Email ?? "";
@@ -664,7 +908,6 @@ public class PlayerPanel : UserControl
             _txtLotNumber.Text = p.LotNumber ?? "";
             _chkIsActive.Checked = p.IsActive;
             SetSelectedRoleId(p.Role);
-            _lblCreatedAt.Text = p.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
 
             PopulatePartnerLookup(p.Id, p.PartnerPlayerId);
             LoadPlayerTeams(p.Id);
@@ -679,13 +922,7 @@ public class PlayerPanel : UserControl
 
     private void PopulatePartnerLookup(int? selfPlayerId, int? selectedPartnerId)
     {
-        var visiblePlayerIds = _lstPlayers.Items
-            .OfType<PlayerListItem>()
-            .Select(i => i.Id)
-            .ToHashSet();
-
         var partners = _allPlayers
-            .Where(p => visiblePlayerIds.Count == 0 || visiblePlayerIds.Contains(p.Id))
             .Where(p => !selfPlayerId.HasValue || p.Id != selfPlayerId.Value)
             .OrderBy(p => p.LastName)
             .ThenBy(p => p.FirstName)
@@ -720,8 +957,8 @@ public class PlayerPanel : UserControl
         try
         {
             _selectedPlayerId = null;
+            SetFieldsVisible(true);
             ClearEditor();
-            PopulatePartnerLookup(null, null);
         }
         finally
         {
@@ -739,84 +976,58 @@ public class PlayerPanel : UserControl
         _txtLotNumber.Text = "";
         _chkIsActive.Checked = true;
         SetSelectedRoleId(0);
-        _lblCreatedAt.Text = "(new)";
+        PopulatePartnerLookup(null, null);
         _lstTeams.Items.Clear();
+        _lstTeams.Visible = false;
+        _lblTeamsContent.Visible = false;
         _lblLookingForTeamsContent.Visible = false;
         _lblSpareListContent.Visible = false;
+    }
+
+    private void ReturnToEmptyState()
+    {
+        _selectedPlayerId = null;
+        _isDirty = false;
+        _mode = PlayerMode.View;
+        _isCreatingNew = false;
+        ClearEditor();
+        SetFieldsVisible(false);
+        UpdateButtonVisibility();
+        _lblModeHint.Text = "Select a player from the list, or create a new one.";
+
+        _lstPlayers.ClearSelected();
     }
 
     private void SetMode(PlayerMode mode)
     {
         _mode = mode;
         _isCreatingNew = (mode == PlayerMode.Create);
-        bool hasSelection = _selectedPlayerId.HasValue;
-
-        // Fields are always editable - no ReadOnly mode
-        _txtFirstName.ReadOnly = false;
-        _txtLastName.ReadOnly = false;
-        _txtEmail.ReadOnly = false;
-        _txtPhone.ReadOnly = false;
-        _txtLotNumber.ReadOnly = false;
-
-        _chkIsActive.Enabled = true;
-        _cmbPartner.Enabled = true;
-
-        _btnEdit.Visible = false;  // Edit button hidden - fields always editable
-
-        _btnSave.Visible = _isCreatingNew;
-        _btnSave.Text = "Create Player";
 
         UpdateButtonVisibility();
-
-        _txtSearch.Enabled = true;
-        _lstPlayers.Enabled = true;
-
-        if (mode != PlayerMode.Create)
-            ClearDirty();
 
         _lblModeHint.Text = mode switch
         {
             PlayerMode.Create => BuildCreateModeHint(),
+            _ when _selectedPlayerId.HasValue => "Editing player. Remember to Save.",
             _ => "Select a player to edit, or create a new one."
         };
     }
 
     private void MarkDirty()
     {
-        if (_isLoadingData || _isSearching || _btnSave == null) return;
+        if (_isLoadingData || _isSearching) return;
         _isDirty = true;
-        UpdateButtonVisibility();
-        if (!_isCreatingNew) { _autoSaveTimer.Stop(); _autoSaveTimer.Start(); }
-    }
-
-    private void ClearDirty()
-    {
-        if (_btnSave == null) return;
-        _isDirty = false;
-        _autoSaveTimer.Stop();
-        UpdateButtonVisibility();
     }
 
     private void UpdateButtonVisibility()
     {
-        if (_isCreatingNew)
-        {
-            _btnNew.Visible    = false;
-            _btnCancel.Visible = true;
-            _btnDelete.Visible = false;
-        }
-        else
-        {
-            _btnNew.Visible    = true;
-            _btnCancel.Visible = false;
-            _btnDelete.Visible = _selectedPlayerId.HasValue;
-        }
-    }
+        bool editing = _isCreatingNew || _selectedPlayerId.HasValue;
 
-    private bool HasDefaultLeagueContext()
-    {
-        using var db = new BocceDbContext();
-        return AppParameterService.GetDefaultLeagueId(db).HasValue;
+        _btnNew.Visible    = !_isCreatingNew;
+        _btnSave.Visible   = editing;
+        _btnSave.Text      = _isCreatingNew ? "Create Player" : "Save Player";
+        _btnClear.Visible  = editing;
+        _btnDelete.Visible = _selectedPlayerId.HasValue && !_isCreatingNew;
     }
 
     private static string BuildCreateModeHint()
@@ -831,24 +1042,6 @@ public class PlayerPanel : UserControl
             return "Creating a new player. League status checkboxes use your default league.";
 
         return $"Creating a new player. League status checkboxes use default league: {leagueName}.";
-    }
-
-    private void RefreshLeagueContextAndStatus(int? playerId)
-    {
-        _lblLeagueContext.Text = "";
-    }
-
-    private void CancelEdit()
-    {
-        _autoSaveTimer.Stop();
-        _isDirty = false;
-        if (_selectedPlayerId.HasValue)
-            LoadPlayerForView(_selectedPlayerId.Value);
-        else
-        {
-            ClearEditor();
-            SetMode(PlayerMode.View);
-        }
     }
 
     private sealed class TeamDisplay
@@ -987,14 +1180,14 @@ public class PlayerPanel : UserControl
         return null;
     }
 
-    private void SavePlayer(bool silent = false)
+    private void SavePlayer()
     {
         string firstName = _txtFirstName.Text.Trim();
         string lastName = _txtLastName.Text.Trim();
 
         if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName))
         {
-            if (!silent) MessageBox.Show("First Name and Last Name are required.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show("First Name and Last Name are required.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
@@ -1024,7 +1217,6 @@ public class PlayerPanel : UserControl
 
                 UpdatePartnerLink(db, player, selectedPartnerId);
                 db.SaveChanges();
-                _selectedPlayerId = player.Id;
             }
             else if (_mode == PlayerMode.View && _selectedPlayerId.HasValue)
             {
@@ -1047,35 +1239,17 @@ public class PlayerPanel : UserControl
                 return;
             }
 
-            _isSavingAndReloading = true;
-            try { LoadPlayerLookup(_selectedPlayerId); }
-            finally { _isSavingAndReloading = false; }
-
-            if (silent)
-            {
-                ClearDirty();
-                AppLogger.Debug("Autosaved player {Id}", _selectedPlayerId);
-            }
-            else
-            {
-                if (_selectedPlayerId.HasValue)
-                    LoadPlayerForView(_selectedPlayerId.Value);
-                MessageBox.Show("Player saved.", "Players", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                SetMode(PlayerMode.View);
-            }
+            MessageBox.Show("Player saved.", "Players", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            ReturnToEmptyState();
+            LoadPlayerLookup();
         }
         catch (Exception ex)
         {
-            if (!silent)
-            {
-                string fullError = ex.Message;
-                if (ex.InnerException != null) fullError += $"\n\nInner: {ex.InnerException.Message}";
-                MessageBox.Show($"Unable to save player.\n\n{fullError}", "Players", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            else AppLogger.Error(ex, "Autosave failed for player {Id}", _selectedPlayerId);
+            string fullError = ex.Message;
+            if (ex.InnerException != null) fullError += $"\n\nInner: {ex.InnerException.Message}";
+            MessageBox.Show($"Unable to save player.\n\n{fullError}", "Players", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
-
 
     private static void UpdatePartnerLink(BocceDbContext db, Player player, int? newPartnerId)
     {
@@ -1134,10 +1308,8 @@ public class PlayerPanel : UserControl
             db.Players.Remove(player);
             db.SaveChanges();
 
-            _selectedPlayerId = null;
+            ReturnToEmptyState();
             LoadPlayerLookup();
-            ClearEditor();
-            SetMode(PlayerMode.View);
         }
         catch (DbUpdateException)
         {
