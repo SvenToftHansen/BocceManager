@@ -26,8 +26,8 @@ export default async function Home() {
           className="object-cover"
         />
         <div className="absolute inset-0 bg-black/55" />
-        <div className="relative z-10 flex w-full max-w-3xl flex-col items-center gap-[1.5vh] px-[4vw] text-center text-white">
-          <h1 className="text-[clamp(1.5rem,5vw,3.75rem)] font-semibold tracking-tight">
+        <div className="relative z-10 flex w-full max-w-4xl flex-col items-center gap-[1.5vh] px-[4vw] text-center text-white">
+          <h1 className="text-[clamp(1.5rem,4.5vw,3.25rem)] font-semibold tracking-tight">
             Golden Vista Bocce League
           </h1>
           <p className="max-w-xl text-[clamp(0.9rem,2vw,1.25rem)] text-zinc-200">
