@@ -30,6 +30,13 @@ public class BocceDbContext : DbContext
         }
     }
 
+    // Reflects whichever connection string actually resolved above, for display in the UI status bar.
+    public static string GetConnectionSummary()
+    {
+        var builder = new Npgsql.NpgsqlConnectionStringBuilder(PostgresConnString);
+        return $"{builder.Host}:{builder.Port} ({builder.Database})";
+    }
+
     // Test mode support
     public static string? DbPath { get; set; }
 
@@ -45,6 +52,7 @@ public class BocceDbContext : DbContext
 
     // Players
     public DbSet<Player>        Players        => Set<Player>();
+    public DbSet<PlayerRole>    PlayerRoles    => Set<PlayerRole>();
     public DbSet<InitiationFee> InitiationFees => Set<InitiationFee>();
     public DbSet<SeasonFee>     SeasonFees     => Set<SeasonFee>();
 

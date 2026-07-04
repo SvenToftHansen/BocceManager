@@ -25,6 +25,13 @@ public class PlayerPanel : UserControl
         public override string ToString() => Name;
     }
 
+    private sealed class RoleItem
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public override string ToString() => Name;
+    }
+
     private sealed class PlayerLookup
     {
         public int Id { get; set; }
@@ -73,6 +80,7 @@ public class PlayerPanel : UserControl
     private TextBox _txtLotNumber = null!;
     private CheckBox _chkIsActive = null!;
     private ComboBox _cmbPartner = null!;
+    private ComboBox _cmbRole = null!;
     private Label _lblCreatedAt = null!;
     private Label _lblModeHint = null!;
     private Label _lblLeagueContext = null!;
@@ -95,6 +103,7 @@ public class PlayerPanel : UserControl
 
         BuildUi();
         _autoSaveTimer.Tick += (_, _) => { _autoSaveTimer.Stop(); if (_isDirty && !_isCreatingNew) SavePlayer(silent: true); };
+        LoadRoleOptions();
         LoadPlayerLookup();
         SetMode(PlayerMode.View);
     }
@@ -329,6 +338,17 @@ public class PlayerPanel : UserControl
         _cmbPartner.SelectedIndexChanged += (_, _) => MarkDirty();
         y += 42;
 
+        var lblRole = MakeLabel("Role", y);
+        _cmbRole = new ComboBox
+        {
+            Location = new Point(inputX, y),
+            Size = new Size(220, 28),
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Font = AppTheme.FontDefault
+        };
+        _cmbRole.SelectedIndexChanged += (_, _) => MarkDirty();
+        y += 42;
+
         var lblActive = MakeLabel("Active", y);
         _chkIsActive = new CheckBox
         {
@@ -456,6 +476,7 @@ public class PlayerPanel : UserControl
             lblPhone, _txtPhone,
             lblLot, _txtLotNumber,
             lblPartner, _cmbPartner,
+            lblRole, _cmbRole,
             lblActive, _chkIsActive,
             lblCreated, _lblCreatedAt,
             _lblTeamsContent,
@@ -493,6 +514,35 @@ public class PlayerPanel : UserControl
         };
         btn.FlatAppearance.BorderSize = 0;
         return btn;
+    }
+
+    private void LoadRoleOptions()
+    {
+        using var db = new BocceDbContext();
+        var roles = db.PlayerRoles
+            .AsNoTracking()
+            .OrderBy(r => r.Id)
+            .Select(r => new RoleItem { Id = r.Id, Name = r.RoleName })
+            .ToList();
+
+        _cmbRole.DataSource = roles;
+        _cmbRole.DisplayMember = "Name";
+        _cmbRole.ValueMember = "Id";
+    }
+
+    private int GetSelectedRoleId() =>
+        _cmbRole.SelectedItem is RoleItem ri ? ri.Id : 0;
+
+    private void SetSelectedRoleId(int roleId)
+    {
+        foreach (var item in _cmbRole.Items)
+        {
+            if (item is RoleItem ri && ri.Id == roleId)
+            {
+                _cmbRole.SelectedItem = ri;
+                return;
+            }
+        }
     }
 
     private void LoadPlayerLookup(int? selectPlayerId = null)
@@ -613,6 +663,7 @@ public class PlayerPanel : UserControl
             _txtPhone.Text = p.Phone ?? "";
             _txtLotNumber.Text = p.LotNumber ?? "";
             _chkIsActive.Checked = p.IsActive;
+            SetSelectedRoleId(p.Role);
             _lblCreatedAt.Text = p.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
 
             PopulatePartnerLookup(p.Id, p.PartnerPlayerId);
@@ -687,6 +738,7 @@ public class PlayerPanel : UserControl
         _txtPhone.Text = "";
         _txtLotNumber.Text = "";
         _chkIsActive.Checked = true;
+        SetSelectedRoleId(0);
         _lblCreatedAt.Text = "(new)";
         _lstTeams.Items.Clear();
         _lblLookingForTeamsContent.Visible = false;
@@ -961,6 +1013,7 @@ public class PlayerPanel : UserControl
                     Phone = NullIfEmpty(_txtPhone.Text),
                     LotNumber = NullIfEmpty(_txtLotNumber.Text),
                     IsActive = _chkIsActive.Checked,
+                    Role = GetSelectedRoleId(),
                     CreatedAt = DateTime.UtcNow
                 };
 
@@ -984,6 +1037,7 @@ public class PlayerPanel : UserControl
                 player.Phone = NullIfEmpty(_txtPhone.Text);
                 player.LotNumber = NullIfEmpty(_txtLotNumber.Text);
                 player.IsActive = _chkIsActive.Checked;
+                player.Role = GetSelectedRoleId();
 
                 UpdatePartnerLink(db, player, selectedPartnerId);
                 db.SaveChanges();

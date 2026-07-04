@@ -15,7 +15,7 @@ public partial class MainForm : Form
         ScoreEntry, Schedule,
         Standings, Playoffs, PlayoffSetup, PlayoffSchedule,
         ReportTeamListing, ReportScheduleGeneric, ReportSpareLists,
-        SpareLists, Announcements, Fees, EmailLists, EmailCompose, EmailHistory, Documents, Parameters, Courts, Utilities, Theme
+        SpareLists, Announcements, Fees, EmailLists, EmailCompose, EmailHistory, Documents, Parameters, Courts, Roles, Utilities, Theme
     }
 
     private NavSection _currentSection = NavSection.Dashboard;
@@ -334,6 +334,7 @@ public partial class MainForm : Form
             add("Documents",      NavSection.Documents);
             add("Parameters",     NavSection.Parameters);
             add("Courts",         NavSection.Courts);
+            add("Roles",          NavSection.Roles);
         });
 
         AddGroup("UTILITIES", add => {
@@ -415,6 +416,7 @@ public partial class MainForm : Form
         NavSection.Documents  => new DocumentsPanel(),
         NavSection.Parameters => new ParametersPanel(),
         NavSection.Courts     => new CourtPanel(),
+        NavSection.Roles      => new RolesPanel(),
         NavSection.ScoreEntry            => new ScoreEntryPanel(),
         NavSection.Schedule              => new SchedulePanel(),
         NavSection.Standings             => new StandingsPanel(),
@@ -486,13 +488,14 @@ public partial class MainForm : Form
         NavSection.Documents     => "Documents",
         NavSection.Parameters    => "Parameters",
         NavSection.Courts        => "Courts",
+        NavSection.Roles         => "Roles",
         NavSection.Theme         => "Theme",
         _ => section.ToString()
     };
 
     private void UpdateStatusBar()
     {
-        lblDbPath.Text = "DB: PostgreSQL (localhost:5432)";
+        lblDbPath.Text = $"DB: PostgreSQL ({Data.BocceDbContext.GetConnectionSummary()})";
     }
 
     private void UpdateContextBar()
@@ -545,6 +548,7 @@ public partial class MainForm : Form
                 NavSection.Parameters,
                 NavSection.Documents,
                 NavSection.Courts,
+                NavSection.Roles,
                 NavSection.Utilities,
                 NavSection.Theme
             };
