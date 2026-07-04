@@ -2248,19 +2248,33 @@ public class DivisionPanel : UserControl
         // Loop picker until valid selection is made
         while (true)
         {
-            var excludeIds = new HashSet<int>();
+            var onThisTeamIds = new HashSet<int>();
+            var sameDivisionOtherTeamIds = new HashSet<int>();
+            var otherDivisionSameSeasonIds = new HashSet<int>();
             try
             {
                 using var db = new BocceDbContext();
-                // Exclude players already on ANY team in this division
-                excludeIds = db.TeamPlayers
-                    .Where(tp => tp.Team.DivisionId == divisionId)
+                // Always exclude players already on this specific team
+                onThisTeamIds = db.TeamPlayers
+                    .Where(tp => tp.TeamId == teamId)
+                    .Select(tp => tp.PlayerId)
+                    .ToHashSet();
+
+                // Players on another team in this division (■ marker)
+                sameDivisionOtherTeamIds = db.TeamPlayers
+                    .Where(tp => tp.Team.DivisionId == divisionId && tp.TeamId != teamId)
+                    .Select(tp => tp.PlayerId)
+                    .ToHashSet();
+
+                // Players on a team in a different division of this season (★ marker)
+                otherDivisionSameSeasonIds = db.TeamPlayers
+                    .Where(tp => tp.Team.Division.SeasonId == _selectedSeasonId && tp.Team.DivisionId != divisionId)
                     .Select(tp => tp.PlayerId)
                     .ToHashSet();
             }
             catch { }
 
-            var playerIds = PickPlayersMultiple(excludeIds);
+            var playerIds = PickPlayersMultiple(onThisTeamIds, sameDivisionOtherTeamIds, otherDivisionSameSeasonIds);
             if (playerIds.Count == 0) return;
 
             int availableSlots = maxPlayersPerTeam - currentPlayerCount;
@@ -2290,13 +2304,14 @@ public class DivisionPanel : UserControl
                     var alreadyOnThisTeam = db.TeamPlayers.Any(tp => tp.TeamId == teamId && tp.PlayerId == playerId);
                     if (alreadyOnThisTeam) continue;
 
-                    // Check if player already on another team in this division (should not happen due to picker, but validate)
+                    // Check if player already on another team in this division (reachable when the
+                    // picker's "Exclude players already on a team" filter is unchecked)
                     var alreadyInDivision = db.TeamPlayers
                         .Any(tp => tp.Team.DivisionId == divisionId && tp.PlayerId == playerId);
                     if (alreadyInDivision)
                     {
                         var player = db.Players.Find(playerId);
-                        skipped.Add(player?.FullName ?? $"Player {playerId}");
+                        skipped.Add($"{player?.FullName ?? $"Player {playerId}"} (already on another team in this division)");
                         continue;
                     }
 
@@ -2628,7 +2643,7 @@ public class DivisionPanel : UserControl
 
     // â"€â"€ Multi-select player picker â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-    private List<int> PickPlayersMultiple(HashSet<int> excludeIds)
+    private List<int> PickPlayersMultiple(HashSet<int> alwaysExcludeIds, HashSet<int> sameDivisionOtherTeamIds, HashSet<int> otherDivisionSameSeasonIds)
     {
         var result = new List<int>();
         using var form = new Form
@@ -2647,7 +2662,7 @@ public class DivisionPanel : UserControl
         {
             using var db = new BocceDbContext();
             allPlayers = db.Players
-                .Where(p => p.IsActive && !excludeIds.Contains(p.Id))
+                .Where(p => p.IsActive && !alwaysExcludeIds.Contains(p.Id))
                 .OrderBy(p => p.LastName).ThenBy(p => p.FirstName)
                 .ToList()
                 .Select(p => (p.Id, $"{p.LastName}, {p.FirstName}"))
@@ -2670,6 +2685,15 @@ public class DivisionPanel : UserControl
             Font = AppTheme.FontDefault, PlaceholderText = "Search... (OR delimiters: | \\ / : ;)",
             BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary, BorderStyle = BorderStyle.FixedSingle
         };
+
+        var cmbFilter = new ComboBox
+        {
+            Location = new Point(320, 8), Width = 260, Height = 28,
+            Font = AppTheme.FontDefault, DropDownStyle = ComboBoxStyle.DropDownList
+        };
+        cmbFilter.Items.AddRange(["All Players", "Non Team Players (all)", "Non Team Players (Div)"]);
+        cmbFilter.SelectedIndex = 2; // Non Team Players (Div)
+        var lblMarkerLegend = Hint("★ = on a team in another division   ■ = on a team in this division", 320, 38);
 
         // Left side: Available players
         var lblAvailable = new Label { Text = "Available Players", Font = AppTheme.FontDefaultBold, AutoSize = true, Location = new Point(10, 42) };
@@ -2722,11 +2746,26 @@ public class DivisionPanel : UserControl
                 // Skip if already in selected
                 if (cmbSelected.Items.Cast<IntItem>().Any(x => x.Id == id)) continue;
 
+                bool onTeamThisDivision = sameDivisionOtherTeamIds.Contains(id);
+                bool onTeamOtherDivision = otherDivisionSameSeasonIds.Contains(id);
+
+                switch (cmbFilter.SelectedIndex)
+                {
+                    case 1: // Non Team Players (all) - hide anyone on a team anywhere this season
+                        if (onTeamThisDivision || onTeamOtherDivision) continue;
+                        break;
+                    case 2: // Non Team Players (Div) - hide only players already on a team in this division
+                        if (onTeamThisDivision) continue;
+                        break;
+                }
+
                 bool matches = SearchQueryService.MatchesAnyTerm(name, query);
 
                 if (matches)
                 {
                     string displayName = lookingForTeam.Contains(id) ? $"◆ {name}" : name;
+                    if (onTeamThisDivision) displayName += " ■";
+                    else if (onTeamOtherDivision) displayName += " ★";
                     cmbAvailable.Items.Add(new IntItem(id, displayName));
                 }
             }
@@ -2734,6 +2773,7 @@ public class DivisionPanel : UserControl
         RefreshAvailable("");
 
         searchBox.TextChanged += (_, _) => RefreshAvailable(searchBox.Text);
+        cmbFilter.SelectedIndexChanged += (_, _) => RefreshAvailable(searchBox.Text);
 
         btnAdd.Click += (_, _) =>
         {
@@ -2779,7 +2819,7 @@ public class DivisionPanel : UserControl
             RefreshAvailable(searchBox.Text);
         };
 
-        form.Controls.AddRange([searchBox, lblAvailable, cmbAvailable, btnAdd, btnRemove, lblSelected, cmbSelected, btnOk, btnCancel]);
+        form.Controls.AddRange([searchBox, cmbFilter, lblMarkerLegend, lblAvailable, cmbAvailable, btnAdd, btnRemove, lblSelected, cmbSelected, btnOk, btnCancel]);
         form.AcceptButton = btnOk;
         form.CancelButton = btnCancel;
 
