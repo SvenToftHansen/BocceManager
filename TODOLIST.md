@@ -41,10 +41,9 @@ _Generated 2026-06-15 from TODO.md, memory files, and app state analysis_
 
 - [ ] **Email Lists Panel** — Manage distribution groups used by the email client
 
-- [ ] **Players Panel** — Full CRUD editor for player records
-  - Fields: first/last name, email, phone, lot#, active flag, looking-for-team flag
-  - Assign players to teams from this panel
-  - Mark LFT players with ◆ in picker
+- [x] **Players Panel** — Full CRUD editor for player records *(reworked 2026-07-04, see Fixes / Polish)*
+  - Fields: first/last name, email, phone, lot#, active flag, role, spouse/partner
+  - Manual Save/Clear/Delete workflow with filters (Season/Division/Team/Team Status/Spare/Looking For Team)
 
 - [x] **Team Applicants Panel** — Group applicant registration and placement *(built 2026-06-24)*
   - LEAGUE nav group, below Teams
@@ -225,13 +224,39 @@ _Generated 2026-06-15 from TODO.md, memory files, and app state analysis_
 
 ## Fixes / Polish
 
-- [x] **Show Team Count in Brackets** *(done 2026-06-26)* — Add team count display across the app
+- [x] **Show Team Count in Brackets** *(done 2026-06-26, extended 2026-07-04)* — Add team count display across the app
   - [x] SeasonPanel division list: "Division A (12)"
-  - [ ] Other panels (LeaguePanel, DivisionPanel, etc.) — future enhancement
+  - [x] Division Lookup list (DivisionPanel) — "Division A (12 teams)"
+  - [ ] Other panels (LeaguePanel, etc.) — future enhancement
   - Uses Division.TeamCount for efficiency
 
 - [ ] **Player Adding Bug** — when adding players to a team that already has players, previously selected players should be greyed out / unavailable in the available list
 - [ ] **Leagues Panel Boolean Bug** — FormatException when displaying IsActive column in DataGridView (may be fixed — verify in Leagues panel)
+
+- [x] **Season current-flag toggle bug** *(fixed 2026-07-04)* — a league with only one season could not have its "Current" flag turned off; the editor force-checked it and re-flipped it on at save. Now a league can have zero current seasons; turning one ON still clears the flag on others, but turning OFF no longer hunts for a replacement.
+
+- [x] **Sparelist notes rework** *(done 2026-07-04)* — note shown inline (truncated 40 chars) next to the spare's name; double-click opens a small popup to view/edit the note; removed the now-redundant bottom Notes textbox panel.
+
+- [x] **Players Panel rework** *(done 2026-07-04)* — see Core Panels Not Yet Built entry below, now substantially complete:
+  - [x] No default lookup selection on panel load
+  - [x] Editor fields hidden until New Player or a lookup row is selected
+  - [x] Removed autosave; added explicit Save / Clear / Delete buttons
+  - [x] Save, Clear, and Delete all return to the empty (hidden fields, no selection) state
+  - [x] Added Season / Division / Team / Team Status (on-off) / Spare List / Looking For Team filters above the lookup, defaulting to All; filters persist across save/clear/delete
+  - [x] Removed Created-date field
+  - [x] Spouse/Partner picker no longer narrows to the search-filtered subset; always lists full roster sorted by last name then first name
+
+- [ ] **Team Applicants Panel removal — deferred** — user asked to remove the Roster > Team Applicants panel, but DivisionPanel's "Place Applicant Group" button reads pending TeamApplicants records to auto-create teams, so the panel/table/service aren't isolated. Decided to leave everything as-is for now; revisit with a decision on whether to also retire the DivisionPanel placement feature and the underlying table.
+
+- [ ] **Roster — Looking For Team / Looking For Placement tabs** — user flagged both tabs need more planning/thinking before any changes; no concrete requirements yet.
+
+- [ ] **Roster — Teams: new "all players × all teams" tab** — big planned feature, needs design before implementation:
+  - Scrollable grid: 5 day columns, each showing team members + open slots
+  - Vertical per-team sections (System Name header, Player 1..N lines)
+  - Player list with advanced search + No Team/All and Looking-For-Team/All filters
+  - Drag-and-drop a player onto a team slot; blank slot = direct move, occupied slot = confirm replacement (show displaced player's name)
+  - Add a "Confirmed" field per team (captain has confirmed day/time + roster)
+  - User will provide an Excel mockup + query example before implementation starts
 
 ---
 
