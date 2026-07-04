@@ -662,9 +662,9 @@ public class DivisionPanel : UserControl
                     _allDivisions = db.Divisions
                         .Where(d => d.SeasonId == _selectedSeasonId.Value)
                         .OrderBy(d => d.SortName).ThenBy(d => d.Name)
-                        .Select(d => new { d.Id, Display = d.Name + (d.IsActive ? "" : " (inactive)") })
+                        .Select(d => new { d.Id, d.Name, d.IsActive, d.TeamCount })
                         .AsEnumerable()
-                        .Select(d => (d.Id, d.Display))
+                        .Select(d => (d.Id, Display: $"{d.Name} ({d.TeamCount} team{(d.TeamCount == 1 ? "" : "s")})" + (d.IsActive ? "" : " (inactive)")))
                         .ToList();
                 }
             }
