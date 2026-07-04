@@ -34,3 +34,6 @@ Desktop.ini
 # NuGet
 *.nupkg
 project.lock.json
+
+.vercel
+.env*

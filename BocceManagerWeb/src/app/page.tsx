@@ -17,7 +17,7 @@ export default async function Home() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <section className="relative flex min-h-[70vh] items-center justify-center overflow-hidden">
+      <section className="relative flex h-screen items-center justify-center overflow-hidden">
         <Image
           src={heroImage}
           alt="Bocce balls on the court"
@@ -26,18 +26,18 @@ export default async function Home() {
           className="object-cover"
         />
         <div className="absolute inset-0 bg-black/55" />
-        <div className="relative z-10 flex flex-col items-center gap-4 px-6 text-center text-white">
-          <h1 className="text-4xl font-semibold tracking-tight sm:text-6xl">
+        <div className="relative z-10 flex flex-col items-center gap-[2vh] px-[4vw] text-center text-white">
+          <h1 className="text-[clamp(1.75rem,6vw,4.5rem)] font-semibold tracking-tight">
             Golden Vista Bocce League
           </h1>
-          <p className="max-w-xl text-lg text-zinc-200 sm:text-xl">
+          <p className="max-w-xl text-[clamp(1rem,2.2vw,1.5rem)] text-zinc-200">
             Standings, schedules, and league info for players and fans.
           </p>
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-4xl flex-1 px-6 py-16">
-        <h2 className="mb-8 text-center text-2xl font-semibold tracking-tight text-foreground">
+      <section className="mx-auto w-full max-w-4xl flex-1 p-[clamp(1.5rem,4vw,4rem)]">
+        <h2 className="mb-[clamp(1.5rem,3vw,2.5rem)] text-center text-[clamp(1.25rem,3vw,2rem)] font-semibold tracking-tight text-foreground">
           Current Seasons
         </h2>
 
@@ -50,17 +50,21 @@ export default async function Home() {
             className={
               currentSeasons.length === 1
                 ? "flex justify-center"
-                : "grid gap-6 sm:grid-cols-2"
+                : "grid gap-[clamp(1rem,3vw,1.5rem)] sm:grid-cols-2"
             }
           >
             {currentSeasons.map(({ league, season }) => (
               <div
                 key={season.Id}
-                className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-sm"
+                className="group w-full max-w-sm cursor-pointer select-none rounded-xl bg-gray-200 p-[clamp(1rem,2.5vw,1.5rem)] text-black shadow-inner ring-1 ring-black/10 transition-colors duration-150 hover:bg-green-200 active:bg-green-900"
               >
-                <h3 className="text-xl font-semibold">{league.Name}</h3>
-                <p className="mt-1 text-muted-foreground">{season.Name}</p>
-                <p className="mt-4 text-sm text-muted-foreground">
+                <h3 className="text-[clamp(1.1rem,2vw,1.4rem)] font-semibold group-active:text-white">
+                  {league.Name}
+                </h3>
+                <p className="mt-1 text-[clamp(0.9rem,1.5vw,1.1rem)] text-gray-700 group-active:text-white">
+                  {season.Name}
+                </p>
+                <p className="mt-[clamp(0.75rem,1.5vw,1rem)] text-[clamp(0.8rem,1.2vw,0.9rem)] text-gray-600 group-active:text-white">
                   Standings and schedules coming soon.
                 </p>
               </div>
