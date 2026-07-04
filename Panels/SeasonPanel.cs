@@ -939,8 +939,7 @@ public class SeasonPanel : UserControl
             if (s.PlayoffStartDate.HasValue)
                 _dtpPlayoffStart.Value = s.PlayoffStartDate.Value.ToDateTime(TimeOnly.MinValue);
 
-            bool onlyOne = db.Seasons.Count(x => x.LeagueId == s.LeagueId) == 1;
-            _chkIsCurrent.Checked    = s.IsCurrent || onlyOne;
+            _chkIsCurrent.Checked    = s.IsCurrent;
             _chkIsLocked.Checked     = s.IsLocked;
             SelStr(_cmbStatus, s.Status ?? "Setup");
             _lblCreatedAt.Text       = s.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
@@ -1488,13 +1487,6 @@ public class SeasonPanel : UserControl
                     .ToList();
                 if (others.Count > 0)
                 { foreach (var o in others) o.IsCurrent = false; db.SaveChanges(); }
-            }
-
-            if (db.Seasons.Count(s => s.LeagueId == _selectedLeagueId.Value) == 1 && !season.IsCurrent)
-            {
-                season.IsCurrent = true;
-                _chkIsCurrent.Checked = true;
-                db.SaveChanges();
             }
 
             _lblCreatedAt.Text = season.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
