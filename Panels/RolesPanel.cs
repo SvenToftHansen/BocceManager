@@ -7,6 +7,7 @@ namespace BocceManager.Panels;
 public class RolesPanel : UserControl
 {
     private ListBox _lstRoles = null!;
+    private ListView _lvPlayersByRole = null!;
     private List<PlayerRole> _roles = [];
 
     public RolesPanel()
@@ -22,15 +23,14 @@ public class RolesPanel : UserControl
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
+            ColumnCount = 1,
+            RowCount = 2,
             Padding = Padding.Empty,
             Margin = Padding.Empty,
             CellBorderStyle = TableLayoutPanelCellBorderStyle.None
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
 
         var listPanel = new TableLayoutPanel
         {
@@ -70,14 +70,47 @@ public class RolesPanel : UserControl
         listPanel.Controls.Add(_lstRoles, 0, 1);
         layout.Controls.Add(listPanel, 0, 0);
 
-        var helpPanel = new Panel
+        var peoplePanel = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            BackColor = AppTheme.ContentBackground,
-            Padding = new Padding(16, 14, 16, 14)
+            ColumnCount = 1,
+            RowCount = 2,
+            Padding = Padding.Empty,
+            Margin = Padding.Empty,
+            CellBorderStyle = TableLayoutPanelCellBorderStyle.None,
+            BackColor = AppTheme.Surface
         };
-        helpPanel.Controls.Add(BuildHelpBox());
-        layout.Controls.Add(helpPanel, 1, 0);
+        peoplePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        peoplePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var lblPeopleHeader = new Label
+        {
+            Text = "People In Roles",
+            Dock = DockStyle.Fill,
+            Font = AppTheme.FontDefaultBold,
+            ForeColor = AppTheme.TextSecondary,
+            BackColor = AppTheme.Surface,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(8, 0, 0, 0)
+        };
+        peoplePanel.Controls.Add(lblPeopleHeader, 0, 0);
+
+        _lvPlayersByRole = new ListView
+        {
+            Dock = DockStyle.Fill,
+            View = View.Details,
+            FullRowSelect = true,
+            GridLines = false,
+            HeaderStyle = ColumnHeaderStyle.Nonclickable,
+            BackColor = AppTheme.Surface,
+            ForeColor = AppTheme.TextPrimary,
+            Font = AppTheme.FontDefault,
+            BorderStyle = BorderStyle.None
+        };
+        _lvPlayersByRole.Columns.Add("Role", 180);
+        _lvPlayersByRole.Columns.Add("Player", 260);
+        peoplePanel.Controls.Add(_lvPlayersByRole, 0, 1);
+        layout.Controls.Add(peoplePanel, 0, 1);
 
         Controls.Add(layout);
     }
@@ -92,11 +125,35 @@ public class RolesPanel : UserControl
             _lstRoles.Items.Clear();
             foreach (var role in _roles)
                 _lstRoles.Items.Add(new RoleListItem(role.Id, role.RoleName));
+
+            LoadPlayersByRole(db);
         }
         catch (Exception ex)
         {
             MessageBox.Show($"Error loading roles:\n\n{ex.Message}",
                 "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void LoadPlayersByRole(BocceDbContext db)
+    {
+        var roleNames = _roles.ToDictionary(r => r.Id, r => r.RoleName);
+
+        var players = db.Players
+            .Where(p => p.Role != 0)
+            .OrderBy(p => p.Role)
+            .ThenBy(p => p.LastName)
+            .ThenBy(p => p.FirstName)
+            .Select(p => new { p.Role, p.FirstName, p.LastName })
+            .ToList();
+
+        _lvPlayersByRole.Items.Clear();
+        foreach (var p in players)
+        {
+            string roleName = roleNames.TryGetValue(p.Role, out var name) ? name : $"Role {p.Role}";
+            var item = new ListViewItem(roleName);
+            item.SubItems.Add($"{p.LastName}, {p.FirstName}");
+            _lvPlayersByRole.Items.Add(item);
         }
     }
 
@@ -170,35 +227,6 @@ public class RolesPanel : UserControl
         }
 
         dialog.Dispose();
-    }
-
-    private RichTextBox BuildHelpBox()
-    {
-        var rtb = new RichTextBox
-        {
-            Dock = DockStyle.Fill,
-            ReadOnly = true,
-            BackColor = AppTheme.ContentBackground,
-            ForeColor = AppTheme.TextPrimary,
-            BorderStyle = BorderStyle.None,
-            TabStop = false,
-            ScrollBars = RichTextBoxScrollBars.None,
-            WordWrap = true
-        };
-
-        var headFont = new Font(AppTheme.FontDefault.FontFamily, 10f, FontStyle.Bold);
-        var bodyFont = new Font(AppTheme.FontDefault.FontFamily, 9.5f, FontStyle.Regular);
-
-        rtb.SelectionFont = headFont;
-        rtb.SelectionColor = AppTheme.TextPrimary;
-        rtb.AppendText("RENAMING A ROLE\n");
-        rtb.SelectionFont = bodyFont;
-        rtb.SelectionColor = AppTheme.TextSecondary;
-        rtb.AppendText("Double-click a role to change its display name. " +
-            "The set of roles is fixed and used elsewhere in the app (e.g. the Role dropdown on the Player editor), " +
-            "so roles cannot be added or removed here.\n");
-
-        return rtb;
     }
 
     private sealed record RoleListItem(int Id, string Name) { public override string ToString() => Name; }
