@@ -2,6 +2,8 @@ import Image from "next/image";
 import { prisma } from "@/lib/prisma";
 import heroImage from "../../public/images/bocce-hero.jpg";
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const leagues = await prisma.leagues.findMany({
     where: { IsActive: true, Seasons: { some: { IsCurrent: true } } },
