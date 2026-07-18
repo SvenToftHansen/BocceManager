@@ -1,0 +1,168 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Notice Designer</title>
+<script src="fabric.min.js"></script>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #3a3f4b; font-family: "Segoe UI", sans-serif; overflow: hidden; }
+  #toolbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    padding: 8px 10px; background: #2b2f38; border-bottom: 1px solid #1c1f26;
+  }
+  #toolbar button {
+    background: #4a90d9; color: #fff; border: none; border-radius: 4px;
+    padding: 6px 10px; font-size: 12px; cursor: pointer;
+  }
+  #toolbar button:hover { background: #5a9ee0; }
+  #toolbar button.danger { background: #d9534f; }
+  #toolbar button.danger:hover { background: #e06865; }
+  #toolbar label { color: #cfd3da; font-size: 12px; display: flex; align-items: center; gap: 4px; }
+  #toolbar input[type=color] { width: 28px; height: 24px; border: none; padding: 0; background: none; }
+  #toolbar input[type=number] { width: 50px; }
+  #toolbar .sep { width: 1px; height: 22px; background: #4a4f5b; margin: 0 4px; }
+  #canvasScroll { position: absolute; top: 44px; left: 0; right: 0; bottom: 0; overflow: auto; background: #22252c; }
+  #canvasWrap { margin: 24px auto; box-shadow: 0 4px 18px rgba(0,0,0,0.4); width: 850px; }
+  #fileInput { display: none; }
+</style>
+</head>
+<body>
+  <div id="toolbar">
+    <button onclick="addText()">Add Text</button>
+    <button onclick="addRect()">Add Rectangle</button>
+    <button onclick="addCircle()">Add Circle</button>
+    <button onclick="document.getElementById('fileInput').click()">Add Image</button>
+    <div class="sep"></div>
+    <label>Fill <input type="color" id="fillColor" value="#4a90d9" onchange="applyFill()"></label>
+    <label>Font <input type="number" id="fontSize" value="28" min="6" max="200" onchange="applyFont()"></label>
+    <button onclick="toggleBold()"><b>B</b></button>
+    <button onclick="toggleItalic()"><i>I</i></button>
+    <div class="sep"></div>
+    <button onclick="bringForward()">Forward</button>
+    <button onclick="sendBackward()">Backward</button>
+    <button class="danger" onclick="deleteSelected()">Delete</button>
+    <div class="sep"></div>
+    <label>Background <input type="color" id="bgColor" value="#ffffff" onchange="applyBackground()"></label>
+    <button class="danger" onclick="clearAll()">Clear All</button>
+  </div>
+  <div id="canvasScroll">
+    <div id="canvasWrap">
+      <canvas id="c" width="850" height="1100"></canvas>
+    </div>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" onchange="addImageFromFile(event)">
+
+<script>
+  const canvas = new fabric.Canvas('c', { backgroundColor: '#ffffff', preserveObjectStacking: true });
+
+  function addText() {
+    const t = new fabric.IText('Double-click to edit', {
+      left: 100, top: 100, fontSize: parseInt(document.getElementById('fontSize').value) || 28,
+      fill: document.getElementById('fillColor').value
+    });
+    canvas.add(t); canvas.setActiveObject(t);
+  }
+
+  function addRect() {
+    const r = new fabric.Rect({
+      left: 120, top: 120, width: 180, height: 110,
+      fill: document.getElementById('fillColor').value
+    });
+    canvas.add(r); canvas.setActiveObject(r);
+  }
+
+  function addCircle() {
+    const c = new fabric.Circle({
+      left: 140, top: 140, radius: 70,
+      fill: document.getElementById('fillColor').value
+    });
+    canvas.add(c); canvas.setActiveObject(c);
+  }
+
+  function addImageFromFile(evt) {
+    const file = evt.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (f) {
+      fabric.Image.fromURL(f.target.result, function (img) {
+        img.scaleToWidth(300);
+        img.set({ left: 80, top: 80 });
+        canvas.add(img); canvas.setActiveObject(img);
+      });
+    };
+    reader.readAsDataURL(file);
+    evt.target.value = '';
+  }
+
+  function applyFill() {
+    const obj = canvas.getActiveObject();
+    if (!obj) return;
+    obj.set('fill', document.getElementById('fillColor').value);
+    canvas.requestRenderAll();
+  }
+
+  function applyFont() {
+    const obj = canvas.getActiveObject();
+    if (!obj || obj.type !== 'i-text') return;
+    obj.set('fontSize', parseInt(document.getElementById('fontSize').value) || 28);
+    canvas.requestRenderAll();
+  }
+
+  function toggleBold() {
+    const obj = canvas.getActiveObject();
+    if (!obj || obj.type !== 'i-text') return;
+    obj.set('fontWeight', obj.fontWeight === 'bold' ? 'normal' : 'bold');
+    canvas.requestRenderAll();
+  }
+
+  function toggleItalic() {
+    const obj = canvas.getActiveObject();
+    if (!obj || obj.type !== 'i-text') return;
+    obj.set('fontStyle', obj.fontStyle === 'italic' ? 'normal' : 'italic');
+    canvas.requestRenderAll();
+  }
+
+  function bringForward() {
+    const obj = canvas.getActiveObject();
+    if (obj) canvas.bringForward(obj);
+  }
+
+  function sendBackward() {
+    const obj = canvas.getActiveObject();
+    if (obj) canvas.sendBackwards(obj);
+  }
+
+  function deleteSelected() {
+    const objs = canvas.getActiveObjects();
+    objs.forEach(o => canvas.remove(o));
+    canvas.discardActiveObject();
+    canvas.requestRenderAll();
+  }
+
+  function applyBackground() {
+    canvas.setBackgroundColor(document.getElementById('bgColor').value, () => canvas.requestRenderAll());
+  }
+
+  function clearAll() {
+    canvas.clear();
+    canvas.setBackgroundColor('#ffffff', () => canvas.requestRenderAll());
+  }
+
+  // --- Bridge functions called from C# via ExecuteScriptAsync ---
+
+  function getDesignJson() {
+    return JSON.stringify(canvas.toJSON(['selectable']));
+  }
+
+  function loadDesign(json) {
+    canvas.clear();
+    if (!json) { canvas.setBackgroundColor('#ffffff', () => canvas.requestRenderAll()); return; }
+    canvas.loadFromJSON(json, () => canvas.requestRenderAll());
+  }
+
+  function getPngDataUrl() {
+    return canvas.toDataURL({ format: 'png', multiplier: 2 });
+  }
+</script>
+</body>
+</html>
