@@ -414,6 +414,7 @@ public partial class MainForm : Form
         NavSection.TeamApplicants  => new TeamApplicantsPanel(),
         NavSection.LookingForTeam  => new LookingForTeamPanel(),
         NavSection.Documents  => new DocumentsPanel(),
+        NavSection.Announcements => new AnnouncementsPanel(),
         NavSection.Parameters => new ParametersPanel(),
         NavSection.Courts     => new CourtPanel(),
         NavSection.Roles      => new RolesPanel(),

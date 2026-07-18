@@ -6,6 +6,7 @@ public class Announcement
     public int? LeagueId { get; set; }
     public string Title { get; set; } = "";
     public string Body { get; set; } = "";
+    public string? DesignJson { get; set; }
     public DateTime? PublishedAt { get; set; }
     public DateTime? ExpiresAt { get; set; }
     public bool IsActive { get; set; } = true;
