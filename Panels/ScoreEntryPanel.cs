@@ -25,6 +25,7 @@ public class ScoreEntryPanel : UserControl
     private Label    _lblLegend      = null!;
     private Panel    _headerPanel    = null!;
     private Panel    _scroll         = null!;
+    private Panel    _toolbar        = null!;
 
     // Parameters tab controls
     private CheckBox _chkAutoJump      = null!;
@@ -123,6 +124,7 @@ public class ScoreEntryPanel : UserControl
 
     public ScoreEntryPanel()
     {
+        AutoScaleMode = AutoScaleMode.None;
         BackColor = AppTheme.ContentBackground;
         Dock = DockStyle.Fill;
         BuildUI();
@@ -173,12 +175,14 @@ public class ScoreEntryPanel : UserControl
 
         // ── Toolbar ──
         var toolbar = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
+        _toolbar = toolbar;
         outer.Controls.Add(toolbar, 0, 0);
         toolbar.Paint += (_, e) =>
         {
             using var pen = new Pen(AppTheme.Separator);
             e.Graphics.DrawLine(pen, 0, toolbar.Height - 1, toolbar.Width, toolbar.Height - 1);
         };
+        toolbar.Resize += (_, _) => PositionStatusLabel();
 
         // ── Top row: week selector + action buttons ──────────────────────────
         toolbar.Controls.Add(new Label
@@ -191,7 +195,7 @@ public class ScoreEntryPanel : UserControl
         _cmbWeek = new ComboBox
         {
             DropDownStyle = ComboBoxStyle.DropDownList,
-            Font = AppTheme.FontDefault, Width = 120, Location = new Point(62, 13)
+            Font = AppTheme.FontDefault, Width = 110, Location = new Point(70, 13)
         };
         toolbar.Controls.Add(_cmbWeek);
 
@@ -233,9 +237,11 @@ public class ScoreEntryPanel : UserControl
         {
             Text = "", Font = AppTheme.FontDefault,
             ForeColor = AppTheme.TextSecondary,
-            AutoSize = true, Location = new Point(900, 16)
+            AutoSize = true, Location = new Point(0, 16)
         };
         toolbar.Controls.Add(_lblStatus);
+        _lblStatus.BringToFront();
+        PositionStatusLabel();
 
         // ── Sticky column headers ──
         _headerPanel = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.ContentBackground };
@@ -1498,7 +1504,18 @@ public class ScoreEntryPanel : UserControl
         Location = new Point(x, y), Size = new Size(w, h)
     };
 
-    private void SetStatus(string msg) => _lblStatus.Text = msg;
+    private void SetStatus(string msg)
+    {
+        _lblStatus.Text = msg;
+        PositionStatusLabel();
+    }
+
+    private void PositionStatusLabel()
+    {
+        const int rightMargin = 12;
+        int x = _toolbar.ClientSize.Width - _lblStatus.PreferredWidth - rightMargin;
+        _lblStatus.Location = new Point(Math.Max(490, x), 16);
+    }
 
     private class PageIndexState
     {
