@@ -20,32 +20,19 @@ public class ScoreEntryPanel : UserControl
     private Button   _btnClearAll    = null!;
     private Button   _btnPrint       = null!;
     private Button   _btnPrintSeason = null!;
+    private CheckBox _chkAutoJump    = null!;
+    private CheckBox _chkSwapCourts  = null!;
     private Label    _lblStatus      = null!;
-    private Label    _lblHint        = null!;
     private Label    _lblLegend      = null!;
     private Panel    _headerPanel    = null!;
     private Panel    _scroll         = null!;
     private Panel    _toolbar        = null!;
 
-    // Parameters tab controls
-    private CheckBox _chkAutoJump      = null!;
-    private CheckBox _chkSpecialChars  = null!;
-    private CheckBox _chkSwapCourts    = null!;
-    private TextBox  _txtForfeitKey    = null!;
-    private TextBox  _txtDblForfeitKey = null!;
-    private TextBox  _txtKey10         = null!;
-    private TextBox  _txtKey11         = null!;
-    private TextBox  _txtKey12         = null!;
-    private Label    _lblParamStatus   = null!;
-
     // Speed Entry settings (loaded from AppParameters on each context load)
-    private bool   _autoJumpEnabled     = true;
-    private bool   _specialCharsEnabled = true;
-    private string _keyForfeit          = ".";
-    private string _keyDblForfeit     = "X";
-    private string _key10             = "/";
-    private string _key11             = "*";
-    private string _key12             = "-";
+    private bool _autoJumpEnabled = true;
+
+    // Forfeit shortcut is fixed: "-" enters -1 in the focused score field.
+    private const string ForfeitKey = "-";
 
     // (sdId, game 1|2, team 1|2) → TextBox
     private readonly Dictionary<(int sdId, int game, int team), TextBox> _boxes = [];
@@ -144,21 +131,6 @@ public class ScoreEntryPanel : UserControl
 
     private void BuildUI()
     {
-        var tabs = new TabControl { Dock = DockStyle.Fill, Font = AppTheme.FontDefault };
-        Controls.Add(tabs);
-
-        var scoreTab  = new TabPage("Score Entry")        { BackColor = AppTheme.ContentBackground, Padding = Padding.Empty };
-        var paramsTab = new TabPage("Parameters & Rules") { BackColor = AppTheme.ContentBackground };
-        tabs.TabPages.Add(scoreTab);
-        tabs.TabPages.Add(paramsTab);
-
-        tabs.SelectedIndexChanged += (_, _) =>
-        {
-            if (tabs.SelectedIndex == 1) LoadParameterValues();
-        };
-
-        BuildParametersTab(paramsTab);
-
         var outer = new TableLayoutPanel
         {
             Dock            = DockStyle.Fill,
@@ -168,10 +140,10 @@ public class ScoreEntryPanel : UserControl
             Margin          = Padding.Empty,
             CellBorderStyle = TableLayoutPanelCellBorderStyle.None
         };
-        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
+        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
         outer.RowStyles.Add(new RowStyle(SizeType.Absolute, Hdr0H + Hdr1H + 4));
         outer.RowStyles.Add(new RowStyle(SizeType.Percent,  100));
-        scoreTab.Controls.Add(outer);
+        Controls.Add(outer);
 
         // ── Toolbar ──
         var toolbar = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Surface };
@@ -211,27 +183,35 @@ public class ScoreEntryPanel : UserControl
         _btnPrintSeason.Click += OnPrintSeason;
         toolbar.Controls.Add(_btnPrintSeason);
 
-        // Settings summary — top line on right side of buttons
-        _lblHint = new Label
-        {
-            Text      = "",
-            Font      = new Font("Segoe UI", 6.5f, FontStyle.Regular),
-            ForeColor = AppTheme.TextMuted,
-            Location  = new Point(500, 9),
-            Size      = new Size(380, 14)
-        };
-        toolbar.Controls.Add(_lblHint);
-
-        // Shortcut-key legend — bottom line on right side of buttons
+        // Shortcut-key legend — right side of buttons
         _lblLegend = new Label
         {
             Text      = "",
             Font      = new Font("Segoe UI", 7f, FontStyle.Regular),
             ForeColor = AppTheme.TextMuted,
-            Location  = new Point(500, 28),
+            Location  = new Point(500, 16),
             Size      = new Size(500, 14)
         };
         toolbar.Controls.Add(_lblLegend);
+
+        // ── Second row: speed-entry toggles ───────────────────────────────────
+        _chkAutoJump = new CheckBox
+        {
+            Text = "Auto-jump", Font = AppTheme.FontDefault,
+            ForeColor = AppTheme.TextPrimary,
+            AutoSize = true, Location = new Point(12, 46)
+        };
+        _chkAutoJump.CheckedChanged += OnAutoJumpChanged;
+        toolbar.Controls.Add(_chkAutoJump);
+
+        _chkSwapCourts = new CheckBox
+        {
+            Text = "Swap Court Order", Font = AppTheme.FontDefault,
+            ForeColor = AppTheme.TextPrimary,
+            AutoSize = true, Location = new Point(150, 46)
+        };
+        _chkSwapCourts.CheckedChanged += OnSwapCourtsChanged;
+        toolbar.Controls.Add(_chkSwapCourts);
 
         _lblStatus = new Label
         {
@@ -315,204 +295,50 @@ public class ScoreEntryPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
-            _autoJumpEnabled     = AppParameterService.GetAppParameter(db, "SpeedEntry.Enabled")             != "false";
-            _specialCharsEnabled = AppParameterService.GetAppParameter(db, "SpeedEntry.SpecialChars.Enabled") != "false";
-            _swapCourts          = AppParameterService.GetAppParameter(db, "SpeedEntry.SwapCourts")           == "true";
-            _keyForfeit    = AppParameterService.GetAppParameter(db, "SpeedEntry.ForfeitKey")       ?? ".";
-            _keyDblForfeit = AppParameterService.GetAppParameter(db, "SpeedEntry.DoubleForfeitKey") ?? "X";
-            _key10         = AppParameterService.GetAppParameter(db, "SpeedEntry.Key10")            ?? "/";
-            _key11         = AppParameterService.GetAppParameter(db, "SpeedEntry.Key11")            ?? "*";
-            _key12         = AppParameterService.GetAppParameter(db, "SpeedEntry.Key12")            ?? "-";
+            _autoJumpEnabled = AppParameterService.GetAppParameter(db, "SpeedEntry.Enabled")   != "false";
+            _swapCourts      = AppParameterService.GetAppParameter(db, "SpeedEntry.SwapCourts") == "true";
         }
         catch { /* keep defaults */ }
+
+        _chkAutoJump.CheckedChanged   -= OnAutoJumpChanged;
+        _chkSwapCourts.CheckedChanged -= OnSwapCourtsChanged;
+        _chkAutoJump.Checked   = _autoJumpEnabled;
+        _chkSwapCourts.Checked = _swapCourts;
+        _chkAutoJump.CheckedChanged   += OnAutoJumpChanged;
+        _chkSwapCourts.CheckedChanged += OnSwapCourtsChanged;
+
         UpdateSpeedEntryButtons();
     }
 
-    private void UpdateSpeedEntryButtons()
+    private void OnAutoJumpChanged(object? sender, EventArgs e)
     {
-        // Hide Save Scores when auto-save handles it; show it otherwise
-
-        // Shortcut legend — only meaningful when shortcuts are on
-        _lblLegend.Text = _specialCharsEnabled
-            ? $"{_keyForfeit}=forfeit  {_keyDblForfeit}=both forfeit  {_key10}=10  {_key11}=11  {_key12}=12  Space=clear"
-            : "";
-
-        _lblHint.Text = "";
+        _autoJumpEnabled = _chkAutoJump.Checked;
+        SaveSpeedEntrySettings();
     }
 
-    private static bool MatchesKey(char typed, string configured)
-        => configured.Length == 1 && char.ToUpper(typed) == char.ToUpper(configured[0]);
-
-    // ── Parameters Tab ─────────────────────────────────────────────────────────
-
-    private void BuildParametersTab(TabPage page)
+    private void OnSwapCourtsChanged(object? sender, EventArgs e)
     {
-        var outer = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
-        page.Controls.Add(outer);
-
-        int y = 20;
-        const int LblW = 270, BoxW2 = 44, Pad = 24;
-
-        outer.Controls.Add(Lbl("Speed Entry Settings", 20, y, AppTheme.TextPrimary,
-            AppTheme.FontDefaultBold, 400, 24));
-        y += 32;
-
-        outer.Controls.Add(Lbl(
-            "Auto-jump: digits advance to the next field automatically.\r\n" +
-            "Shortcuts: single keystrokes enter two-digit scores and forfeits.\r\n" +
-            "All settings save automatically.",
-            20, y, AppTheme.TextSecondary, AppTheme.FontDefault, 560, 52));
-        y += 64;
-
-        // ── Swap Courts — first (applies immediately) ─────────────────────────
-        _chkSwapCourts = new CheckBox
-        {
-            Text = "Swap court order  (reverses left-to-right column order in the grid)",
-            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary,
-            AutoSize = true, Location = new Point(20, y)
-        };
-        _chkSwapCourts.CheckedChanged += (_, _) =>
-        {
-            _swapCourts = _chkSwapCourts.Checked;
-            SaveParameterSettings();
-            BuildGrid();
-            UpdateSpeedEntryButtons();
-        };
-        outer.Controls.Add(_chkSwapCourts);
-        y += 32;
-
-        // ── Auto-jump ─────────────────────────────────────────────────────────
-        _chkAutoJump = new CheckBox
-        {
-            Text = "Auto-jump enabled  (digits advance to the next field; with shortcuts off, '1' waits for 10/11)",
-            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary,
-            AutoSize = true, Location = new Point(20, y)
-        };
-        _chkAutoJump.CheckedChanged += (_, _) =>
-        {
-            _autoJumpEnabled = _chkAutoJump.Checked;
-            SaveParameterSettings();
-            UpdateSpeedEntryButtons();
-        };
-        outer.Controls.Add(_chkAutoJump);
-        y += 36;
-
-        // ── Shortcut Keys ─────────────────────────────────────────────────────
-        outer.Controls.Add(Lbl("─────────────────────────────────", 20, y, AppTheme.TextMuted,
-            AppTheme.FontDefault, 340, 18));
-        y += 22;
-
-        _chkSpecialChars = new CheckBox
-        {
-            Text = "Shortcut keys enabled  (single characters enter forfeits and two-digit scores)",
-            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextPrimary,
-            AutoSize = true, Location = new Point(20, y)
-        };
-        _chkSpecialChars.CheckedChanged += (_, _) =>
-        {
-            _specialCharsEnabled = _chkSpecialChars.Checked;
-            SaveParameterSettings();
-            UpdateSpeedEntryButtons();
-        };
-        outer.Controls.Add(_chkSpecialChars);
-        y += 32;
-
-        TextBox KeyRow(string label)
-        {
-            outer.Controls.Add(Lbl(label, 20, y + 3, AppTheme.TextPrimary, AppTheme.FontDefault, LblW, 22));
-            var tb = new TextBox
-            {
-                MaxLength = 1,
-                Width     = BoxW2,
-                Font      = AppTheme.FontDefaultBold,
-                TextAlign = HorizontalAlignment.Center,
-                Location  = new Point(20 + LblW + 8, y)
-            };
-            tb.Leave += (_, _) => SaveParameterSettings();
-            outer.Controls.Add(tb);
-            y += Pad + 8;
-            return tb;
-        }
-
-        _txtForfeitKey    = KeyRow("Forfeit key  (enters −1 in current field):");
-        _txtDblForfeitKey = KeyRow("Double forfeit key  (enters −1 in both):");
-        _txtKey10         = KeyRow("Key for score 10:");
-        _txtKey11         = KeyRow("Key for score 11:");
-        _txtKey12         = KeyRow("Key for score 12:");
-
-        y += 8;
-        _lblParamStatus = new Label
-        {
-            Text      = "",
-            Font      = AppTheme.FontDefault,
-            ForeColor = AppTheme.TextSecondary,
-            AutoSize  = true,
-            Location  = new Point(20, y)
-        };
-        outer.Controls.Add(_lblParamStatus);
+        _swapCourts = _chkSwapCourts.Checked;
+        SaveSpeedEntrySettings();
+        BuildGrid();
     }
 
-    private void LoadParameterValues()
+    private void SaveSpeedEntrySettings()
     {
-        _chkAutoJump.Checked      = _autoJumpEnabled;
-        _chkSpecialChars.Checked  = _specialCharsEnabled;
-        _chkSwapCourts.Checked    = _swapCourts;
-        _txtForfeitKey.Text       = _keyForfeit;
-        _txtDblForfeitKey.Text    = _keyDblForfeit;
-        _txtKey10.Text            = _key10;
-        _txtKey11.Text            = _key11;
-        _txtKey12.Text            = _key12;
-        _lblParamStatus.Text      = "";
-    }
-
-    private void SaveParameterSettings()
-    {
-        string forfeit    = _txtForfeitKey?.Text.Trim()    ?? "";
-        string dblForfeit = _txtDblForfeitKey?.Text.Trim() ?? "";
-        string k10        = _txtKey10?.Text.Trim()         ?? "";
-        string k11        = _txtKey11?.Text.Trim()         ?? "";
-        string k12        = _txtKey12?.Text.Trim()         ?? "";
-
-        // Key fields may be empty if called before the tab is first opened
-        bool keysValid = forfeit.Length == 1 && dblForfeit.Length == 1
-                      && k10.Length == 1 && k11.Length == 1 && k12.Length == 1;
-
-        if (_lblParamStatus != null)
-        {
-            _lblParamStatus.Text      = keysValid ? "" : "Each shortcut key must be exactly one character.";
-            _lblParamStatus.ForeColor = Color.Firebrick;
-        }
-
         try
         {
             using var db = new BocceDbContext();
             AppParameterService.SetAppParameter(db, "SpeedEntry.Enabled",
-                _chkAutoJump.Checked ? "true" : "false");
-            AppParameterService.SetAppParameter(db, "SpeedEntry.SpecialChars.Enabled",
-                _chkSpecialChars.Checked ? "true" : "false");
+                _autoJumpEnabled ? "true" : "false");
             AppParameterService.SetAppParameter(db, "SpeedEntry.SwapCourts",
-                _chkSwapCourts.Checked ? "true" : "false");
-            if (keysValid)
-            {
-                AppParameterService.SetAppParameter(db, "SpeedEntry.ForfeitKey",       forfeit);
-                AppParameterService.SetAppParameter(db, "SpeedEntry.DoubleForfeitKey", dblForfeit);
-                AppParameterService.SetAppParameter(db, "SpeedEntry.Key10",            k10);
-                AppParameterService.SetAppParameter(db, "SpeedEntry.Key11",            k11);
-                AppParameterService.SetAppParameter(db, "SpeedEntry.Key12",            k12);
-                _keyForfeit    = forfeit;
-                _keyDblForfeit = dblForfeit;
-                _key10 = k10; _key11 = k11; _key12 = k12;
-                UpdateSpeedEntryButtons();
-            }
+                _swapCourts ? "true" : "false");
         }
-        catch (Exception ex)
-        {
-            if (_lblParamStatus != null)
-            {
-                _lblParamStatus.Text      = $"Error: {ex.Message}";
-                _lblParamStatus.ForeColor = Color.Firebrick;
-            }
-        }
+        catch (Exception ex) { SetStatus($"Settings save error: {ex.Message}"); }
+    }
+
+    private void UpdateSpeedEntryButtons()
+    {
+        _lblLegend.Text = $"{ForfeitKey} = forfeit (-1)     Space = clear";
     }
 
     private void ClearGrid()
@@ -840,48 +666,30 @@ public class ScoreEntryPanel : UserControl
     // Auto-advance to the next box when entry is unambiguously complete.
     // The Focused guard prevents the partner box from triggering advance when
     // its text is set programmatically (shortcut keys).
+    // '1' is held back since it may be the start of 10/11/12 (typed digit by digit).
     private void AutoAdvance(TextBox tb)
     {
         if (!tb.Focused || !_autoJumpEnabled) return;
         string txt = tb.Text;
-        // When shortcuts are on, 10/11/12 have single-key equivalents so '1' is unambiguous.
-        // When shortcuts are off, '1' might be the start of 10 or 11 — hold back.
         bool advance = txt.Length == 2
-            || (txt.Length == 1 && char.IsDigit(txt[0])
-                && (_specialCharsEnabled || txt[0] != '1'));
+            || (txt.Length == 1 && char.IsDigit(txt[0]) && txt[0] != '1');
         if (!advance) return;
         int idx = _boxOrder.IndexOf(tb);
         if (idx >= 0 && idx + 1 < _boxOrder.Count)
             BeginInvoke(() => _boxOrder[idx + 1].Focus());
     }
 
-    // Space always clears the pair. When Speed Entry is on, the configurable shortcut
-    // keys set scores directly; all other non-digit chars are blocked.
+    // Space clears the pair. "-" enters a forfeit (-1) in the current field.
+    // All other non-digit characters are blocked.
     private void ScoreKeyPress(TextBox current, TextBox partner, KeyPressEventArgs e)
     {
         if (char.IsControl(e.KeyChar)) return;
 
         if (e.KeyChar == ' ') { e.Handled = true; current.Text = ""; partner.Text = ""; return; }
 
-        if (_specialCharsEnabled)
+        if (e.KeyChar.ToString() == ForfeitKey)
         {
-            if (MatchesKey(e.KeyChar, _keyForfeit))
-            {
-                e.Handled = true; current.Text = "-1"; return;
-            }
-            if (MatchesKey(e.KeyChar, _keyDblForfeit))
-            {
-                e.Handled = true;
-                current.Text = "-1"; partner.Text = "-1";
-                // AutoAdvance will move to partner; this second BeginInvoke skips past it.
-                int idx = _boxOrder.IndexOf(current);
-                if (idx >= 0 && idx + 2 < _boxOrder.Count)
-                    BeginInvoke(() => _boxOrder[idx + 2].Focus());
-                return;
-            }
-            if (MatchesKey(e.KeyChar, _key10)) { e.Handled = true; current.Text = "10"; return; }
-            if (MatchesKey(e.KeyChar, _key11)) { e.Handled = true; current.Text = "11"; return; }
-            if (MatchesKey(e.KeyChar, _key12)) { e.Handled = true; current.Text = "12"; return; }
+            e.Handled = true; current.Text = "-1"; return;
         }
 
         // Digits only — forfeit is shortcut-only; no manual negative entry.
@@ -901,7 +709,7 @@ public class ScoreEntryPanel : UserControl
         // TextChanged won't fire so AutoAdvance never runs.  Force the advance here
         // using the same single-digit rule as AutoAdvance.
         if (proposed == current.Text && proposed.Length == 1
-            && (_specialCharsEnabled || proposed[0] != '1') && _autoJumpEnabled)
+            && proposed[0] != '1' && _autoJumpEnabled)
         {
             e.Handled = true;
             int idx = _boxOrder.IndexOf(current);

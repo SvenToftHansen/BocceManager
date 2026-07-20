@@ -11,7 +11,6 @@ public sealed record CascadeImpact(
     int TotalDivisions,
     int TotalTeams,
     int SpareListCount,
-    int AnnouncementCount,
     int EmailListCount,
     int ParameterCount);
 
@@ -41,7 +40,6 @@ public static class LeagueService
             TotalDivisions:    seasonImpacts.Sum(s => s.Divisions),
             TotalTeams:        seasonImpacts.Sum(s => s.Teams),
             SpareListCount:    db.SpareLists.Count(sl => sl.LeagueId == leagueId),
-            AnnouncementCount: db.Announcements.Count(a => a.LeagueId == leagueId),
             EmailListCount:    db.EmailLists.Count(e => e.LeagueId == leagueId),
             ParameterCount:    db.LeagueParameters.Count(p => p.LeagueId == leagueId));
     }
@@ -121,7 +119,6 @@ public static class LeagueService
 
         db.SpareLists.RemoveRange(db.SpareLists.Where(sl => sl.LeagueId == leagueId));
         db.LookingForTeams.RemoveRange(db.LookingForTeams.Where(l => l.LeagueId == leagueId));
-        db.Announcements.RemoveRange(db.Announcements.Where(a => a.LeagueId == leagueId));
 
         var emailListIds = db.EmailLists.Where(el => el.LeagueId == leagueId)
                                         .Select(el => el.Id).ToList();

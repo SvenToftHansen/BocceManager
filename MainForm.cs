@@ -15,7 +15,7 @@ public partial class MainForm : Form
         ScoreEntry, Schedule,
         Standings, Playoffs, PlayoffSetup, PlayoffSchedule,
         ReportTeamListing, ReportScheduleGeneric, ReportSpareLists,
-        SpareLists, Announcements, Fees, EmailLists, EmailCompose, EmailHistory, Documents, Parameters, Courts, Roles, Utilities, Theme
+        SpareLists, Fees, EmailLists, EmailCompose, EmailHistory, Documents, Parameters, Courts, Roles, Utilities, Theme
     }
 
     private NavSection _currentSection = NavSection.Dashboard;
@@ -329,7 +329,6 @@ public partial class MainForm : Form
         });
 
         AddGroup("ADMINISTRATION", add => {
-            add("Announcements",  NavSection.Announcements);
             add("Fees",           NavSection.Fees);
             add("Documents",      NavSection.Documents);
             add("Parameters",     NavSection.Parameters);
@@ -414,7 +413,6 @@ public partial class MainForm : Form
         NavSection.TeamApplicants  => new TeamApplicantsPanel(),
         NavSection.LookingForTeam  => new LookingForTeamPanel(),
         NavSection.Documents  => new DocumentsPanel(),
-        NavSection.Announcements => new AnnouncementsPanel(),
         NavSection.Parameters => new ParametersPanel(),
         NavSection.Courts     => new CourtPanel(),
         NavSection.Roles      => new RolesPanel(),
@@ -481,7 +479,6 @@ public partial class MainForm : Form
         NavSection.PlayoffSetup       => "Playoff Setup",
         NavSection.PlayoffSchedule    => "Playoff Schedule",
         NavSection.SpareLists    => "Spare Lists",
-        NavSection.Announcements => "Announcements",
         NavSection.Fees          => "Fees",
         NavSection.EmailLists    => "Email Lists",
         NavSection.EmailCompose  => "Compose Email",
@@ -572,7 +569,6 @@ public partial class MainForm : Form
                 sectionsToEnable.Add(NavSection.ReportScheduleGeneric);
                 sectionsToEnable.Add(NavSection.ReportSpareLists);
                 sectionsToEnable.Add(NavSection.SpareLists);
-                sectionsToEnable.Add(NavSection.Announcements);
                 sectionsToEnable.Add(NavSection.Fees);
                 sectionsToEnable.Add(NavSection.EmailLists);
                 sectionsToEnable.Add(NavSection.EmailCompose);

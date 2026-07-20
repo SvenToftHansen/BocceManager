@@ -22,50 +22,6 @@ namespace BocceManager.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("BocceManager.Data.Entities.Announcement", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Body")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("text");
-
-                    b.Property<string>("DesignJson")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<int?>("LeagueId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("PublishedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("LeagueId");
-
-                    b.ToTable("Announcements");
-                });
-
             modelBuilder.Entity("BocceManager.Data.Entities.AppParameter", b =>
                 {
                     b.Property<int>("Id")
@@ -2030,15 +1986,6 @@ namespace BocceManager.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("TimeSlots");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.Announcement", b =>
-                {
-                    b.HasOne("BocceManager.Data.Entities.League", "League")
-                        .WithMany()
-                        .HasForeignKey("LeagueId");
-
-                    b.Navigation("League");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.BocceMatch", b =>

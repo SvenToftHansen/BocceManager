@@ -97,9 +97,6 @@ public class BocceDbContext : DbContext
     // Standings
     public DbSet<TeamStanding> TeamStandings => Set<TeamStanding>();
 
-    // Other
-    public DbSet<Announcement> Announcements => Set<Announcement>();
-
     // Email
     public DbSet<EmailList> EmailLists => Set<EmailList>();
     public DbSet<EmailListMember> EmailListMembers => Set<EmailListMember>();
