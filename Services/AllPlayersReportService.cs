@@ -27,9 +27,12 @@ public static class AllPlayersReportService
                     _                 => "All Players"
                 }
             };
-            if (MissingPhone) parts.Add("Missing Phone Number");
-            if (MissingEmail) parts.Add("Missing Email Address");
-            if (MissingLotNumber) parts.Add("Missing Lot Number");
+            var missing = new List<string>();
+            if (MissingPhone) missing.Add("Phone");
+            if (MissingEmail) missing.Add("Email");
+            if (MissingLotNumber) missing.Add("Lot Number");
+            if (missing.Count > 0) parts.Add("Missing " + string.Join(" or ", missing));
+
             return "Filter: " + string.Join("   •   ", parts);
         }
     }
@@ -37,13 +40,13 @@ public static class AllPlayersReportService
     // ── Layout constants ──────────────────────────────────────────────────────
 
     private const float ColNameW  = 150f;
-    private const float ColPhoneW = 100f;
+    private const float ColPhoneW = 130f;
     private const float ColLotW   = 60f;
-    private const float ColCheckW = 65f;
+    private const float ColCheckW = 72f;
 
     private const float DocHdrH    = 32f;
     private const float FilterHdrH = 18f;
-    private const float ColHdrH    = 26f;
+    private const float ColHdrH    = 22f;
     private const float DataRowH   = 18f;
     private const float FooterH    = 18f;
 
@@ -96,9 +99,15 @@ public static class AllPlayersReportService
 
             if (filter.Paid == PaidFilter.Paid && !overallPaid) continue;
             if (filter.Paid == PaidFilter.Unpaid && overallPaid) continue;
-            if (filter.MissingPhone && !string.IsNullOrWhiteSpace(p.Phone)) continue;
-            if (filter.MissingEmail && !string.IsNullOrWhiteSpace(p.Email)) continue;
-            if (filter.MissingLotNumber && !string.IsNullOrWhiteSpace(p.LotNumber)) continue;
+            bool anyMissingFilterActive = filter.MissingPhone || filter.MissingEmail || filter.MissingLotNumber;
+            if (anyMissingFilterActive)
+            {
+                bool matchesMissing =
+                    (filter.MissingPhone && string.IsNullOrWhiteSpace(p.Phone)) ||
+                    (filter.MissingEmail && string.IsNullOrWhiteSpace(p.Email)) ||
+                    (filter.MissingLotNumber && string.IsNullOrWhiteSpace(p.LotNumber));
+                if (!matchesMissing) continue;
+            }
 
             var name = string.IsNullOrWhiteSpace(p.LastName)
                 ? p.FirstName.Trim()
@@ -156,7 +165,7 @@ public static class AllPlayersReportService
             using var boxPen      = new Pen(Color.Black, 1f);
             using var checkPen    = new Pen(Color.Black, 1.6f);
             using var leftAlign   = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
-            using var centerAlign = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+            using var centerAlign = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
 
             // Document header
             g.FillRectangle(headerBrush, b.Left, y, b.Width, DocHdrH);
@@ -177,10 +186,10 @@ public static class AllPlayersReportService
                 DrawColText("Phone", cx, ColPhoneW); cx += ColPhoneW;
                 DrawColText("Email", cx, colEmailW); cx += colEmailW;
                 DrawColText("Lot #", cx, ColLotW);   cx += ColLotW;
-                DrawColText("Initiation\nFee", cx, ColCheckW, centerAlign); cx += ColCheckW;
-                DrawColText("Season\nFee",     cx, ColCheckW, centerAlign); cx += ColCheckW;
-                DrawColText("On a\nTeam",      cx, ColCheckW, centerAlign); cx += ColCheckW;
-                DrawColText("On Spare\nList",  cx, ColCheckW, centerAlign);
+                DrawColText("Init Fee",   cx, ColCheckW, centerAlign); cx += ColCheckW;
+                DrawColText("Season Fee", cx, ColCheckW, centerAlign); cx += ColCheckW;
+                DrawColText("On Team",    cx, ColCheckW, centerAlign); cx += ColCheckW;
+                DrawColText("On Spare",   cx, ColCheckW, centerAlign);
                 g.DrawRectangle(Pens.Gray, lx, y, tableWidth - 1, ColHdrH - 1);
 
                 void DrawColText(string text, float x, float w, StringFormat? sf = null)
