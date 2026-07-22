@@ -3,6 +3,7 @@ using System.Drawing.Printing;
 using BocceManager.Data;
 using BocceManager.Data.Entities;
 using BocceManager.UI.Theme;
+using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 
 namespace BocceManager.Services;
@@ -11,16 +12,19 @@ public static class TeamsPrintService
 {
     // ── Data structures ───────────────────────────────────────────────────────
 
+    public enum ListingMode { Compact, FullRoster }
+
     public record PrintSection(string DocHeader, string TimeSlotLabel, List<DaySection> DaySections);
     public record DaySection(string DayLabel, string TimeSlot, List<TeamRow> Teams);
-    public record TeamRow(string TeamIdentifier, string CaptainName, string AllOtherPlayers, string Phone);
+    public record TeamRow(string TeamIdentifier, string CaptainName, string AllOtherPlayers, string Phone, IReadOnlyList<string> OtherPlayersList);
 
     // ── Layout constants ──────────────────────────────────────────────────────
 
-    private const float ColTeamW    = 100f;  // Wider for team names
-    private const float ColCaptainW = 120f;
-    private const float ColPhoneW   = 138f;
-    private const float DayGapH     = 12f;   // 1/8 inch gap between days
+    private const float ColTeamW      = 100f;  // Wider for team names
+    private const float ColCaptainW   = 120f;
+    private const float ColPhoneW     = 138f;
+    private const float ColPlayerMinW = 70f;   // Minimum width per player column in Full Roster mode
+    private const float DayGapH       = 12f;   // 1/8 inch gap between days
 
 
     private const float DocHdrH     = 48f;  // Increased to prevent cutoff
@@ -158,7 +162,7 @@ public static class TeamsPrintService
                             : team.Team.SystemName;
                         if (!team.Team.IsActive) teamName += " *";
 
-                        teamRows.Add(new TeamRow(teamName, captain, players, phone));
+                        teamRows.Add(new TeamRow(teamName, captain, players, phone, otherPlayers));
                     }
                 }
 
@@ -186,17 +190,24 @@ public static class TeamsPrintService
 
     // ── Build PrintDocument ───────────────────────────────────────────────────
 
-    public static PrintDocument BuildDocument(List<PrintSection> sections)
+    private record ColumnDef(string Header, float Width, Func<TeamRow, string> GetText, bool Wrap);
+
+    private static int MaxOtherPlayers(List<PrintSection> sections) =>
+        sections.SelectMany(s => s.DaySections).SelectMany(d => d.Teams)
+            .Select(t => t.OtherPlayersList.Count).DefaultIfEmpty(0).Max();
+
+    public static PrintDocument BuildDocument(List<PrintSection> sections, ListingMode mode = ListingMode.Compact)
     {
         int secIdx  = 0;
         int dayIdx  = 0;
         int rowIdx  = 0;
         int pageNum = 0;
+        int maxOtherPlayers = mode == ListingMode.FullRoster ? MaxOtherPlayers(sections) : 0;
 
         var doc = new PrintDocument();
         doc.QueryPageSettings += (_, qe) =>
         {
-            qe.PageSettings.Landscape = false;
+            qe.PageSettings.Landscape = mode == ListingMode.FullRoster;  // Extra columns need the width
             qe.PageSettings.Margins   = new Margins(10, 15, 10, 15);  // Extra space top/bottom
         };
         doc.BeginPrint += (_, _) => { secIdx = 0; dayIdx = 0; rowIdx = 0; pageNum = 0; };
@@ -231,7 +242,37 @@ public static class TeamsPrintService
 
             float lx = b.Left;
             float tableWidth = b.Width;
-            float ColPlayersW = tableWidth - ColTeamW - ColCaptainW - ColPhoneW;  // Fill remaining space
+
+            // ── Column layout (per-mode) ────────────────────────────────────
+            List<ColumnDef> columns;
+            if (mode == ListingMode.Compact)
+            {
+                float colPlayersW = tableWidth - ColTeamW - ColCaptainW - ColPhoneW;
+                columns =
+                [
+                    new("Team",      ColTeamW,      r => r.TeamIdentifier, false),
+                    new("Captain",   ColCaptainW,    r => r.CaptainName,    false),
+                    new("Players",   colPlayersW,    r => r.AllOtherPlayers, true),
+                    new("Contact #", ColPhoneW,      r => r.Phone,          false),
+                ];
+            }
+            else
+            {
+                float fixedW      = ColTeamW + ColCaptainW + ColPhoneW;
+                float playerColW  = Math.Max(ColPlayerMinW, (tableWidth - fixedW) / Math.Max(1, maxOtherPlayers));
+                columns =
+                [
+                    new("Team",    ColTeamW,    r => r.TeamIdentifier, false),
+                    new("Captain", ColCaptainW, r => r.CaptainName,    false),
+                ];
+                for (int i = 0; i < maxOtherPlayers; i++)
+                {
+                    int idx = i;
+                    columns.Add(new($"Player {i + 2}", playerColW,
+                        r => idx < r.OtherPlayersList.Count ? r.OtherPlayersList[idx] : "", false));
+                }
+                columns.Add(new("Contact #", ColPhoneW, r => r.Phone, false));
+            }
 
             // ── Draw helpers ──────────────────────────────────────────────────
             void DrawTimeSlotLabel(string text)
@@ -246,10 +287,11 @@ public static class TeamsPrintService
                 if (!draw) return;
                 g.FillRectangle(hdrFill, lx, y, tableWidth, ColHdrH);
                 float cx = lx;
-                DrawColText("Team",       cx, ColTeamW);    cx += ColTeamW;
-                DrawColText("Captain",    cx, ColCaptainW); cx += ColCaptainW;
-                DrawColText("Players",    cx, ColPlayersW); cx += ColPlayersW;
-                DrawColText("Contact #",  cx, ColPhoneW);
+                foreach (var col in columns)
+                {
+                    DrawColText(col.Header, cx, col.Width);
+                    cx += col.Width;
+                }
                 g.DrawRectangle(Pens.Gray, lx, y, tableWidth - 1, ColHdrH - 1);
 
                 void DrawColText(string text, float x, float w)
@@ -268,7 +310,7 @@ public static class TeamsPrintService
             }
             // Greedily pack names onto lines, breaking at name boundaries only.
             // Returns the wrapped text (lines joined with \n) and the required row height.
-            (string text, float rowH) WrapPlayers(string players)
+            (string text, float rowH) WrapPlayers(string players, float colWidth)
             {
                 if (string.IsNullOrEmpty(players)) return ("", DataRowH);
                 var names   = players.Split(" | ");
@@ -279,7 +321,7 @@ public static class TeamsPrintService
                     current.Add(name);
                     float w = g.MeasureString(string.Join(" | ", current), dataFont,
                                               PointF.Empty, StringFormat.GenericTypographic).Width;
-                    if (w > ColPlayersW - 4 && current.Count > 1)
+                    if (w > colWidth - 4 && current.Count > 1)
                     {
                         current.RemoveAt(current.Count - 1);
                         lines.Add(string.Join(" | ", current));
@@ -292,15 +334,32 @@ public static class TeamsPrintService
                 float  totalH  = Math.Max(DataRowH, lines.Count * dataFont.GetHeight(g) + 4);
                 return (wrapped, totalH);
             }
-            void DrawDataRow(TeamRow r, bool alt, float rowH, string wrappedPlayers)
+            // Computes wrapped text (for wrapping columns) and the resulting row height.
+            (Dictionary<int, string> wrapped, float rowH) ComputeRow(TeamRow r)
+            {
+                float rowH = DataRowH;
+                var wrapped = new Dictionary<int, string>();
+                for (int i = 0; i < columns.Count; i++)
+                {
+                    if (!columns[i].Wrap) continue;
+                    var (text, h) = WrapPlayers(columns[i].GetText(r), columns[i].Width);
+                    wrapped[i] = text;
+                    rowH = Math.Max(rowH, h);
+                }
+                return (wrapped, rowH);
+            }
+            void DrawDataRow(TeamRow r, float rowH, Dictionary<int, string> wrapped)
             {
                 if (!draw) return;
                 // All white background, no alternating colors
                 float cx = lx;
-                DrawCell(r.TeamIdentifier, cx, ColTeamW);  cx += ColTeamW;
-                DrawCell(r.CaptainName,    cx, ColCaptainW); cx += ColCaptainW;
-                DrawCell(wrappedPlayers,   cx, ColPlayersW); cx += ColPlayersW;
-                DrawCell(r.Phone,          cx, ColPhoneW);
+                for (int i = 0; i < columns.Count; i++)
+                {
+                    var col  = columns[i];
+                    var text = wrapped.TryGetValue(i, out var w) ? w : col.GetText(r);
+                    DrawCell(text, cx, col.Width);
+                    cx += col.Width;
+                }
                 g.DrawLine(sepPen, lx, y + rowH, lx + tableWidth, y + rowH);
 
                 void DrawCell(string text, float x, float w)
@@ -367,9 +426,9 @@ public static class TeamsPrintService
 
                     for (; rowIdx < day.Teams.Count; rowIdx++)
                     {
-                        var (wrappedPlayers, rowH) = WrapPlayers(day.Teams[rowIdx].AllOtherPlayers);
+                        var (wrapped, rowH) = ComputeRow(day.Teams[rowIdx]);
                         if (y + rowH > yMax) { pe.HasMorePages = true; goto PageDone; }
-                        DrawDataRow(day.Teams[rowIdx], rowIdx % 2 == 1, rowH, wrappedPlayers);
+                        DrawDataRow(day.Teams[rowIdx], rowH, wrapped);
                         y += rowH;
                     }
 
@@ -399,10 +458,163 @@ public static class TeamsPrintService
         return doc;
     }
 
+    // ── Flat export data (CSV) ────────────────────────────────────────────────
+
+    public static (string[] Headers, List<string[]> Rows) BuildFlatExportData(List<PrintSection> sections, ListingMode mode)
+    {
+        int maxOtherPlayers = mode == ListingMode.FullRoster ? MaxOtherPlayers(sections) : 0;
+
+        string[] headers = mode == ListingMode.Compact
+            ? ["Time Slot", "Day", "Team", "Captain", "Players", "Phone"]
+            : ["Time Slot", "Day", "Team", "Captain", .. Enumerable.Range(2, maxOtherPlayers).Select(n => $"Player {n}"), "Phone"];
+
+        var rows = new List<string[]>();
+        foreach (var section in sections)
+        {
+            foreach (var day in section.DaySections)
+            {
+                foreach (var team in day.Teams)
+                {
+                    var row = new List<string> { section.TimeSlotLabel, day.DayLabel, team.TeamIdentifier, team.CaptainName };
+                    if (mode == ListingMode.Compact)
+                    {
+                        row.Add(team.AllOtherPlayers);
+                    }
+                    else
+                    {
+                        for (int i = 0; i < maxOtherPlayers; i++)
+                            row.Add(i < team.OtherPlayersList.Count ? team.OtherPlayersList[i] : "");
+                    }
+                    row.Add(team.Phone);
+                    rows.Add(row.ToArray());
+                }
+            }
+        }
+
+        return (headers, rows);
+    }
+
+    // ── Excel export (mirrors the printed layout exactly) ────────────────────
+
+    public static void ExportToExcel(Control parent, string filename, List<PrintSection> sections, ListingMode mode)
+    {
+        using var saveDlg = new SaveFileDialog
+        {
+            Title = "Export to Excel",
+            Filter = "Excel files (*.xlsx)|*.xlsx|All Files (*.*)|*.*",
+            FileName = $"{filename}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+        };
+
+        if (saveDlg.ShowDialog(parent) != DialogResult.OK) return;
+
+        try
+        {
+            int maxOtherPlayers = mode == ListingMode.FullRoster ? MaxOtherPlayers(sections) : 0;
+
+            string[] columnHeaders = mode == ListingMode.Compact
+                ? ["Team", "Captain", "Players", "Contact #"]
+                : ["Team", "Captain", .. Enumerable.Range(2, maxOtherPlayers).Select(n => $"Player {n}"), "Contact #"];
+
+            int colCount = columnHeaders.Length;
+
+            var headerFill = XLColor.FromColor(AppTheme.NavHeader);
+            var timeSlotFill = XLColor.FromColor(AppTheme.NavHeader);
+            var dayFill = XLColor.FromColor(AppTheme.NavHover);
+            var colHdrFill = XLColor.FromColor(AppTheme.GridHeaderBackground);
+
+            using var wb = new XLWorkbook();
+            var ws = wb.AddWorksheet("Team Listing");
+            int r = 1;
+
+            if (sections.Count > 0)
+            {
+                ws.Range(r, 1, r, colCount).Merge();
+                var cell = ws.Cell(r, 1);
+                cell.Value = sections[0].DocHeader;
+                cell.Style.Font.Bold = true;
+                cell.Style.Font.FontColor = XLColor.White;
+                cell.Style.Fill.BackgroundColor = headerFill;
+                cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                ws.Row(r).Height = 22;
+                r += 2;  // blank spacer row
+            }
+
+            foreach (var section in sections)
+            {
+                ws.Range(r, 1, r, colCount).Merge();
+                var tsCell = ws.Cell(r, 1);
+                tsCell.Value = section.TimeSlotLabel;
+                tsCell.Style.Font.Bold = true;
+                tsCell.Style.Font.FontColor = XLColor.White;
+                tsCell.Style.Fill.BackgroundColor = timeSlotFill;
+                tsCell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                ws.Row(r).Height = 20;
+                r++;
+
+                for (int c = 0; c < colCount; c++)
+                {
+                    var hc = ws.Cell(r, c + 1);
+                    hc.Value = columnHeaders[c];
+                    hc.Style.Font.Bold = true;
+                    hc.Style.Font.FontColor = XLColor.White;
+                    hc.Style.Fill.BackgroundColor = colHdrFill;
+                }
+                r++;
+
+                foreach (var day in section.DaySections)
+                {
+                    ws.Range(r, 1, r, colCount).Merge();
+                    var dCell = ws.Cell(r, 1);
+                    dCell.Value = $"{day.DayLabel} - {day.TimeSlot}";
+                    dCell.Style.Font.Bold = true;
+                    dCell.Style.Font.FontColor = XLColor.White;
+                    dCell.Style.Fill.BackgroundColor = dayFill;
+                    dCell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    r++;
+
+                    foreach (var team in day.Teams)
+                    {
+                        int c = 1;
+                        ws.Cell(r, c++).Value = team.TeamIdentifier;
+                        ws.Cell(r, c++).Value = team.CaptainName;
+                        if (mode == ListingMode.Compact)
+                        {
+                            ws.Cell(r, c++).Value = team.AllOtherPlayers;
+                        }
+                        else
+                        {
+                            for (int i = 0; i < maxOtherPlayers; i++)
+                                ws.Cell(r, c++).Value = i < team.OtherPlayersList.Count ? team.OtherPlayersList[i] : "";
+                        }
+                        ws.Cell(r, c++).Value = team.Phone;
+                        r++;
+                    }
+                }
+
+                r++;  // spacer between sections
+            }
+
+            ws.Columns().AdjustToContents();
+
+            wb.SaveAs(saveDlg.FileName);
+
+            AppLogger.Info("Excel export saved: {Path}", saveDlg.FileName);
+            MessageBox.Show($"Exported to {saveDlg.FileName}", "Export Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error(ex, "Excel export failed for {Filename}", filename);
+            MessageBox.Show($"Error exporting to Excel: {ex.Message}", "Export Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
     // ── Preview / print UI ────────────────────────────────────────────────────
 
-    public static void ShowPrintPreview(Control parent, PrintDocument doc, string? exportFilename = null, string[]? exportHeaders = null, List<string[]>? exportRows = null)
+    public static void ShowPrintPreview(Control parent, PrintDocument doc, string exportBaseName, List<PrintSection> sections, ListingMode mode)
     {
-        PrintPreviewService.ShowPrintPreview(parent, doc, exportHeaders, exportRows);
+        var (headers, rows) = BuildFlatExportData(sections, mode);
+        PrintPreviewService.ShowPrintPreview(parent, doc, headers, rows,
+            p => ExportToExcel(p, exportBaseName, sections, mode));
     }
 }

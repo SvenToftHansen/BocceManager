@@ -15,7 +15,8 @@ public static class PrintPreviewService
     /// <param name="doc">PrintDocument to preview</param>
     /// <param name="exportHeaders">Optional headers for Excel/CSV export</param>
     /// <param name="exportRows">Optional data rows for Excel/CSV export</param>
-    public static void ShowPrintPreview(Control parent, PrintDocument doc, string[]? exportHeaders = null, List<string[]>? exportRows = null)
+    /// <param name="customExcelExport">Optional override for the Excel button — used when the report needs a richer export than a flat header/rows table (e.g. mirroring grouped print layout)</param>
+    public static void ShowPrintPreview(Control parent, PrintDocument doc, string[]? exportHeaders = null, List<string[]>? exportRows = null, Action<Control>? customExcelExport = null)
     {
         var printerList = PrinterSettings.InstalledPrinters.Cast<string>().ToList();
         if (printerList.Count > 0 &&
@@ -90,7 +91,7 @@ public static class PrintPreviewService
         }
 
         btnPrinter.Enabled = hasPrinter;
-        btnExcel.Enabled = exportHeaders != null && exportRows != null;
+        btnExcel.Enabled = customExcelExport != null || (exportHeaders != null && exportRows != null);
         btnCsv.Enabled = exportHeaders != null && exportRows != null;
         btnPrev.Enabled = false;
         btnNext.Enabled = totalPages > 1;
@@ -116,7 +117,11 @@ public static class PrintPreviewService
         btnPdf.Click += (_, _) => SendToPdf(parent, doc, doc.DocumentName);
         btnExcel.Click += (_, _) =>
         {
-            if (exportHeaders != null && exportRows != null)
+            if (customExcelExport != null)
+            {
+                customExcelExport(parent);
+            }
+            else if (exportHeaders != null && exportRows != null)
             {
                 ReportExportService.ExportToExcel(parent, doc.DocumentName, exportHeaders, exportRows);
             }

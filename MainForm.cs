@@ -14,7 +14,7 @@ public partial class MainForm : Form
         Players, Teams, TeamApplicants, LookingForTeam,
         ScoreEntry, Schedule,
         Standings, Playoffs, PlayoffSetup, PlayoffSchedule,
-        ReportTeamListing, ReportScheduleGeneric, ReportSpareLists,
+        ReportTeamListing, ReportScheduleGeneric, ReportSpareLists, ReportUnpaidFees,
         SpareLists, Fees, EmailLists, EmailCompose, EmailHistory, Documents, Parameters, Courts, Roles, Utilities, Theme
     }
 
@@ -320,6 +320,7 @@ public partial class MainForm : Form
             add("Team Listing", NavSection.ReportTeamListing);
             add("Schedules",    NavSection.ReportScheduleGeneric);
             add("Spare List",   NavSection.ReportSpareLists);
+            add("Unpaid Fees",  NavSection.ReportUnpaidFees);
         });
 
         AddGroup("EMAIL", add => {
@@ -424,6 +425,7 @@ public partial class MainForm : Form
         NavSection.ReportTeamListing     => new ReportTeamListingPanel(),
         NavSection.ReportScheduleGeneric => new ReportSchedulePanel(),
         NavSection.ReportSpareLists      => new ReportSpareListPanel(),
+        NavSection.ReportUnpaidFees      => new ReportUnpaidFeesPanel(),
         NavSection.SpareLists => new SpareListPanel(),
         NavSection.Fees       => new FeesPanel(),
         NavSection.Utilities  => new UtilitiesPanel(),
@@ -475,6 +477,7 @@ public partial class MainForm : Form
         NavSection.ReportTeamListing     => "Team Listing",
         NavSection.ReportScheduleGeneric => "Schedules",
         NavSection.ReportSpareLists      => "Spare List",
+        NavSection.ReportUnpaidFees      => "Unpaid Fees",
         NavSection.Playoffs           => "Playoffs",
         NavSection.PlayoffSetup       => "Playoff Setup",
         NavSection.PlayoffSchedule    => "Playoff Schedule",
@@ -568,6 +571,7 @@ public partial class MainForm : Form
                 sectionsToEnable.Add(NavSection.ReportTeamListing);
                 sectionsToEnable.Add(NavSection.ReportScheduleGeneric);
                 sectionsToEnable.Add(NavSection.ReportSpareLists);
+                sectionsToEnable.Add(NavSection.ReportUnpaidFees);
                 sectionsToEnable.Add(NavSection.SpareLists);
                 sectionsToEnable.Add(NavSection.Fees);
                 sectionsToEnable.Add(NavSection.EmailLists);

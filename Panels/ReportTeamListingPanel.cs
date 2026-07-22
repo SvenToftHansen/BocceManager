@@ -6,16 +6,42 @@ namespace BocceManager.Panels;
 public class ReportTeamListingPanel : UserControl
 {
     private Label _lblMessage = null!;
+    private Button _btnCompact = null!;
+    private Button _btnFullRoster = null!;
 
     public ReportTeamListingPanel()
     {
         BackColor = AppTheme.ContentBackground;
         Dock = DockStyle.Fill;
 
+        var toolbar = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 46,
+            BackColor = AppTheme.ContentBackground,
+            Padding = new Padding(12, 8, 12, 8)
+        };
+
+        _btnCompact = new Button
+        {
+            Text = "Compact (Players in One Column)",
+            Left = 12, Top = 8, Width = 220, Height = 30,
+            FlatStyle = FlatStyle.Flat, Font = AppTheme.FontButton
+        };
+        _btnFullRoster = new Button
+        {
+            Text = "Full Roster (One Player per Column)",
+            Left = 240, Top = 8, Width = 240, Height = 30,
+            FlatStyle = FlatStyle.Flat, Font = AppTheme.FontButton
+        };
+
+        toolbar.Controls.Add(_btnCompact);
+        toolbar.Controls.Add(_btnFullRoster);
+
         _lblMessage = new Label
         {
             Dock = DockStyle.Fill,
-            Text = "Loading Team Listing...",
+            Text = "Choose a Team Listing format above",
             TextAlign = ContentAlignment.MiddleCenter,
             Font = AppTheme.FontDefault,
             ForeColor = AppTheme.TextSecondary,
@@ -23,10 +49,13 @@ public class ReportTeamListingPanel : UserControl
         };
 
         Controls.Add(_lblMessage);
-        HandleCreated += (_, _) => BeginInvoke(new Action(ShowReport));
+        Controls.Add(toolbar);
+
+        _btnCompact.Click += (_, _) => ShowReport(TeamsPrintService.ListingMode.Compact);
+        _btnFullRoster.Click += (_, _) => ShowReport(TeamsPrintService.ListingMode.FullRoster);
     }
 
-    private void ShowReport()
+    private void ShowReport(TeamsPrintService.ListingMode mode)
     {
         try
         {
@@ -46,45 +75,16 @@ public class ReportTeamListingPanel : UserControl
                 return;
             }
 
-            var doc = TeamsPrintService.BuildDocument(sections);
-            doc.DocumentName = "Team Listing";
+            var doc = TeamsPrintService.BuildDocument(sections, mode);
+            doc.DocumentName = mode == TeamsPrintService.ListingMode.Compact
+                ? "Team Listing"
+                : "Team Listing (Full Roster)";
 
-            // Build export data
-            var exportHeaders = new[] { "Division", "Time Slot", "Day", "Team", "Captain", "Players", "Phone" };
-            var exportRows = BuildExportData(sections);
-
-            TeamsPrintService.ShowPrintPreview(this, doc, "TeamListing", exportHeaders, exportRows);
+            TeamsPrintService.ShowPrintPreview(this, doc, "TeamListing", sections, mode);
         }
         catch (Exception ex)
         {
             _lblMessage.Text = $"Error: {ex.Message}";
         }
-    }
-
-    private List<string[]> BuildExportData(List<TeamsPrintService.PrintSection> sections)
-    {
-        var rows = new List<string[]>();
-
-        foreach (var section in sections)
-        {
-            foreach (var daySection in section.DaySections)
-            {
-                foreach (var team in daySection.Teams)
-                {
-                    rows.Add(new[]
-                    {
-                        daySection.TimeSlot,
-                        section.TimeSlotLabel,
-                        daySection.DayLabel,
-                        team.TeamIdentifier,
-                        team.CaptainName,
-                        team.AllOtherPlayers,
-                        team.Phone
-                    });
-                }
-            }
-        }
-
-        return rows;
     }
 }
