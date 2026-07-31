@@ -14,7 +14,7 @@ public partial class MainForm : Form
         Players, Teams, TeamApplicants, LookingForTeam,
         ScoreEntry, Schedule,
         Standings, Playoffs, PlayoffSetup, PlayoffSchedule,
-        ReportTeamListing, ReportScheduleGeneric, ReportSpareLists, ReportUnpaidFees, ReportAllPlayers,
+        ReportTeamListing, ReportScheduleGeneric, ReportSpareLists, ReportUnpaidFees, ReportAllPlayers, RosterCompare,
         SpareLists, Fees, EmailLists, EmailCompose, EmailHistory, Documents, Parameters, Courts, Roles, Utilities, Theme
     }
 
@@ -322,6 +322,7 @@ public partial class MainForm : Form
             add("Spare List",   NavSection.ReportSpareLists);
             add("Unpaid Fees",  NavSection.ReportUnpaidFees);
             add("All Players",  NavSection.ReportAllPlayers);
+            add("Roster Compare", NavSection.RosterCompare);
         });
 
         AddGroup("EMAIL", add => {
@@ -428,6 +429,7 @@ public partial class MainForm : Form
         NavSection.ReportSpareLists      => new ReportSpareListPanel(),
         NavSection.ReportUnpaidFees      => new ReportUnpaidFeesPanel(),
         NavSection.ReportAllPlayers      => new ReportAllPlayersPanel(),
+        NavSection.RosterCompare         => new RosterComparePanel(),
         NavSection.SpareLists => new SpareListPanel(),
         NavSection.Fees       => new FeesPanel(),
         NavSection.Utilities  => new UtilitiesPanel(),
@@ -481,6 +483,7 @@ public partial class MainForm : Form
         NavSection.ReportSpareLists      => "Spare List",
         NavSection.ReportUnpaidFees      => "Unpaid Fees",
         NavSection.ReportAllPlayers      => "All Players",
+        NavSection.RosterCompare         => "Roster Compare",
         NavSection.Playoffs           => "Playoffs",
         NavSection.PlayoffSetup       => "Playoff Setup",
         NavSection.PlayoffSchedule    => "Playoff Schedule",
