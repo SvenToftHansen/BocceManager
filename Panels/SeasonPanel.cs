@@ -1633,11 +1633,12 @@ public class SeasonPanel : UserControl
                 {
                     db.TeamPlayers.Add(new TeamPlayer
                     {
-                        TeamId      = newTeam.Id,
-                        PlayerId    = tp.PlayerId,
-                        Role        = tp.Role,
-                        IsActive    = tp.IsActive,
-                        JoinedDate  = DateOnly.FromDateTime(DateTime.Today)
+                        TeamId       = newTeam.Id,
+                        PlayerId     = tp.PlayerId,
+                        PlayerNumber = tp.PlayerNumber,
+                        Role         = tp.Role,
+                        IsActive     = tp.IsActive,
+                        JoinedDate   = DateOnly.FromDateTime(DateTime.Today)
                     });
                     playerCount++;
                 }

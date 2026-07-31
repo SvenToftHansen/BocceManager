@@ -89,8 +89,10 @@ public static class TeamApplicantService
             db.Teams.Add(team);
             db.SaveChanges(); // get team.Id
 
+            int playerNumber = 0;
             foreach (var member in applicant.Members)
             {
+                playerNumber++;
                 int playerId;
 
                 if (member.PlayerId.HasValue)
@@ -116,10 +118,11 @@ public static class TeamApplicantService
 
                 db.TeamPlayers.Add(new TeamPlayer
                 {
-                    TeamId     = team.Id,
-                    PlayerId   = playerId,
-                    Role       = "player",
-                    JoinedDate = DateOnly.FromDateTime(DateTime.Today)
+                    TeamId       = team.Id,
+                    PlayerId     = playerId,
+                    PlayerNumber = playerNumber,
+                    Role         = playerNumber == 1 ? "captain" : "player",
+                    JoinedDate   = DateOnly.FromDateTime(DateTime.Today)
                 });
 
                 // Clear any LFT entry for this player in this season
@@ -176,12 +179,16 @@ public static class TeamApplicantService
             bool alreadyOnTeam = db.TeamPlayers.Any(tp => tp.TeamId == teamId && tp.PlayerId == lft.PlayerId);
             if (alreadyOnTeam) return (false, "Player is already on that team.");
 
+            int nextNumber = db.TeamPlayers.Where(tp => tp.TeamId == teamId)
+                .Select(tp => (int?)tp.PlayerNumber).Max() ?? 0;
+
             db.TeamPlayers.Add(new TeamPlayer
             {
-                TeamId     = teamId,
-                PlayerId   = lft.PlayerId,
-                Role       = "player",
-                JoinedDate = DateOnly.FromDateTime(DateTime.Today)
+                TeamId       = teamId,
+                PlayerId     = lft.PlayerId,
+                PlayerNumber = nextNumber + 1,
+                Role         = nextNumber == 0 ? "captain" : "player",
+                JoinedDate   = DateOnly.FromDateTime(DateTime.Today)
             });
 
             lft.TeamId = teamId;
@@ -189,6 +196,7 @@ public static class TeamApplicantService
             FeeService.EnsureSeasonFee(db, lft.PlayerId, team.Division.SeasonId);
 
             db.SaveChanges();
+            if (nextNumber == 0) TeamRosterService.SyncCaptain(db, teamId);
 
             AppLogger.Info("Placed LFT player {PlayerId} onto team {TeamId}", lft.PlayerId, teamId);
             return (true, $"{lft.Player.FullName} added to {team.SystemName}.");

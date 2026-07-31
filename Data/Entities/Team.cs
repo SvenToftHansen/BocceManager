@@ -28,7 +28,10 @@ public class TeamPlayer
     public int Id { get; set; }
     public int TeamId { get; set; }
     public int PlayerId { get; set; }
-    // captain | player
+    // 1-based order within the team; used to sort the roster on team reports.
+    // Player #1 is always the team captain.
+    public int PlayerNumber { get; set; } = 1;
+    // captain | player - kept in sync with PlayerNumber == 1
     public string Role { get; set; } = "player";
     public bool IsActive { get; set; } = true;
     public DateOnly JoinedDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);

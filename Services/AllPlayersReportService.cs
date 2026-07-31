@@ -8,32 +8,42 @@ namespace BocceManager.Services;
 
 public static class AllPlayersReportService
 {
-    public enum PaidFilter { All, Paid, Unpaid }
-
     public record PlayerFeeRow(
         string Name, string Phone, string Email, string LotNumber,
         bool? InitiationPaid, bool? SeasonPaid, bool OnTeam, bool OnSpareList);
 
-    public record ReportFilter(PaidFilter Paid, bool MissingPhone, bool MissingEmail, bool MissingLotNumber)
+    public record ReportFilter(
+        bool Paid, bool Unpaid,
+        bool MissingPhone, bool MissingEmail, bool MissingLotNumber,
+        bool OnTeam, bool NotOnTeam,
+        bool OnSpareList, bool NotOnSpareList)
     {
         public string Describe()
         {
-            var parts = new List<string>
-            {
-                Paid switch
-                {
-                    PaidFilter.Paid   => "Paid Only",
-                    PaidFilter.Unpaid => "Unpaid Only",
-                    _                 => "All Players"
-                }
-            };
+            var parts = new List<string>();
+
+            var fee = new List<string>();
+            if (Paid) fee.Add("Paid");
+            if (Unpaid) fee.Add("Unpaid");
+            if (fee.Count > 0) parts.Add("Fee: " + string.Join(" or ", fee));
+
             var missing = new List<string>();
             if (MissingPhone) missing.Add("Phone");
             if (MissingEmail) missing.Add("Email");
             if (MissingLotNumber) missing.Add("Lot Number");
             if (missing.Count > 0) parts.Add("Missing " + string.Join(" or ", missing));
 
-            return "Filter: " + string.Join("   •   ", parts);
+            var team = new List<string>();
+            if (OnTeam) team.Add("On a Team");
+            if (NotOnTeam) team.Add("Not on a Team");
+            if (team.Count > 0) parts.Add(string.Join(" or ", team));
+
+            var spare = new List<string>();
+            if (OnSpareList) spare.Add("On Spare List");
+            if (NotOnSpareList) spare.Add("Not on Spare List");
+            if (spare.Count > 0) parts.Add(string.Join(" or ", spare));
+
+            return parts.Count > 0 ? "Filter: " + string.Join("   •   ", parts) : "Filter: All Players";
         }
     }
 
@@ -96,17 +106,34 @@ public static class AllPlayersReportService
             bool? initiationPaid = initiationPaidByPlayer.TryGetValue(p.Id, out var ip) ? ip : null;
             bool? seasonPaid     = seasonPaidByPlayer.TryGetValue(p.Id, out var sp) ? sp : null;
             bool overallPaid     = initiationPaid != false && seasonPaid != false;
+            bool onTeam          = onTeamPlayerIds.Contains(p.Id);
+            bool onSpareList     = onSpareListPlayerIds.Contains(p.Id);
 
-            if (filter.Paid == PaidFilter.Paid && !overallPaid) continue;
-            if (filter.Paid == PaidFilter.Unpaid && overallPaid) continue;
-            bool anyMissingFilterActive = filter.MissingPhone || filter.MissingEmail || filter.MissingLotNumber;
-            if (anyMissingFilterActive)
+            if (filter.Paid || filter.Unpaid)
+            {
+                bool matchesFee = (filter.Paid && overallPaid) || (filter.Unpaid && !overallPaid);
+                if (!matchesFee) continue;
+            }
+
+            if (filter.MissingPhone || filter.MissingEmail || filter.MissingLotNumber)
             {
                 bool matchesMissing =
                     (filter.MissingPhone && string.IsNullOrWhiteSpace(p.Phone)) ||
                     (filter.MissingEmail && string.IsNullOrWhiteSpace(p.Email)) ||
                     (filter.MissingLotNumber && string.IsNullOrWhiteSpace(p.LotNumber));
                 if (!matchesMissing) continue;
+            }
+
+            if (filter.OnTeam || filter.NotOnTeam)
+            {
+                bool matchesTeam = (filter.OnTeam && onTeam) || (filter.NotOnTeam && !onTeam);
+                if (!matchesTeam) continue;
+            }
+
+            if (filter.OnSpareList || filter.NotOnSpareList)
+            {
+                bool matchesSpare = (filter.OnSpareList && onSpareList) || (filter.NotOnSpareList && !onSpareList);
+                if (!matchesSpare) continue;
             }
 
             var name = string.IsNullOrWhiteSpace(p.LastName)
@@ -117,8 +144,7 @@ public static class AllPlayersReportService
 
             rows.Add(new PlayerFeeRow(
                 name, p.Phone ?? "", p.Email ?? "", p.LotNumber ?? "",
-                initiationPaid, seasonPaid,
-                onTeamPlayerIds.Contains(p.Id), onSpareListPlayerIds.Contains(p.Id)));
+                initiationPaid, seasonPaid, onTeam, onSpareList));
         }
 
         return rows;

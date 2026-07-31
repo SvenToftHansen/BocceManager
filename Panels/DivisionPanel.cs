@@ -50,7 +50,6 @@ public class DivisionPanel : UserControl
     private DataGridView _teamsGrid      = null!;
     private DataGridView _playersGrid    = null!;
     private Label        _lblTeamTitle   = null!;
-    private ComboBox     _cmbCaptain     = null!;
     private Button       _btnAddTeam        = null!;
     private Button       _btnPlaceApplicant = null!;
     private Button       _btnBuildTeams     = null!;
@@ -59,6 +58,8 @@ public class DivisionPanel : UserControl
     private Button       _btnDeleteAllTeams = null!;
     private Button       _btnAddPlayer   = null!;
     private Button       _btnRemovePlayer = null!;
+    private Button       _btnMovePlayerUp   = null!;
+    private Button       _btnMovePlayerDown = null!;
     private Button       _btnDeleteAllPlayers = null!;
 
     // â"€â"€ Shared toolbar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -404,15 +405,11 @@ public class DivisionPanel : UserControl
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill
         };
         _playersGrid.AlternatingRowsDefaultCellStyle = new DataGridViewCellStyle { BackColor = AppTheme.GridAlternateRow };
+        _playersGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "PlNum",  HeaderText = "#",       FillWeight = 12 });
         _playersGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "PlId",   Visible = false });
-        _playersGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "PlName", HeaderText = "Player",  FillWeight = 70 });
-        _playersGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "PlRole", HeaderText = "Role",    FillWeight = 30 });
-
-        var captainStrip = new Panel { Dock = DockStyle.Bottom, Height = 42, BackColor = AppTheme.Surface, Padding = new Padding(10, 8, 8, 6) };
-        var captainLbl   = new Label  { Text = "Captain:", Left = 10, Top = 12, AutoSize = true, Font = AppTheme.FontDefaultBold, ForeColor = AppTheme.TextPrimary };
-        _cmbCaptain = new ComboBox { Left = 85, Top = 8, Width = 260, DropDownStyle = ComboBoxStyle.DropDownList, Font = AppTheme.FontDefault, Enabled = false };
-        _cmbCaptain.SelectedIndexChanged += OnCaptainChanged;
-        captainStrip.Controls.AddRange([captainLbl, _cmbCaptain]);
+        _playersGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "PlName", HeaderText = "Player",  FillWeight = 63 });
+        _playersGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "PlRole", HeaderText = "Role",    FillWeight = 25 });
+        _playersGrid.SelectionChanged += (_, _) => UpdatePlayerButtonStates();
 
         var playerBtns = new Panel { Dock = DockStyle.Right, Width = 148, BackColor = AppTheme.ContentBackground, Padding = new Padding(8) };
         _btnAddPlayer = new Button
@@ -431,21 +428,36 @@ public class DivisionPanel : UserControl
         };
         _btnRemovePlayer.Click += (_, _) => RemovePlayerFromTeam();
 
+        _btnMovePlayerUp = new Button
+        {
+            Text = "Move Up", Location = new Point(8, 76), Size = new Size(132, 30),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
+        };
+        _btnMovePlayerUp.Click += (_, _) => MovePlayer(-1);
+
+        _btnMovePlayerDown = new Button
+        {
+            Text = "Move Down", Location = new Point(8, 114), Size = new Size(132, 30),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
+        };
+        _btnMovePlayerDown.Click += (_, _) => MovePlayer(1);
+
         _btnDeleteAllPlayers = new Button
         {
-            Text = "Delete All Players", Location = new Point(8, 76), Size = new Size(132, 30),
+            Text = "Delete All Players", Location = new Point(8, 152), Size = new Size(132, 30),
             FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonDanger, ForeColor = Color.White,
             Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }, Enabled = false
         };
         _btnDeleteAllPlayers.Click += (_, _) => DeleteAllPlayersFromTeam();
-        playerBtns.Controls.AddRange([_btnAddPlayer, _btnRemovePlayer, _btnDeleteAllPlayers]);
+        playerBtns.Controls.AddRange([_btnAddPlayer, _btnRemovePlayer, _btnMovePlayerUp, _btnMovePlayerDown, _btnDeleteAllPlayers]);
 
         _lblTeamTitle = new Label { Dock = DockStyle.Top, Height = 28, Font = AppTheme.FontSectionHeading, ForeColor = AppTheme.Accent, Text = "Players - select a team above", Padding = new Padding(2, 4, 0, 0) };
 
         // Dock order: Fill added first (lowest priority), then Right, Bottom, Top (highest)
         playerPanel.Controls.Add(_playersGrid);
         playerPanel.Controls.Add(playerBtns);
-        playerPanel.Controls.Add(captainStrip);
         playerPanel.Controls.Add(_lblTeamTitle);
 
         var splitter = new Panel { Dock = DockStyle.Bottom, Height = 5, BackColor = AppTheme.Separator };
@@ -2144,58 +2156,52 @@ public class DivisionPanel : UserControl
     private void LoadPlayersForTeam(int teamId)
     {
         _playersGrid.Rows.Clear();
-        int? captainId = null;
-        var playerItems = new List<IntItem>();
 
         try
         {
             using var db = new BocceDbContext();
-            var team = db.Teams.Find(teamId);
-            captainId = team?.CaptainPlayerId;
-
             var tps = db.TeamPlayers
                 .Include(tp => tp.Player)
                 .Where(tp => tp.TeamId == teamId)
-                .OrderBy(tp => tp.Player.LastName).ThenBy(tp => tp.Player.FirstName)
+                .OrderBy(tp => tp.PlayerNumber)
                 .ToList();
 
-            playerItems.Add(new IntItem(0, "(none)"));
             foreach (var tp in tps)
             {
                 string fullName = $"{tp.Player.LastName}, {tp.Player.FirstName}";
-                string role = tp.Role == "captain" ? "Captain" : "Player";
-                _playersGrid.Rows.Add(tp.PlayerId, fullName, role);
-                playerItems.Add(new IntItem(tp.PlayerId, fullName));
+                string role = tp.PlayerNumber == 1 ? "Captain" : "Player";
+                _playersGrid.Rows.Add(tp.PlayerNumber, tp.PlayerId, fullName, role);
             }
             _playersGrid.ClearSelection();
         }
         catch { }
 
-        _cmbCaptain.SelectedIndexChanged -= OnCaptainChanged;
-        _cmbCaptain.Items.Clear();
-        foreach (var item in playerItems) _cmbCaptain.Items.Add(item);
-        _cmbCaptain.SelectedIndex = 0;
-        _cmbCaptain.Enabled = !_seasonIsLocked;
-        if (captainId.HasValue)
-            for (int i = 0; i < _cmbCaptain.Items.Count; i++)
-                if (_cmbCaptain.Items[i] is IntItem ci && ci.Id == captainId.Value)
-                { _cmbCaptain.SelectedIndex = i; break; }
-        _cmbCaptain.SelectedIndexChanged += OnCaptainChanged;
-
-        _playersGrid.SelectionChanged += (_, _) =>
-            _btnRemovePlayer.Enabled = _playersGrid.SelectedRows.Count > 0;
+        UpdatePlayerButtonStates();
     }
 
     private void ClearPlayersPanel()
     {
         _playersGrid.Rows.Clear();
         _lblTeamTitle.Text = "Players - select a team above";
-        _cmbCaptain.SelectedIndexChanged -= OnCaptainChanged;
-        _cmbCaptain.Items.Clear();
-        _cmbCaptain.Enabled = false;
-        _cmbCaptain.SelectedIndexChanged += OnCaptainChanged;
-        _btnRemovePlayer.Enabled = false;
+        UpdatePlayerButtonStates();
     }
+
+    private void UpdatePlayerButtonStates()
+    {
+        bool hasSelection = _currentTeamId != null && _playersGrid.SelectedRows.Count > 0;
+        _btnRemovePlayer.Enabled = hasSelection && !_seasonIsLocked;
+        if (!hasSelection || _seasonIsLocked)
+        {
+            _btnMovePlayerUp.Enabled   = false;
+            _btnMovePlayerDown.Enabled = false;
+            return;
+        }
+
+        int rowIndex = _playersGrid.SelectedRows[0].Index;
+        _btnMovePlayerUp.Enabled   = rowIndex > 0;
+        _btnMovePlayerDown.Enabled = rowIndex < _playersGrid.Rows.Count - 1;
+    }
+
 
     private void AddPlayerToTeam()
     {
@@ -2297,6 +2303,8 @@ public class DivisionPanel : UserControl
                 int count = 0;
                 var skipped = new List<string>();
                 var addedPlayerIds = new List<int>();
+                int nextNumber = db.TeamPlayers.Where(tp => tp.TeamId == teamId)
+                    .Select(tp => (int?)tp.PlayerNumber).Max() ?? 0;
 
                 foreach (var playerId in playerIds)
                 {
@@ -2328,12 +2336,14 @@ public class DivisionPanel : UserControl
                         continue;
                     }
 
+                    nextNumber++;
                     db.TeamPlayers.Add(new TeamPlayer
                     {
-                        TeamId    = teamId,
-                        PlayerId  = playerId,
-                        Role      = "player",
-                        JoinedDate = DateOnly.FromDateTime(DateTime.Today)
+                        TeamId       = teamId,
+                        PlayerId     = playerId,
+                        PlayerNumber = nextNumber,
+                        Role         = "player",
+                        JoinedDate   = DateOnly.FromDateTime(DateTime.Today)
                     });
 
                     // Keep LookingForTeam history: assigned entries get TeamId set.
@@ -2351,7 +2361,11 @@ public class DivisionPanel : UserControl
                     count++;
                 }
 
-                if (count > 0) db.SaveChanges();
+                if (count > 0)
+                {
+                    db.SaveChanges();
+                    TeamRosterService.SyncCaptain(db, teamId);
+                }
 
                 if (count > 0 && _selectedSeasonId.HasValue)
                     foreach (var pid in addedPlayerIds)
@@ -2402,14 +2416,14 @@ public class DivisionPanel : UserControl
             var tp = db.TeamPlayers.FirstOrDefault(x => x.TeamId == teamId && x.PlayerId == playerId);
             if (tp != null) { db.TeamPlayers.Remove(tp); db.SaveChanges(); }
 
-            // Clear captain if it was this player
+            // Renumber remaining players 1..N (closing the gap) and re-derive the captain.
+            var remaining = db.TeamPlayers.Where(x => x.TeamId == teamId).OrderBy(x => x.PlayerNumber).ToList();
+            int number = 1;
+            foreach (var r in remaining) r.PlayerNumber = number++;
+            db.SaveChanges();
+            TeamRosterService.SyncCaptain(db, teamId);
+
             var team = db.Teams.Include(t => t.Division).ThenInclude(d => d.Season).FirstOrDefault(t => t.Id == teamId);
-            if (team?.CaptainPlayerId == playerId)
-            {
-                team.CaptainPlayerId = null;
-                team.DisplayName     = null;
-                db.SaveChanges();
-            }
 
             // Player is no longer assigned to this team: mark LFT entry active again.
             if (team != null)
@@ -2441,73 +2455,42 @@ public class DivisionPanel : UserControl
             { _teamsGrid.ClearSelection(); r.Selected = true; break; }
     }
 
-    private void OnCaptainChanged(object? sender, EventArgs e)
+    // direction: -1 to move the selected player up (toward #1), +1 to move down.
+    private void MovePlayer(int direction)
     {
         if (_seasonIsLocked) return;
-        if (_currentTeamId == null) return;
+        if (_currentTeamId == null || _playersGrid.SelectedRows.Count == 0) return;
         int teamId   = _currentTeamId.Value;
-        int playerId = _cmbCaptain.SelectedItem is IntItem ci ? ci.Id : 0;
-
-        if (playerId > 0)
-        {
-            // Check if player is already captain of another team in this league
-            try
-            {
-                using var db = new BocceDbContext();
-                var team = db.Teams.Find(teamId);
-                if (team == null) return;
-                var otherCaptaincy = db.Teams
-                    .Where(t => t.Division.Season.LeagueId == team.Division.Season.LeagueId
-                             && t.Id != teamId
-                             && t.CaptainPlayerId == playerId)
-                    .Select(t => t.DisplayName ?? t.SystemName)
-                    .FirstOrDefault();
-
-                if (!string.IsNullOrEmpty(otherCaptaincy))
-                {
-                    MessageBox.Show(
-                        $"This player is already captain of: {otherCaptaincy}\n\nA player can only be captain of one team.",
-                        "Captain Already Assigned", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    _cmbCaptain.SelectedIndex = 0; // Reset to "(none)"
-                    return;
-                }
-            }
-            catch { }
-        }
+        int playerId = Convert.ToInt32(_playersGrid.SelectedRows[0].Cells["PlId"].Value);
 
         try
         {
             using var db = new BocceDbContext();
-            var team = db.Teams.Find(teamId);
-            if (team == null) return;
+            var tps = db.TeamPlayers.Where(tp => tp.TeamId == teamId).OrderBy(tp => tp.PlayerNumber).ToList();
+            int idx     = tps.FindIndex(tp => tp.PlayerId == playerId);
+            int swapIdx = idx + direction;
+            if (idx < 0 || swapIdx < 0 || swapIdx >= tps.Count) return;
 
-            // Update role flags on all TeamPlayers
-            var tps = db.TeamPlayers.Where(tp => tp.TeamId == teamId).ToList();
-            foreach (var tp in tps)
-                tp.Role = tp.PlayerId == playerId ? "captain" : "player";
-
-            if (playerId > 0)
-            {
-                team.CaptainPlayerId = playerId;
-                var captain = db.Players.Find(playerId);
-                if (captain != null)
-                    team.DisplayName = $"{team.TeamLetter}-{captain.LastName}";
-            }
-            else
-            {
-                team.CaptainPlayerId = null;
-                team.DisplayName     = null;
-            }
+            (tps[idx].PlayerNumber, tps[swapIdx].PlayerNumber) = (tps[swapIdx].PlayerNumber, tps[idx].PlayerNumber);
             db.SaveChanges();
+            TeamRosterService.SyncCaptain(db, teamId);
         }
-        catch { return; }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not reorder player:\n{ex.Message}", "Golden Vista Bocce League Master", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
 
-        // Refresh grid row and players panel
         LoadPlayersForTeam(teamId);
         if (_selectedDivisionId.HasValue) LoadTeams(_selectedDivisionId.Value);
         foreach (DataGridViewRow r in _teamsGrid.Rows)
             if (r.Cells["TmId"].Value != null && Convert.ToInt32(r.Cells["TmId"].Value) == teamId)
             { _teamsGrid.ClearSelection(); r.Selected = true; break; }
+
+        // Re-select the moved player's row so repeated clicks keep moving it.
+        foreach (DataGridViewRow r in _playersGrid.Rows)
+            if (r.Cells["PlId"].Value != null && Convert.ToInt32(r.Cells["PlId"].Value) == playerId)
+            { _playersGrid.ClearSelection(); r.Selected = true; break; }
     }
 
     // â"€â"€ Player picker dialog â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€

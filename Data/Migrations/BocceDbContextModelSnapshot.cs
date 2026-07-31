@@ -1890,6 +1890,9 @@ namespace BocceManager.Data.Migrations
                     b.Property<int>("PlayerId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("PlayerNumber")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Role")
                         .IsRequired()
                         .HasColumnType("text");

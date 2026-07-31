@@ -136,8 +136,7 @@ public static class TeamsPrintService
                     foreach (var team in divData.Teams.OrderBy(t => t.Team.TeamLetter))
                     {
                         var playersForTeam = team.Players
-                            .OrderBy(tp => tp.Player.LastName)
-                            .ThenBy(tp => tp.Player.FirstName)
+                            .OrderBy(tp => tp.PlayerNumber)
                             .ToList();
 
                         int? captainId = team.Team.CaptainPlayerId;
@@ -150,8 +149,6 @@ public static class TeamsPrintService
 
                         var otherPlayers = playersForTeam
                             .Where(tp => tp != captainTp)
-                            .OrderBy(tp => tp.Player.LastName)
-                            .ThenBy(tp => tp.Player.FirstName)
                             .Select(tp => $"{tp.Player.FirstName} {tp.Player.LastName}".Trim())
                             .ToList();
 
@@ -191,6 +188,10 @@ public static class TeamsPrintService
     // ── Build PrintDocument ───────────────────────────────────────────────────
 
     private record ColumnDef(string Header, float Width, Func<TeamRow, string> GetText, bool Wrap);
+
+    // Player 5 is the team's spare slot, not a regular roster player.
+    private static string PlayerColumnHeader(int playerNumber) =>
+        playerNumber == 5 ? "Team Spare" : $"Player {playerNumber}";
 
     private static int MaxOtherPlayers(List<PrintSection> sections) =>
         sections.SelectMany(s => s.DaySections).SelectMany(d => d.Teams)
@@ -268,7 +269,7 @@ public static class TeamsPrintService
                 for (int i = 0; i < maxOtherPlayers; i++)
                 {
                     int idx = i;
-                    columns.Add(new($"Player {i + 2}", playerColW,
+                    columns.Add(new(PlayerColumnHeader(i + 2), playerColW,
                         r => idx < r.OtherPlayersList.Count ? r.OtherPlayersList[idx] : "", false));
                 }
                 columns.Add(new("Contact #", ColPhoneW, r => r.Phone, false));
@@ -466,7 +467,7 @@ public static class TeamsPrintService
 
         string[] headers = mode == ListingMode.Compact
             ? ["Time Slot", "Day", "Team", "Captain", "Players", "Phone"]
-            : ["Time Slot", "Day", "Team", "Captain", .. Enumerable.Range(2, maxOtherPlayers).Select(n => $"Player {n}"), "Phone"];
+            : ["Time Slot", "Day", "Team", "Captain", .. Enumerable.Range(2, maxOtherPlayers).Select(PlayerColumnHeader), "Phone"];
 
         var rows = new List<string[]>();
         foreach (var section in sections)
@@ -514,7 +515,7 @@ public static class TeamsPrintService
 
             string[] columnHeaders = mode == ListingMode.Compact
                 ? ["Team", "Captain", "Players", "Contact #"]
-                : ["Team", "Captain", .. Enumerable.Range(2, maxOtherPlayers).Select(n => $"Player {n}"), "Contact #"];
+                : ["Team", "Captain", .. Enumerable.Range(2, maxOtherPlayers).Select(PlayerColumnHeader), "Contact #"];
 
             int colCount = columnHeaders.Length;
 
