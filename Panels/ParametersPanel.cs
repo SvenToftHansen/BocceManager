@@ -21,6 +21,13 @@ public class ParametersPanel : UserControl
     private TextBox _txtCaptainEmail  = null!;
     private TextBox _txtInitiationFeeAmount = null!;
 
+    // Gmail integration
+    private TextBox _txtGmailClientId     = null!;
+    private TextBox _txtGmailClientSecret = null!;
+    private Label   _lblGmailStatus       = null!;
+    private Button  _btnGmailConnect      = null!;
+    private Button  _btnGmailDisconnect   = null!;
+
     private readonly System.Windows.Forms.Timer _autoSaveTimer = new() { Interval = 1500 };
 
     public ParametersPanel()
@@ -64,16 +71,118 @@ public class ParametersPanel : UserControl
         y += 12;
 
         y = AddSectionHeader(scroll, "FEES", y);
-        _ = AddTextRow(scroll, "Initiation Fee Amount", "InitiationFeeAmount", ref _txtInitiationFeeAmount, y);
+        y = AddTextRow(scroll, "Initiation Fee Amount", "InitiationFeeAmount", ref _txtInitiationFeeAmount, y);
+
+        y += 12;
+
+        y = AddSectionHeader(scroll, "GMAIL INTEGRATION", y);
+        y = AddTextRow(scroll, "Client ID", "Gmail.ClientId", ref _txtGmailClientId, y);
+        _txtGmailClientSecret = new TextBox
+        {
+            Font = AppTheme.FontDefault,
+            BackColor = AppTheme.ContentBackground,
+            ForeColor = AppTheme.TextPrimary,
+            Location = new Point(200, y + 4),
+            Height = 26,
+            UseSystemPasswordChar = true,
+            PlaceholderText = "(unchanged)",
+            Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
+        };
+        _txtGmailClientSecret.Width = scroll.ClientSize.Width - 216;
+        scroll.SizeChanged += (_, _) => _txtGmailClientSecret.Width = scroll.ClientSize.Width - 216;
+        AddLabel(scroll, "Client Secret", y);
+        scroll.Controls.Add(_txtGmailClientSecret);
+        y += 40;
+
+        var gmailButtonRow = new Panel { Location = new Point(200, y), Height = 32, Width = 400 };
+        _btnGmailConnect = new Button
+        {
+            Text = "Connect to Gmail", Size = new Size(140, 28), Location = new Point(0, 0),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Accent, ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }
+        };
+        _btnGmailDisconnect = new Button
+        {
+            Text = "Disconnect", Size = new Size(100, 28), Location = new Point(148, 0),
+            FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(100, 116, 139), ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }
+        };
+        _btnGmailConnect.Click += OnGmailConnect;
+        _btnGmailDisconnect.Click += OnGmailDisconnect;
+        gmailButtonRow.Controls.Add(_btnGmailConnect);
+        gmailButtonRow.Controls.Add(_btnGmailDisconnect);
+        scroll.Controls.Add(gmailButtonRow);
+        y += 40;
+
+        _lblGmailStatus = new Label
+        {
+            Font = AppTheme.FontDefault, ForeColor = AppTheme.TextMuted,
+            AutoSize = true, Location = new Point(200, y)
+        };
+        scroll.Controls.Add(_lblGmailStatus);
 
         LoadTextParams();
+        RefreshGmailStatus();
 
         // Wire autosave timer
-        _autoSaveTimer.Tick += (_, _) => { _autoSaveTimer.Stop(); SaveTextParams(); };
+        _autoSaveTimer.Tick += (_, _) => { _autoSaveTimer.Stop(); SaveTextParams(); SaveGmailCredentials(); };
         _txtClubName.TextChanged             += (_, _) => ScheduleAutoSave();
         _txtCaptainName.TextChanged          += (_, _) => ScheduleAutoSave();
         _txtCaptainEmail.TextChanged         += (_, _) => ScheduleAutoSave();
         _txtInitiationFeeAmount.TextChanged  += (_, _) => ScheduleAutoSave();
+        _txtGmailClientId.TextChanged        += (_, _) => ScheduleAutoSave();
+        _txtGmailClientSecret.TextChanged    += (_, _) => ScheduleAutoSave();
+    }
+
+    private void RefreshGmailStatus()
+    {
+        _lblGmailStatus.Text = GmailAuthService.IsConnected() ? "Connected." : "Not connected.";
+    }
+
+    private async void OnGmailConnect(object? sender, EventArgs e)
+    {
+        _btnGmailConnect.Enabled = false;
+        _lblGmailStatus.Text = "Connecting... a browser window will open to sign in.";
+        try
+        {
+            var email = await GmailAuthService.ConnectAsync();
+            _lblGmailStatus.Text = $"Connected as {email}.";
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error(ex, "Gmail connect failed");
+            _lblGmailStatus.Text = "Not connected.";
+            MessageBox.Show($"Could not connect to Gmail:\n\n{ex.Message}", "Gmail Integration", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            _btnGmailConnect.Enabled = true;
+        }
+    }
+
+    private void OnGmailDisconnect(object? sender, EventArgs e)
+    {
+        GmailAuthService.Disconnect();
+        RefreshGmailStatus();
+    }
+
+    private void SaveGmailCredentials()
+    {
+        try
+        {
+            using var db = new BocceDbContext();
+            AppParameterService.SetAppParameter(db, "Gmail.ClientId", _txtGmailClientId.Text.Trim());
+
+            if (_txtGmailClientSecret.Text.Length > 0)
+            {
+                AppParameterService.SetAppParameter(db, "Gmail.ClientSecretProtected", SecretProtector.Protect(_txtGmailClientSecret.Text));
+                _txtGmailClientSecret.Text = "";
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error(ex, "Failed to autosave Gmail credentials");
+        }
     }
 
     private void ScheduleAutoSave()
