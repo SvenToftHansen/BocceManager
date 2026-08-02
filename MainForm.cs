@@ -579,6 +579,7 @@ public partial class MainForm : Form
                 sectionsToEnable.Add(NavSection.ReportSpareLists);
                 sectionsToEnable.Add(NavSection.ReportUnpaidFees);
                 sectionsToEnable.Add(NavSection.ReportAllPlayers);
+                sectionsToEnable.Add(NavSection.RosterCompare);
                 sectionsToEnable.Add(NavSection.SpareLists);
                 sectionsToEnable.Add(NavSection.Fees);
                 sectionsToEnable.Add(NavSection.EmailLists);
