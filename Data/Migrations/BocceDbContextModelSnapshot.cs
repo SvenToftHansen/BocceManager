@@ -339,6 +339,43 @@ namespace BocceManager.Data.Migrations
                     b.ToTable("EmailLogs");
                 });
 
+            modelBuilder.Entity("BocceManager.Data.Entities.EmailLogRecipient", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("EmailLogId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("PlayerId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmailLogId");
+
+                    b.HasIndex("PlayerId");
+
+                    b.ToTable("EmailLogRecipients");
+                });
+
             modelBuilder.Entity("BocceManager.Data.Entities.Game", b =>
                 {
                     b.Property<int>("Id")
@@ -2086,6 +2123,23 @@ namespace BocceManager.Data.Migrations
                     b.Navigation("League");
                 });
 
+            modelBuilder.Entity("BocceManager.Data.Entities.EmailLogRecipient", b =>
+                {
+                    b.HasOne("BocceManager.Data.Entities.EmailLog", "EmailLog")
+                        .WithMany("Recipients")
+                        .HasForeignKey("EmailLogId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BocceManager.Data.Entities.Player", "Player")
+                        .WithMany()
+                        .HasForeignKey("PlayerId");
+
+                    b.Navigation("EmailLog");
+
+                    b.Navigation("Player");
+                });
+
             modelBuilder.Entity("BocceManager.Data.Entities.Game", b =>
                 {
                     b.HasOne("BocceManager.Data.Entities.BocceMatch", "Match")
@@ -2740,6 +2794,11 @@ namespace BocceManager.Data.Migrations
             modelBuilder.Entity("BocceManager.Data.Entities.EmailList", b =>
                 {
                     b.Navigation("Members");
+                });
+
+            modelBuilder.Entity("BocceManager.Data.Entities.EmailLog", b =>
+                {
+                    b.Navigation("Recipients");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.League", b =>

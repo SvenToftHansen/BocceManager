@@ -34,4 +34,19 @@ public class EmailLog
     public DateTime SentAt { get; set; } = DateTime.UtcNow;
 
     public League? League { get; set; }
+    public ICollection<EmailLogRecipient> Recipients { get; set; } = [];
+}
+
+public class EmailLogRecipient
+{
+    public int Id { get; set; }
+    public int EmailLogId { get; set; }
+    public int? PlayerId { get; set; }
+    public string Email { get; set; } = "";
+    public string Status { get; set; } = "Sent"; // Sent | Failed
+    public string? ErrorMessage { get; set; }
+    public DateTime SentAt { get; set; } = DateTime.UtcNow;
+
+    public EmailLog EmailLog { get; set; } = null!;
+    public Player? Player { get; set; }
 }
