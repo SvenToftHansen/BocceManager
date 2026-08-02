@@ -147,33 +147,27 @@ _Generated 2026-06-15 from TODO.md, memory files, and app state analysis_
 
 ## Communications
 
-- [ ] **In-App Email Client + Brevo Integration** — full email compose panel
+- [x] **In-App Email Client + Gmail Integration** — full email compose panel
   - Recipient picker: individuals, teams, divisions, all members, email lists
-  - Send via Brevo REST API (free tier: 300 emails/day, covers 240–500/week)
-  - Brevo API key stored in AppParameters
-  - Send history log
+  - Send via Gmail API (OAuth2 desktop flow); personal Gmail accounts cap at ~500/day, comfortably covers 240–500/week
+  - Gmail Client ID/Secret and refresh token stored DPAPI-encrypted in AppParameters (Parameters panel "Gmail Integration" section)
+  - Per-recipient send history log (EmailLog/EmailLogRecipient)
   - Related: Email Lists Panel
+  - Note: superseded the originally planned Brevo integration, which was never built
 
 - [ ] **Automated Standings Email per Team** — email each team their own division standings + overall season seed report
   - Generate per-team divisional standings (their division only, formatted as a compact table)
   - Generate overall Season Seed / Playoff Seeding Order report (all teams)
   - Combine into one email per team: "Your Standings + League Standings"
   - Trigger manually from Standings panel ("Email Standings" button) or from Email panel
-  - Use Brevo API (same as general email); one send per team = 1 email per team per send
+  - Use the Gmail integration (same as general email); one send per team = 1 email per team per send
   - Consider PDF attachment vs. HTML inline table for the standings content
-  - Needs: In-App Email Client + Brevo Integration to be in place first
-  - Low-volume: ~60 teams × 2 reports = 60 emails per send (well within free tier)
+  - Low-volume: ~60 teams × 2 reports = 60 emails per send (well within Gmail's daily limit)
 
-- [ ] **Brevo Account Reminder on Season Status Change** — prompt user to manage their Brevo plan when season transitions
-  - When season advances to "League Play": show reminder to upgrade Brevo plan with a button that opens Brevo billing page in browser
-  - When season is marked "Completed": show reminder to downgrade Brevo plan to save money
-  - Reminder should be a dismissible dialog, not a blocking modal
-  - Wire into the season status transition flow (see Season Status Transition Validation)
-
-- [ ] **Brevo Usage Dashboard** — show current Brevo sending stats in the admin area
-  - Call Brevo API to display: emails sent this month, remaining quota, current plan
-  - Helps user know whether to upgrade before season starts
-  - Add as a section in the Email or Parameters panel
+- [ ] **Daily Send Count Indicator in Compose** — show today's Gmail send count against the ~500/day account limit
+  - Derive from EmailLogRecipient rows (Status = "Sent", SentAt = today) — no external API call needed
+  - Helps the user judge whether a big blast should be split across two days
+  - Add as a small label near the Send button in Compose
 
 ---
 
