@@ -432,6 +432,9 @@ public partial class MainForm : Form
         NavSection.RosterCompare         => new RosterComparePanel(),
         NavSection.SpareLists => new SpareListPanel(),
         NavSection.Fees       => new FeesPanel(),
+        NavSection.EmailLists   => new EmailListsPanel(),
+        NavSection.EmailCompose => new EmailComposePanel(),
+        NavSection.EmailHistory => new EmailHistoryPanel(),
         NavSection.Utilities  => new UtilitiesPanel(),
         NavSection.Theme      => new ThemePanel(),
         _ => new PlaceholderPanel(SectionTitle(section))
