@@ -354,13 +354,15 @@ public class EmailComposePanel : UserControl
         };
         var previewView = new WebView2 { Dock = DockStyle.Fill };
         dialog.Controls.Add(previewView);
-        // Initialize on Shown (not Load) — starting WebView2 before the dialog's window
-        // handle is fully realized intermittently throws E_ABORT from CreateCoreWebView2ControllerAsync.
+        // Share the compose editor's CoreWebView2Environment instead of letting this control
+        // create its own default one — two default environments in one process both try to
+        // lock the same default user-data folder, which fails with E_ABORT every time.
+        var sharedEnvironment = _webView.CoreWebView2.Environment;
         dialog.Shown += async (_, _) =>
         {
             try
             {
-                await previewView.EnsureCoreWebView2Async();
+                await previewView.EnsureCoreWebView2Async(sharedEnvironment);
                 previewView.CoreWebView2.NavigateToString(html);
             }
             catch (Exception ex)
