@@ -37,6 +37,11 @@ public class EmailComposePanel : UserControl
     private readonly List<(string FileName, byte[] Bytes)> _attachments = [];
     private readonly HashSet<int> _selectedIndividualIds = [];
 
+    private FlowLayoutPanel _mergeRow = null!;
+    private bool _inPreviewMode;
+    private string? _preservedBodyHtml;
+    private TaskCompletionSource? _pendingNavigation;
+
     public EmailComposePanel()
     {
         BackColor = AppTheme.ContentBackground;
@@ -108,19 +113,19 @@ public class EmailComposePanel : UserControl
         layout.Controls.Add(subjectRow, 0, 1);
 
         // -- Row 3: merge field insert buttons + insert report --
-        var mergeRow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8, 0, 8, 0) };
-        mergeRow.Controls.Add(new Label { Text = "Insert into body:", AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.FontSmall, Margin = new Padding(0, 6, 6, 0) });
+        _mergeRow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8, 0, 8, 0) };
+        _mergeRow.Controls.Add(new Label { Text = "Insert into body:", AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.FontSmall, Margin = new Padding(0, 6, 6, 0) });
         foreach (var field in new[] { "{FirstName}", "{LastName}", "{TeamName}", "{Email}" })
         {
             var btn = MakeButton(field, Color.FromArgb(100, 116, 139));
             btn.Click += async (_, _) => await InsertMergeFieldAsync(field);
-            mergeRow.Controls.Add(btn);
+            _mergeRow.Controls.Add(btn);
         }
         var btnInsertReport = MakeButton("Insert Report...", AppTheme.Accent);
         btnInsertReport.Margin = new Padding(16, 0, 6, 0);
         btnInsertReport.Click += OnInsertReport;
-        mergeRow.Controls.Add(btnInsertReport);
-        layout.Controls.Add(mergeRow, 0, 2);
+        _mergeRow.Controls.Add(btnInsertReport);
+        layout.Controls.Add(_mergeRow, 0, 2);
 
         // -- Row 4: attachment chips --
         _attachmentsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8, 2, 8, 2), AutoScroll = true };
@@ -167,7 +172,12 @@ public class EmailComposePanel : UserControl
         {
             await _webView.EnsureCoreWebView2Async();
             var editorPath = Path.Combine(AppContext.BaseDirectory, "Resources", "EmailEditor", "editor.html");
-            _webView.CoreWebView2.NavigationCompleted += (_, _) => _webViewReady = true;
+            _webView.CoreWebView2.NavigationCompleted += (_, _) =>
+            {
+                _webViewReady = true;
+                _pendingNavigation?.TrySetResult();
+                _pendingNavigation = null;
+            };
             _webView.CoreWebView2.Navigate(new Uri(editorPath).AbsoluteUri);
         }
         catch (Exception ex)
@@ -304,8 +314,19 @@ public class EmailComposePanel : UserControl
         }
     }
 
+    // Preview reuses the compose editor's own WebView2 instead of spinning up a second one —
+    // creating a second CoreWebView2 controller in this app reliably threw E_ABORT (WebView2
+    // controller creation appears to be unreliable for a second control in this process/host),
+    // so instead of fighting that, Preview temporarily navigates the same control to a
+    // rendered, read-only version of the email and back.
     private async void OnPreview(object? sender, EventArgs e)
     {
+        if (_inPreviewMode)
+        {
+            await ExitPreviewModeAsync();
+            return;
+        }
+
         if (!_webViewReady)
         {
             MessageBox.Show("The email editor is still loading — try again in a moment.", "Preview", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -339,40 +360,44 @@ public class EmailComposePanel : UserControl
 
         var html = $"""
             <html><body style="font-family:'Segoe UI',sans-serif;padding:16px;">
+            <p style="color:#b45309;font-size:12px;margin-top:0;">Preview — click "Close Preview" to keep editing.</p>
             <h3 style="border-bottom:1px solid #ccc;padding-bottom:8px;">{System.Net.WebUtility.HtmlEncode(subject)}</h3>
             <div>{mergedBody}</div>
             {attachmentNote}
             </body></html>
             """;
 
-        using var dialog = new Form
-        {
-            Text = "Preview Email",
-            Width = 700,
-            Height = 800,
-            StartPosition = FormStartPosition.CenterParent
-        };
-        var previewView = new WebView2 { Dock = DockStyle.Fill };
-        dialog.Controls.Add(previewView);
-        // Share the compose editor's CoreWebView2Environment instead of letting this control
-        // create its own default one — two default environments in one process both try to
-        // lock the same default user-data folder, which fails with E_ABORT every time.
-        var sharedEnvironment = _webView.CoreWebView2.Environment;
-        dialog.Shown += async (_, _) =>
-        {
-            try
-            {
-                await previewView.EnsureCoreWebView2Async(sharedEnvironment);
-                previewView.CoreWebView2.NavigateToString(html);
-            }
-            catch (Exception ex)
-            {
-                AppLogger.Error(ex, "Failed to initialize preview WebView2");
-                MessageBox.Show("Could not open the preview.", "Preview", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                dialog.Close();
-            }
-        };
-        dialog.ShowDialog(this);
+        _preservedBodyHtml = bodyTemplate;
+        _inPreviewMode = true;
+        _btnPreview.Text = "Close Preview";
+        _txtSubject.Enabled = false;
+        _btnSend.Enabled = false;
+        _mergeRow.Enabled = false;
+
+        await NavigateAndWaitAsync(html: html);
+    }
+
+    private async Task ExitPreviewModeAsync()
+    {
+        _inPreviewMode = false;
+        _btnPreview.Text = "Preview";
+        _txtSubject.Enabled = true;
+        _btnSend.Enabled = true;
+        _mergeRow.Enabled = true;
+
+        var editorPath = Path.Combine(AppContext.BaseDirectory, "Resources", "EmailEditor", "editor.html");
+        await NavigateAndWaitAsync(uri: new Uri(editorPath).AbsoluteUri);
+
+        if (_preservedBodyHtml != null)
+            await _webView.CoreWebView2.ExecuteScriptAsync($"window.setBody({JsonSerializer.Serialize(_preservedBodyHtml)})");
+    }
+
+    private Task NavigateAndWaitAsync(string? uri = null, string? html = null)
+    {
+        _pendingNavigation = new TaskCompletionSource();
+        if (html != null) _webView.CoreWebView2.NavigateToString(html);
+        else _webView.CoreWebView2.Navigate(uri!);
+        return _pendingNavigation.Task;
     }
 
     // Scope indices: 0 All Active Players, 1 Players on Teams, 2 Division, 3 Team,
