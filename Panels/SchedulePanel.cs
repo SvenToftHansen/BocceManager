@@ -1547,15 +1547,24 @@ public class SchedulePanel : UserControl
 
             if (deleteAll)
             {
-                var allSchedules = db.ScheduleDivisions.ToList();
+                var currentSeason = AppParameterService.GetDefaultSeasonId(db);
+                if (!currentSeason.HasValue)
+                {
+                    MessageBox.Show("No active season selected.");
+                    return;
+                }
+
+                var allSchedules = db.ScheduleDivisions
+                    .Where(s => s.Division.SeasonId == currentSeason.Value)
+                    .ToList();
                 if (!allSchedules.Any())
                 {
-                    MessageBox.Show("No schedules to delete.");
+                    MessageBox.Show("No schedules to delete for the current season.");
                     return;
                 }
 
                 if (MessageBox.Show(
-                    $"Delete ALL division schedules ({allSchedules.Count} records)?\n\nThis cannot be undone.",
+                    $"Delete ALL division schedules for the current season ({allSchedules.Count} records)?\n\nThis cannot be undone.",
                     "Delete All Schedules",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Warning) != DialogResult.Yes)
@@ -1564,7 +1573,7 @@ public class SchedulePanel : UserControl
                 db.ScheduleDivisions.RemoveRange(allSchedules);
                 db.SaveChanges();
 
-                MessageBox.Show($"Deleted {allSchedules.Count} schedule record(s).");
+                MessageBox.Show($"Deleted {allSchedules.Count} schedule record(s) for the current season.");
                 _gridDivisionSchedules.Rows.Clear();
                 _gridDivisionSchedules.Columns.Clear();
                 _lblDayHeader.Text = "";
