@@ -8,6 +8,7 @@ public class ClubDocument
     public string DocType { get; set; } = "";    // "pdf", "docx", "googledocs"
     public string? GoogleDocsUrl { get; set; }
     public int? LeagueId { get; set; }
+    public int? SeasonId { get; set; }
     public DateTime UploadedAt { get; set; } = DateTime.Now;
     public string? Notes { get; set; }
 }

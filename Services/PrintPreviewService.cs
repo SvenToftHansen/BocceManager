@@ -189,7 +189,12 @@ public static class PrintPreviewService
         {
             if (savedToDocsFolder)
             {
-                try { DocumentService.RegisterGeneratedPdf(db, fileName, suggestedName); }
+                try
+                {
+                    var leagueId = AppParameterService.GetDefaultLeagueId(db);
+                    var seasonId = AppParameterService.GetDefaultSeasonId(db);
+                    DocumentService.RegisterGeneratedPdf(db, fileName, suggestedName, leagueId, seasonId);
+                }
                 catch (Exception ex) { AppLogger.Error(ex, "Failed to register report PDF {FileName} in Documents", fileName); }
             }
 

@@ -14,7 +14,7 @@ public class DocumentsPanel : UserControl
     private Button _btnDelete = null!;
     private bool _webViewReady;
     private string? _pendingNavUrl;
-    private const int PreferredSplitDistance = 310;
+    private const int PreferredSplitDistance = 420;
 
     public DocumentsPanel()
     {
@@ -80,7 +80,9 @@ public class DocumentsPanel : UserControl
             Font = AppTheme.FontDefault,
             BorderStyle = BorderStyle.None
         };
-        _listView.Columns.Add("Title",   175);
+        _listView.Columns.Add("Title",   140);
+        _listView.Columns.Add("League",   85);
+        _listView.Columns.Add("Season",   95);
         _listView.Columns.Add("Type",     52);
         _listView.Columns.Add("Date",     70);
         _listView.SelectedIndexChanged += OnSelectionChanged;
@@ -98,7 +100,7 @@ public class DocumentsPanel : UserControl
         if (_mainSplit.Width <= 1) return;
 
         // Assign min sizes only after we know the measured width.
-        const int desiredLeftMin = 220;
+        const int desiredLeftMin = 330;
         const int desiredRightMin = 320;
         int maxTotalMin = Math.Max(0, _mainSplit.Width - 1);
 
@@ -180,9 +182,13 @@ public class DocumentsPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
+            var leagueNames = db.Leagues.ToDictionary(l => l.Id, l => l.Name);
+            var seasonNames = db.Seasons.ToDictionary(s => s.Id, s => s.Name);
             foreach (var doc in db.ClubDocuments.OrderBy(d => d.Title).ToList())
             {
                 var item = new ListViewItem(doc.Title);
+                item.SubItems.Add(doc.LeagueId.HasValue && leagueNames.TryGetValue(doc.LeagueId.Value, out var leagueName) ? leagueName : "");
+                item.SubItems.Add(doc.SeasonId.HasValue && seasonNames.TryGetValue(doc.SeasonId.Value, out var seasonName) ? seasonName : "");
                 item.SubItems.Add(doc.DocType == "googledocs" ? "GDOC" : doc.DocType.ToUpper());
                 item.SubItems.Add(doc.UploadedAt.ToString("MM/dd/yy"));
                 item.Tag = doc;
@@ -248,13 +254,13 @@ public class DocumentsPanel : UserControl
         if (ofd.ShowDialog() != DialogResult.OK) return;
 
         var defaultTitle = Path.GetFileNameWithoutExtension(ofd.FileName);
-        var title = PromptInput("Add Document", "Display name:", defaultTitle);
-        if (title == null) return;
+        var details = PromptDocumentDetails("Add Document", defaultTitle);
+        if (details == null) return;
 
         try
         {
             using var db = new BocceDbContext();
-            var doc = DocumentService.AddFile(db, ofd.FileName, title.Trim(), null, null);
+            var doc = DocumentService.AddFile(db, ofd.FileName, details.Value.Title, null, details.Value.LeagueId, details.Value.SeasonId);
             LoadDocuments();
             SelectItem(doc.Id);
         }
@@ -274,13 +280,13 @@ public class DocumentsPanel : UserControl
             return;
         }
 
-        var title = PromptInput("Add Google Doc", "Display name:", "Google Doc");
-        if (title == null) return;
+        var details = PromptDocumentDetails("Add Google Doc", "Google Doc");
+        if (details == null) return;
 
         try
         {
             using var db = new BocceDbContext();
-            var doc = DocumentService.AddGoogleDoc(db, url.Trim(), title.Trim(), null, null);
+            var doc = DocumentService.AddGoogleDoc(db, url.Trim(), details.Value.Title, null, details.Value.LeagueId, details.Value.SeasonId);
             LoadDocuments();
             SelectItem(doc.Id);
         }
@@ -373,5 +379,109 @@ public class DocumentsPanel : UserControl
         form.ActiveControl = txt;
         txt.SelectAll();
         return form.ShowDialog(this) == DialogResult.OK ? txt.Text : null;
+    }
+
+    // Prompts for a document's display name plus an optional League/Season tag, defaulting
+    // the pickers to the app's current default League/Season.
+    private (string Title, int? LeagueId, int? SeasonId)? PromptDocumentDetails(string caption, string defaultTitle)
+    {
+        List<League> leagues;
+        List<Season> seasons;
+        int? defaultLeagueId, defaultSeasonId;
+        try
+        {
+            using var db = new BocceDbContext();
+            leagues = db.Leagues.OrderBy(l => l.Name).ToList();
+            seasons = db.Seasons.OrderBy(s => s.Name).ToList();
+            defaultLeagueId = AppParameterService.GetDefaultLeagueId(db);
+            defaultSeasonId = AppParameterService.GetDefaultSeasonId(db);
+        }
+        catch
+        {
+            leagues = [];
+            seasons = [];
+            defaultLeagueId = null;
+            defaultSeasonId = null;
+        }
+
+        using var form = new Form
+        {
+            Text = caption,
+            Width = 440,
+            Height = 258,
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            BackColor = AppTheme.ContentBackground
+        };
+
+        var lblTitle = new Label { Text = "Display name:", Left = 12, Top = 14, Width = 410, Height = 20, ForeColor = AppTheme.TextPrimary, Font = AppTheme.FontDefault };
+        var txtTitle = new TextBox { Text = defaultTitle, Left = 12, Top = 38, Width = 408, Font = AppTheme.FontDefault };
+
+        var lblLeague = new Label { Text = "League:", Left = 12, Top = 70, Width = 410, Height = 20, ForeColor = AppTheme.TextPrimary, Font = AppTheme.FontDefault };
+        var cmbLeague = new ComboBox { Left = 12, Top = 94, Width = 408, Font = AppTheme.FontDefault, DropDownStyle = ComboBoxStyle.DropDownList };
+
+        var lblSeason = new Label { Text = "Season:", Left = 12, Top = 126, Width = 410, Height = 20, ForeColor = AppTheme.TextPrimary, Font = AppTheme.FontDefault };
+        var cmbSeason = new ComboBox { Left = 12, Top = 150, Width = 408, Font = AppTheme.FontDefault, DropDownStyle = ComboBoxStyle.DropDownList };
+
+        cmbLeague.Items.Add(new ComboItem(null, "(none)"));
+        foreach (var l in leagues) cmbLeague.Items.Add(new ComboItem(l.Id, l.Name));
+
+        void RefreshSeasons(int? leagueId)
+        {
+            cmbSeason.Items.Clear();
+            cmbSeason.Items.Add(new ComboItem(null, "(none)"));
+            foreach (var s in seasons.Where(s => leagueId == null || s.LeagueId == leagueId))
+                cmbSeason.Items.Add(new ComboItem(s.Id, s.Name));
+            cmbSeason.SelectedIndex = 0;
+        }
+
+        cmbLeague.SelectedIndexChanged += (_, _) => RefreshSeasons((cmbLeague.SelectedItem as ComboItem)?.Id);
+
+        var leagueIndex = defaultLeagueId.HasValue
+            ? cmbLeague.Items.Cast<ComboItem>().ToList().FindIndex(i => i.Id == defaultLeagueId)
+            : -1;
+        cmbLeague.SelectedIndex = leagueIndex >= 0 ? leagueIndex : 0;
+
+        if (defaultSeasonId.HasValue)
+        {
+            var seasonIndex = cmbSeason.Items.Cast<ComboItem>().ToList().FindIndex(i => i.Id == defaultSeasonId);
+            if (seasonIndex >= 0) cmbSeason.SelectedIndex = seasonIndex;
+        }
+
+        var btnOk = new Button
+        {
+            Text = "OK", DialogResult = DialogResult.OK,
+            Left = 232, Top = 194, Width = 88, Height = 30,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = AppTheme.Accent, ForeColor = Color.White,
+            Font = AppTheme.FontButton
+        };
+        var btnCancel = new Button
+        {
+            Text = "Cancel", DialogResult = DialogResult.Cancel,
+            Left = 328, Top = 194, Width = 88, Height = 30,
+            FlatStyle = FlatStyle.Flat,
+            Font = AppTheme.FontButton
+        };
+
+        form.Controls.AddRange([lblTitle, txtTitle, lblLeague, cmbLeague, lblSeason, cmbSeason, btnOk, btnCancel]);
+        form.AcceptButton = btnOk;
+        form.CancelButton = btnCancel;
+        form.ActiveControl = txtTitle;
+        txtTitle.SelectAll();
+
+        if (form.ShowDialog(this) != DialogResult.OK) return null;
+        if (string.IsNullOrWhiteSpace(txtTitle.Text)) return null;
+
+        return (txtTitle.Text.Trim(), (cmbLeague.SelectedItem as ComboItem)?.Id, (cmbSeason.SelectedItem as ComboItem)?.Id);
+    }
+
+    private class ComboItem(int? id, string name)
+    {
+        public int? Id { get; } = id;
+        public string Name { get; } = name;
+        public override string ToString() => Name;
     }
 }

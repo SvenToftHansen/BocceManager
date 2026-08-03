@@ -25,7 +25,7 @@ public static class DocumentService
     public static string GetFilePath(ClubDocument doc) =>
         Path.Combine(DocumentsFolder, doc.FileName);
 
-    public static ClubDocument AddFile(BocceDbContext db, string sourcePath, string title, string? notes, int? leagueId)
+    public static ClubDocument AddFile(BocceDbContext db, string sourcePath, string title, string? notes, int? leagueId, int? seasonId)
     {
         EnsureFolder();
         var ext = Path.GetExtension(sourcePath).ToLowerInvariant();
@@ -49,6 +49,7 @@ public static class DocumentService
             DocType = docType,
             Notes = notes,
             LeagueId = leagueId,
+            SeasonId = seasonId,
             UploadedAt = DateTime.UtcNow
         };
         db.ClubDocuments.Add(doc);
@@ -56,7 +57,7 @@ public static class DocumentService
         return doc;
     }
 
-    public static ClubDocument AddGoogleDoc(BocceDbContext db, string url, string title, string? notes, int? leagueId)
+    public static ClubDocument AddGoogleDoc(BocceDbContext db, string url, string title, string? notes, int? leagueId, int? seasonId)
     {
         var doc = new ClubDocument
         {
@@ -66,6 +67,7 @@ public static class DocumentService
             GoogleDocsUrl = url,
             Notes = notes,
             LeagueId = leagueId,
+            SeasonId = seasonId,
             UploadedAt = DateTime.UtcNow
         };
         db.ClubDocuments.Add(doc);
@@ -76,7 +78,7 @@ public static class DocumentService
     // Registers a report PDF that was rendered directly into DocumentsFolder (no copy needed —
     // the file is already there). Re-saving the same report the same day overwrites the file on
     // disk, so upsert by FileName rather than creating a duplicate row.
-    public static ClubDocument RegisterGeneratedPdf(BocceDbContext db, string fileName, string title)
+    public static ClubDocument RegisterGeneratedPdf(BocceDbContext db, string fileName, string title, int? leagueId, int? seasonId)
     {
         var doc = db.ClubDocuments.FirstOrDefault(d => d.FileName == fileName);
         if (doc == null)
@@ -85,6 +87,8 @@ public static class DocumentService
             db.ClubDocuments.Add(doc);
         }
         doc.Title = title;
+        doc.LeagueId = leagueId;
+        doc.SeasonId = seasonId;
         doc.UploadedAt = DateTime.UtcNow;
         db.SaveChanges();
         return doc;
