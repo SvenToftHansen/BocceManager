@@ -24,11 +24,14 @@ public class EmailComposePanel : UserControl
     private Label _lblRecipientCount = null!;
     private TextBox _txtSubject = null!;
     private WebView2 _webView = null!;
+    private FlowLayoutPanel _attachmentsPanel = null!;
     private Button _btnSend = null!;
+    private Button _btnPreview = null!;
     private Label _lblStatus = null!;
     private bool _webViewReady;
 
     private List<EmailRecipient> _currentRecipients = [];
+    private readonly List<(string FileName, byte[] Bytes)> _attachments = [];
 
     public EmailComposePanel()
     {
@@ -41,10 +44,11 @@ public class EmailComposePanel : UserControl
 
     private void BuildUI()
     {
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, BackColor = AppTheme.ContentBackground };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, BackColor = AppTheme.ContentBackground };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
 
@@ -87,7 +91,7 @@ public class EmailComposePanel : UserControl
         subjectRow.Controls.Add(_txtSubject);
         layout.Controls.Add(subjectRow, 0, 1);
 
-        // -- Row 3: merge field insert buttons --
+        // -- Row 3: merge field insert buttons + insert report --
         var mergeRow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8, 0, 8, 0) };
         mergeRow.Controls.Add(new Label { Text = "Insert into body:", AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.FontSmall, Margin = new Padding(0, 6, 6, 0) });
         foreach (var field in new[] { "{FirstName}", "{LastName}", "{TeamName}", "{Email}" })
@@ -96,22 +100,33 @@ public class EmailComposePanel : UserControl
             btn.Click += async (_, _) => await InsertMergeFieldAsync(field);
             mergeRow.Controls.Add(btn);
         }
+        var btnInsertReport = MakeButton("Insert Report...", AppTheme.Accent);
+        btnInsertReport.Margin = new Padding(16, 0, 6, 0);
+        btnInsertReport.Click += OnInsertReport;
+        mergeRow.Controls.Add(btnInsertReport);
         layout.Controls.Add(mergeRow, 0, 2);
 
-        // -- Row 4: body editor --
+        // -- Row 4: attachment chips --
+        _attachmentsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8, 2, 8, 2), AutoScroll = true };
+        layout.Controls.Add(_attachmentsPanel, 0, 3);
+
+        // -- Row 5: body editor --
         var bodyPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8, 0, 8, 0) };
         _webView = new WebView2 { Dock = DockStyle.Fill };
         bodyPanel.Controls.Add(_webView);
-        layout.Controls.Add(bodyPanel, 0, 3);
+        layout.Controls.Add(bodyPanel, 0, 4);
 
-        // -- Row 5: send --
+        // -- Row 6: send --
         var sendRow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8) };
         _btnSend = MakeButton("Send", AppTheme.ButtonSuccess);
         _btnSend.Click += OnSend;
         sendRow.Controls.Add(_btnSend);
+        _btnPreview = MakeButton("Preview", Color.FromArgb(100, 116, 139));
+        _btnPreview.Click += OnPreview;
+        sendRow.Controls.Add(_btnPreview);
         _lblStatus = new Label { AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.FontDefault, Margin = new Padding(12, 8, 0, 0) };
         sendRow.Controls.Add(_lblStatus);
-        layout.Controls.Add(sendRow, 0, 4);
+        layout.Controls.Add(sendRow, 0, 5);
 
         Controls.Add(layout);
     }
@@ -149,6 +164,186 @@ public class EmailComposePanel : UserControl
     {
         if (!_webViewReady) return;
         await _webView.CoreWebView2.ExecuteScriptAsync($"window.insertTextAtCursor('{field}')");
+    }
+
+    private async void OnInsertReport(object? sender, EventArgs e)
+    {
+        var choice = ShowReportPickerDialog();
+        if (choice == null) return;
+
+        int? leagueId;
+        int? seasonId;
+        using (var db = new BocceDbContext())
+        {
+            leagueId = AppParameterService.GetDefaultLeagueId(db);
+            seasonId = AppParameterService.GetDefaultSeasonId(db);
+        }
+
+        if (!leagueId.HasValue)
+        {
+            MessageBox.Show("Select a default league before inserting a report.", "Insert Report", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            if (choice.Value.AsContent)
+            {
+                if (!_webViewReady)
+                {
+                    MessageBox.Show("The email editor is still loading — try again in a moment.", "Insert Report", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                var html = ReportAttachmentService.BuildHtmlContent(choice.Value.Report, leagueId.Value, seasonId);
+                await _webView.CoreWebView2.ExecuteScriptAsync($"window.insertHtmlAtCursor({JsonSerializer.Serialize(html)})");
+            }
+            else
+            {
+                var (fileName, bytes) = ReportAttachmentService.BuildPdfAttachment(choice.Value.Report, leagueId.Value, seasonId);
+                _attachments.Add((fileName, bytes));
+                RefreshAttachmentChips();
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error(ex, "Failed to insert report into compose email");
+            MessageBox.Show($"Could not build report:\n\n{ex.Message}", "Insert Report", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private (AttachableReport Report, bool AsContent)? ShowReportPickerDialog()
+    {
+        var options = ReportAttachmentService.GetOptions();
+
+        using var dialog = new Form
+        {
+            Text = "Insert Report",
+            Width = 380,
+            Height = 200,
+            StartPosition = FormStartPosition.CenterParent,
+            BackColor = AppTheme.ContentBackground,
+            Font = AppTheme.FontDefault,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false
+        };
+
+        var lblReport = new Label { Text = "Report:", Location = new Point(10, 15), Size = new Size(100, 20), ForeColor = AppTheme.TextPrimary };
+        var cmbReport = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(10, 38), Size = new Size(340, 26) };
+        foreach (var opt in options) cmbReport.Items.Add(opt);
+
+        var rbPdf = new RadioButton { Text = "Attach as PDF", Location = new Point(10, 72), AutoSize = true, Checked = true, ForeColor = AppTheme.TextPrimary };
+        var rbContent = new RadioButton { Text = "Insert as content (HTML table)", Location = new Point(10, 96), AutoSize = true, ForeColor = AppTheme.TextPrimary };
+
+        cmbReport.SelectedIndexChanged += (_, _) =>
+        {
+            var selected = (AttachableReportOption)cmbReport.SelectedItem!;
+            rbContent.Enabled = selected.SupportsContent;
+            if (!selected.SupportsContent) rbPdf.Checked = true;
+        };
+        cmbReport.SelectedIndex = 0;
+
+        var btnOk = new Button { Text = "OK", Location = new Point(174, 132), Size = new Size(75, 28), DialogResult = DialogResult.OK };
+        var btnCancel = new Button { Text = "Cancel", Location = new Point(255, 132), Size = new Size(75, 28), DialogResult = DialogResult.Cancel };
+
+        dialog.Controls.AddRange([lblReport, cmbReport, rbPdf, rbContent, btnOk, btnCancel]);
+        dialog.AcceptButton = btnOk;
+        dialog.CancelButton = btnCancel;
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return null;
+
+        var chosen = (AttachableReportOption)cmbReport.SelectedItem!;
+        return (chosen.Report, rbContent.Checked);
+    }
+
+    private void RefreshAttachmentChips()
+    {
+        _attachmentsPanel.Controls.Clear();
+        foreach (var (fileName, _) in _attachments)
+        {
+            var chip = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                BackColor = Color.FromArgb(230, 230, 235),
+                Padding = new Padding(6, 3, 2, 3),
+                Margin = new Padding(0, 2, 6, 2)
+            };
+            chip.Controls.Add(new Label { Text = fileName, AutoSize = true, Font = AppTheme.FontSmall, ForeColor = AppTheme.TextPrimary, Margin = new Padding(0, 3, 4, 0) });
+            var btnRemove = new Button
+            {
+                Text = "✕", Width = 20, Height = 20, FlatStyle = FlatStyle.Flat,
+                BackColor = Color.Transparent, ForeColor = AppTheme.TextMuted, Cursor = Cursors.Hand,
+                Margin = new Padding(0)
+            };
+            btnRemove.FlatAppearance.BorderSize = 0;
+            var capturedName = fileName;
+            btnRemove.Click += (_, _) =>
+            {
+                _attachments.RemoveAll(a => a.FileName == capturedName);
+                RefreshAttachmentChips();
+            };
+            chip.Controls.Add(btnRemove);
+            _attachmentsPanel.Controls.Add(chip);
+        }
+    }
+
+    private async void OnPreview(object? sender, EventArgs e)
+    {
+        if (!_webViewReady)
+        {
+            MessageBox.Show("The email editor is still loading — try again in a moment.", "Preview", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var bodyRaw = await _webView.CoreWebView2.ExecuteScriptAsync("window.getBody()");
+        var bodyTemplate = JsonSerializer.Deserialize<string>(bodyRaw) ?? "";
+        var subjectTemplate = _txtSubject.Text.Trim();
+
+        Player samplePlayer;
+        string? sampleTeam;
+        if (_currentRecipients.Count > 0)
+        {
+            var r = _currentRecipients[0];
+            samplePlayer = new Player { FirstName = r.FirstName, LastName = r.LastName, Email = r.Email };
+            sampleTeam = r.TeamName;
+        }
+        else
+        {
+            samplePlayer = new Player { FirstName = "Jane", LastName = "Doe", Email = "jane@example.com" };
+            sampleTeam = "Sample Team";
+        }
+
+        var subject = MergeFieldService.Apply(subjectTemplate, samplePlayer, sampleTeam);
+        var mergedBody = MergeFieldService.Apply(bodyTemplate, samplePlayer, sampleTeam);
+
+        var attachmentNote = _attachments.Count > 0
+            ? $"<p style=\"color:#666;font-size:12px;\">Attachments: {string.Join(", ", _attachments.Select(a => System.Net.WebUtility.HtmlEncode(a.FileName)))}</p>"
+            : "";
+
+        var html = $"""
+            <html><body style="font-family:'Segoe UI',sans-serif;padding:16px;">
+            <h3 style="border-bottom:1px solid #ccc;padding-bottom:8px;">{System.Net.WebUtility.HtmlEncode(subject)}</h3>
+            <div>{mergedBody}</div>
+            {attachmentNote}
+            </body></html>
+            """;
+
+        using var dialog = new Form
+        {
+            Text = "Preview Email",
+            Width = 700,
+            Height = 800,
+            StartPosition = FormStartPosition.CenterParent
+        };
+        var previewView = new WebView2 { Dock = DockStyle.Fill };
+        dialog.Controls.Add(previewView);
+        dialog.Load += async (_, _) =>
+        {
+            await previewView.EnsureCoreWebView2Async();
+            previewView.CoreWebView2.NavigateToString(html);
+        };
+        dialog.ShowDialog(this);
     }
 
     private void LoadTargets()
@@ -291,6 +486,10 @@ public class EmailComposePanel : UserControl
             var credential = await GmailAuthService.GetCredentialAsync();
             var fromEmail = await GmailAuthService.GetConnectedAccountAsync(credential);
 
+            List<EmailAttachment>? attachments = _attachments.Count == 0
+                ? null
+                : _attachments.Select(a => new EmailAttachment(a.FileName, "application/pdf", a.Bytes)).ToList();
+
             int sent = 0, failed = 0;
             var results = new List<(EmailRecipient Recipient, bool Success, string? Error)>();
 
@@ -305,7 +504,7 @@ public class EmailComposePanel : UserControl
                     var subject = ApplyMerge(subjectTemplate, player, recipient.TeamName);
                     var body = ApplyMerge(bodyTemplate, player, recipient.TeamName);
 
-                    await GmailSendService.SendAsync(credential, fromEmail, recipient.Email, subject, body);
+                    await GmailSendService.SendAsync(credential, fromEmail, recipient.Email, subject, body, attachments);
                     results.Add((recipient, true, null));
                     sent++;
                 }

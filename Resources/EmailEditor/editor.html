@@ -64,6 +64,12 @@
     editor.focus();
     document.execCommand('insertText', false, text);
   };
+
+  // Called from the host app to insert report content (e.g. an HTML table) at the cursor.
+  window.insertHtmlAtCursor = (html) => {
+    editor.focus();
+    document.execCommand('insertHTML', false, html);
+  };
 </script>
 </body>
 </html>
