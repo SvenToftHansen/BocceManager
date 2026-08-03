@@ -24,11 +24,15 @@ public class EmailHistoryPanel : UserControl
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
-            Panel1MinSize = 150,
-            Panel2MinSize = 150,
-            SplitterDistance = 260,
+            Panel1MinSize = 0,
+            Panel2MinSize = 0,
             BackColor = AppTheme.Separator
         };
+        // Panel1MinSize/Panel2MinSize/SplitterDistance can't be set to their real values
+        // until the control has a real size — WinForms recomputes SplitterDistance
+        // internally when the min sizes are set, and throws if Height is still 0.
+        _split.SizeChanged += (_, _) => SafeApplySplitDistance(_split, 150, 150, 260);
+        _split.HandleCreated += (_, _) => BeginInvoke(new Action(() => SafeApplySplitDistance(_split, 150, 150, 260)));
 
         _lvLogs = new ListView
         {
@@ -67,6 +71,41 @@ public class EmailHistoryPanel : UserControl
         _split.Panel2.Controls.Add(_lvRecipients);
 
         Controls.Add(_split);
+    }
+
+    private static void SafeApplySplitDistance(SplitContainer split, int desiredFirstMin, int desiredSecondMin, int preferred)
+    {
+        int extent = split.Orientation == Orientation.Horizontal ? split.Height : split.Width;
+        if (extent <= 1) return;
+
+        int maxTotalMin = Math.Max(0, extent - 1);
+        int firstMin = desiredFirstMin, secondMin = desiredSecondMin;
+        if (firstMin + secondMin > maxTotalMin)
+        {
+            if (maxTotalMin == 0)
+            {
+                firstMin = 0;
+                secondMin = 0;
+            }
+            else
+            {
+                double ratio = desiredFirstMin / (double)(desiredFirstMin + desiredSecondMin);
+                firstMin = (int)Math.Floor(maxTotalMin * ratio);
+                secondMin = maxTotalMin - firstMin;
+            }
+        }
+
+        split.Panel1MinSize = firstMin;
+        split.Panel2MinSize = secondMin;
+
+        int maxFirst = extent - secondMin;
+        if (maxFirst < firstMin) maxFirst = firstMin;
+
+        int clamped = Math.Min(preferred, maxFirst);
+        clamped = Math.Max(firstMin, clamped);
+
+        if (clamped > 0)
+            split.SplitterDistance = clamped;
     }
 
     private void LoadLogs()

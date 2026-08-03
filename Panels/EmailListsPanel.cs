@@ -1,6 +1,7 @@
 using BocceManager.Data;
 using BocceManager.Data.Entities;
 using BocceManager.Services;
+using BocceManager.UI.Controls;
 using BocceManager.UI.Theme;
 
 namespace BocceManager.Panels;
@@ -14,13 +15,13 @@ public class EmailListsPanel : UserControl
         public override string ToString() => IsActive ? Name : $"{Name} (inactive)";
     }
 
-    private sealed record PlayerItem(int Id, string Name)
+    private sealed record PlayerItem(int Id, string Name, string SearchBlob)
     {
         public override string ToString() => Name;
     }
 
     private ListBox _lstLists = null!;
-    private TextBox _txtSearch = null!;
+    private SearchBoxControl _txtSearch = null!;
     private CheckedListBox _clbPlayers = null!;
     private Button _btnAdd = null!, _btnRename = null!, _btnDelete = null!, _btnToggleActive = null!;
 
@@ -41,11 +42,15 @@ public class EmailListsPanel : UserControl
         var split = new SplitContainer
         {
             Dock = DockStyle.Fill,
-            Panel1MinSize = 220,
-            Panel2MinSize = 260,
-            SplitterDistance = 260,
+            Panel1MinSize = 0,
+            Panel2MinSize = 0,
             BackColor = AppTheme.Separator
         };
+        // Panel1MinSize/Panel2MinSize/SplitterDistance can't be set to their real values
+        // until the control has a real size — WinForms recomputes SplitterDistance
+        // internally when the min sizes are set, and throws if Width is still 0.
+        split.SizeChanged += (_, _) => SafeApplySplitDistance(split, 220, 260, 260);
+        split.HandleCreated += (_, _) => BeginInvoke(new Action(() => SafeApplySplitDistance(split, 220, 260, 260)));
 
         // -- Left: lists --
         var leftLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, BackColor = AppTheme.Surface };
@@ -89,15 +94,8 @@ public class EmailListsPanel : UserControl
         rightLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var searchPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
-        _txtSearch = new TextBox
-        {
-            Dock = DockStyle.Fill,
-            Font = AppTheme.FontDefault,
-            BackColor = AppTheme.ContentBackground,
-            ForeColor = AppTheme.TextPrimary,
-            PlaceholderText = "Search players..."
-        };
-        _txtSearch.TextChanged += (_, _) => RefreshPlayerChecklist();
+        _txtSearch = new SearchBoxControl("Search name, email, phone, lot") { Dock = DockStyle.Fill };
+        _txtSearch.SearchTextChanged += (_, _) => RefreshPlayerChecklist();
         searchPanel.Controls.Add(_txtSearch);
         rightLayout.Controls.Add(searchPanel, 0, 0);
 
@@ -116,6 +114,41 @@ public class EmailListsPanel : UserControl
         split.Panel2.Controls.Add(rightLayout);
 
         Controls.Add(split);
+    }
+
+    private static void SafeApplySplitDistance(SplitContainer split, int desiredFirstMin, int desiredSecondMin, int preferred)
+    {
+        int extent = split.Orientation == Orientation.Horizontal ? split.Height : split.Width;
+        if (extent <= 1) return;
+
+        int maxTotalMin = Math.Max(0, extent - 1);
+        int firstMin = desiredFirstMin, secondMin = desiredSecondMin;
+        if (firstMin + secondMin > maxTotalMin)
+        {
+            if (maxTotalMin == 0)
+            {
+                firstMin = 0;
+                secondMin = 0;
+            }
+            else
+            {
+                double ratio = desiredFirstMin / (double)(desiredFirstMin + desiredSecondMin);
+                firstMin = (int)Math.Floor(maxTotalMin * ratio);
+                secondMin = maxTotalMin - firstMin;
+            }
+        }
+
+        split.Panel1MinSize = firstMin;
+        split.Panel2MinSize = secondMin;
+
+        int maxFirst = extent - secondMin;
+        if (maxFirst < firstMin) maxFirst = firstMin;
+
+        int clamped = Math.Min(preferred, maxFirst);
+        clamped = Math.Max(firstMin, clamped);
+
+        if (clamped > 0)
+            split.SplitterDistance = clamped;
     }
 
     private static Button MakeButton(string text, Color back) => new()
@@ -146,7 +179,8 @@ public class EmailListsPanel : UserControl
             _allPlayers = db.Players
                 .Where(p => p.IsActive)
                 .OrderBy(p => p.LastName).ThenBy(p => p.FirstName)
-                .Select(p => new PlayerItem(p.Id, $"{p.LastName}, {p.FirstName}"))
+                .Select(p => new PlayerItem(p.Id, $"{p.LastName}, {p.FirstName}",
+                    $"{p.LastName} {p.FirstName} {p.Email} {p.Phone} {p.LotNumber}"))
                 .ToList();
 
             _lstLists.Items.Clear();
@@ -192,10 +226,10 @@ public class EmailListsPanel : UserControl
 
     private void RefreshPlayerChecklist()
     {
-        var filter = _txtSearch.Text.Trim();
+        var filter = _txtSearch.SearchText.Trim();
         var visible = filter.Length == 0
             ? _allPlayers
-            : _allPlayers.Where(p => p.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+            : _allPlayers.Where(p => SearchQueryService.MatchesAnyTerm(p.SearchBlob, filter)).ToList();
 
         _suppressCheckEvents = true;
         _clbPlayers.Items.Clear();
