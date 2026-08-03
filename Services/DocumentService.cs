@@ -85,7 +85,7 @@ public static class DocumentService
             db.ClubDocuments.Add(doc);
         }
         doc.Title = title;
-        doc.UploadedAt = DateTime.Now;
+        doc.UploadedAt = DateTime.UtcNow;
         db.SaveChanges();
         return doc;
     }
