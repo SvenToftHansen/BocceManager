@@ -48,6 +48,7 @@ public class PlayerPanel : UserControl
         public string? Phone { get; set; }
         public string? LotNumber { get; set; }
         public bool IsActive { get; set; }
+        public int? PartnerPlayerId { get; set; }
 
         public string FullName => string.IsNullOrWhiteSpace(FirstName)
             ? LastName.Trim()
@@ -87,6 +88,8 @@ public class PlayerPanel : UserControl
     private ComboBox _cmbFilterOnTeam = null!;
     private ComboBox _cmbFilterSpare = null!;
     private ComboBox _cmbFilterLookingForTeam = null!;
+    private ComboBox _cmbFilterCouple = null!;
+    private HashSet<int> _likelyCoupleIds = [];
 
     private TextBox _txtFirstName = null!;
     private TextBox _txtLastName = null!;
@@ -242,6 +245,9 @@ public class PlayerPanel : UserControl
         _cmbFilterLookingForTeam = new ComboBox();
         _cmbFilterLookingForTeam.Items.AddRange(["All", "Looking For Team", "Not Looking"]);
         _cmbFilterLookingForTeam.SelectedIndex = 0;
+        _cmbFilterCouple = new ComboBox();
+        _cmbFilterCouple.Items.AddRange(["All", "Couples", "Unmarked Couples"]);
+        _cmbFilterCouple.SelectedIndex = 0;
 
         _cmbFilterSeason.SelectedIndexChanged += (_, _) => OnSeasonFilterChanged();
         _cmbFilterDivision.SelectedIndexChanged += (_, _) => OnDivisionFilterChanged();
@@ -249,7 +255,9 @@ public class PlayerPanel : UserControl
         _cmbFilterOnTeam.SelectedIndexChanged += (_, _) => { if (!_isLoadingFilters) ApplySearchFilter(); };
         _cmbFilterSpare.SelectedIndexChanged += (_, _) => { if (!_isLoadingFilters) ApplySearchFilter(); };
         _cmbFilterLookingForTeam.SelectedIndexChanged += (_, _) => { if (!_isLoadingFilters) ApplySearchFilter(); };
+        _cmbFilterCouple.SelectedIndexChanged += (_, _) => { if (!_isLoadingFilters) ApplySearchFilter(); };
 
+        var rowCouple = MakeFilterRow("Couples:", _cmbFilterCouple);
         var rowLft = MakeFilterRow("Looking For:", _cmbFilterLookingForTeam);
         var rowSpare = MakeFilterRow("Spare List:", _cmbFilterSpare);
         var rowOnTeam = MakeFilterRow("Team Status:", _cmbFilterOnTeam);
@@ -266,8 +274,8 @@ public class PlayerPanel : UserControl
             ForeColor = AppTheme.TextPrimary
         };
 
-        var filterPanel = new Panel { Dock = DockStyle.Top, Height = 24 * 6 + 18 };
-        filterPanel.Controls.AddRange([rowLft, rowSpare, rowOnTeam, rowTeam, rowDivision, rowSeason]);
+        var filterPanel = new Panel { Dock = DockStyle.Top, Height = 24 * 7 + 18 };
+        filterPanel.Controls.AddRange([rowCouple, rowLft, rowSpare, rowOnTeam, rowTeam, rowDivision, rowSeason]);
         filterPanel.Controls.Add(filtersHeader);
 
         var searchHint = new Label
@@ -771,6 +779,7 @@ public class PlayerPanel : UserControl
         int onTeamIdx = _cmbFilterOnTeam.SelectedIndex;       // 0 All, 1 On Team, 2 Off Team
         int spareIdx = _cmbFilterSpare.SelectedIndex;         // 0 All, 1 Spare List, 2 Not Spare
         int lftIdx = _cmbFilterLookingForTeam.SelectedIndex;  // 0 All, 1 Looking, 2 Not Looking
+        int coupleIdx = _cmbFilterCouple.SelectedIndex;       // 0 All, 1 Couples, 2 Unmarked Couples
 
         if (teamId.HasValue)
         {
@@ -805,6 +814,16 @@ public class PlayerPanel : UserControl
             if (lftIdx == 2 && isLooking) return false;
         }
 
+        if (coupleIdx == 1)
+        {
+            if (!p.PartnerPlayerId.HasValue) return false;
+        }
+        else if (coupleIdx == 2)
+        {
+            if (p.PartnerPlayerId.HasValue) return false;
+            if (!_likelyCoupleIds.Contains(p.Id)) return false;
+        }
+
         return true;
     }
 
@@ -825,12 +844,39 @@ public class PlayerPanel : UserControl
                 Email = p.Email,
                 Phone = p.Phone,
                 LotNumber = p.LotNumber,
-                IsActive = p.IsActive
+                IsActive = p.IsActive,
+                PartnerPlayerId = p.PartnerPlayerId
             })
             .ToList());
 
+        _likelyCoupleIds = ComputeLikelyCoupleIds();
+
         LoadFilterContextData();
         ApplySearchFilter(selectPlayerId);
+    }
+
+    private HashSet<int> ComputeLikelyCoupleIds()
+    {
+        var ids = new HashSet<int>();
+
+        void AddMatches(Func<PlayerLookup, string?> selector)
+        {
+            var groups = _allPlayers
+                .Where(p => !string.IsNullOrWhiteSpace(selector(p)))
+                .GroupBy(p => selector(p)!.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1);
+
+            foreach (var group in groups)
+                foreach (var p in group)
+                    ids.Add(p.Id);
+        }
+
+        AddMatches(p => p.LastName);
+        AddMatches(p => p.Email);
+        AddMatches(p => p.Phone);
+        AddMatches(p => p.LotNumber);
+
+        return ids;
     }
 
     private int? GetSelectedPartnerId()
@@ -909,7 +955,7 @@ public class PlayerPanel : UserControl
             _chkIsActive.Checked = p.IsActive;
             SetSelectedRoleId(p.Role);
 
-            PopulatePartnerLookup(p.Id, p.PartnerPlayerId);
+            PopulatePartnerLookup(p.Id, p.PartnerPlayerId, p.LastName);
             LoadPlayerTeams(p.Id);
             LoadPlayerLeagueStatus(p.Id);
         }
@@ -920,11 +966,14 @@ public class PlayerPanel : UserControl
         }
     }
 
-    private void PopulatePartnerLookup(int? selfPlayerId, int? selectedPartnerId)
+    private void PopulatePartnerLookup(int? selfPlayerId, int? selectedPartnerId, string? selfLastName = null)
     {
         var partners = _allPlayers
             .Where(p => !selfPlayerId.HasValue || p.Id != selfPlayerId.Value)
-            .OrderBy(p => p.LastName)
+            .Where(p => (selectedPartnerId.HasValue && p.Id == selectedPartnerId.Value)
+                || (!p.PartnerPlayerId.HasValue && _likelyCoupleIds.Contains(p.Id)))
+            .OrderBy(p => string.IsNullOrEmpty(selfLastName) || !string.Equals(p.LastName, selfLastName, StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+            .ThenBy(p => p.LastName)
             .ThenBy(p => p.FirstName)
             .Select(p => new PartnerItem { Id = p.Id, Name = p.DisplayName })
             .ToList();
