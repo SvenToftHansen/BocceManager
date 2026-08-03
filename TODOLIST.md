@@ -110,19 +110,16 @@ _Generated 2026-06-15 from TODO.md, memory files, and app state analysis_
 
 ---
 
-## Reporting (FastReport + WebView2 + PostgreSQL)
+## Reporting
 
-- [ ] **Install NuGet packages** — FastReport.Core (free), Microsoft.Web.WebView2
-- [ ] **Reports table** — PostgreSQL table: id, name, category, description, frx_content (text), is_active, updated_at
-- [ ] **Report Viewer Panel** — unified viewer using WebView2 to display PDF rendered from .frx
-- [ ] **Dynamic report menu** — builds sidebar/menu items from DB contents at startup
-- [ ] **Import/Export UI** — panel to import .frx files into DB and export for external editing in FastReport Designer
-- [ ] **Schedule Report (.frx)** — first-draft FastReport definition for schedule by week/division
-- [ ] **Teams Report (.frx)** — first-draft FastReport definition for team roster by division
-- [ ] **Standings Report (.frx)** — first-draft for standings by division
+Reports are hand-rolled `PrintDocument` GDI+ services (see CLAUDE.md's "Reporting System"), not a report-designer framework — an earlier FastReport.OpenSource plan was scrapped since it was never actually implemented (dead package reference, unused DB tables) while the schedule/teams/standings reports below were built directly.
+
+- [x] **Schedule Report** — `SchedulePrintService` / `ReportSchedulePanel`
+- [x] **Teams Report** — `TeamsPrintService` / `ReportTeamListingPanel`
+- [x] **Standings Report** — `StandingsPrintService` / `StandingsPanel`
 - [ ] **Document Creator** — combine multiple reports into one PDF for distribution
   - User selects which reports to include
-  - Merge and output to configured PDF folder
+  - Merge each report's PDF (via `PdfRenderService`) into one file, output to the configured PDF folder
 
 ---
 
@@ -148,10 +145,12 @@ _Generated 2026-06-15 from TODO.md, memory files, and app state analysis_
 ## Communications
 
 - [x] **In-App Email Client + Gmail Integration** — full email compose panel
-  - Recipient picker: individuals, teams, divisions, all members, email lists
+  - Recipient picker: all active players, players on teams, division, team, players on spare list, unpaid players, email lists, individual(s) (multi-select)
   - Send via Gmail API (OAuth2 desktop flow); personal Gmail accounts cap at ~500/day, comfortably covers 240–500/week
   - Gmail Client ID/Secret and refresh token stored DPAPI-encrypted in AppParameters (Parameters panel "Gmail Integration" section)
   - Per-recipient send history log (EmailLog/EmailLogRecipient)
+  - Insert Report... — attach (PDF) or embed (HTML table) Spare List/Unpaid Fees/All Players/Team Listing via `ReportAttachmentService`
+  - Preview — renders subject/body (merged against a sample or real recipient) before sending
   - Related: Email Lists Panel
   - Note: superseded the originally planned Brevo integration, which was never built
 
@@ -161,7 +160,7 @@ _Generated 2026-06-15 from TODO.md, memory files, and app state analysis_
   - Combine into one email per team: "Your Standings + League Standings"
   - Trigger manually from Standings panel ("Email Standings" button) or from Email panel
   - Use the Gmail integration (same as general email); one send per team = 1 email per team per send
-  - Consider PDF attachment vs. HTML inline table for the standings content
+  - Extend `ReportAttachmentService`'s `AttachableReport` enum with a Standings option (its `BuildDocument` is currently private and needs a mode/division filter — see `StandingsPrintService`)
   - Low-volume: ~60 teams × 2 reports = 60 emails per send (well within Gmail's daily limit)
 
 - [ ] **Daily Send Count Indicator in Compose** — show today's Gmail send count against the ~500/day account limit

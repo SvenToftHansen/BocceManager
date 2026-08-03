@@ -21,28 +21,24 @@
 
 ## Architectural Decisions
 
-### Reporting System (Updated 2026-06-13)
+### Reporting System (Updated 2026-08-03)
 
-**Decision**: Use **FastReport.OpenSource** instead of Microsoft ReportViewer for report generation and editing.
+**Decision**: Reports are hand-rolled `System.Drawing.Printing.PrintDocument` GDI+ drawing code, not a report-designer framework.
 
-**Rationale**:
-- Microsoft ReportViewer has compatibility issues with .NET 9 (BinaryFormatter was removed in .NET 9 for security reasons)
-- ReportViewer is designed for .NET Framework and older .NET Core versions
-- FastReport.OpenSource is already included in the project and fully supports .NET 9
-- FastReport has a visual designer allowing WYSIWYG report editing
-- FastReport supports multiple export formats (PDF, Excel, etc.)
+**Background**: An earlier plan to adopt FastReport.OpenSource (in place of Microsoft ReportViewer, which doesn't work on .NET 9) was never actually implemented — the package reference, a `Reports`/`ReportParameters` metadata schema, and a `ReportService.cs` were added, but no code ever loaded a `.frx` file or rendered through FastReport. That dead scaffolding (package reference, entities, service, orphaned `.rdlc` files) has been removed to stop it from implying report generation works a way it doesn't.
 
-**Implementation**:
-- Reports are defined in FastReport format (not RDLC)
-- Users can edit reports visually using FastReport Designer
-- ReportViewerPanel uses FastReport's report viewer control
-- Load reports with: `var report = new Report(); report.Load("path/to/report.frx");`
-- More details: See ReportViewerPanel.cs and ReportService.cs
+**How reporting actually works**:
+- Each report has a dedicated service (e.g. `SpareListReportService`, `UnpaidFeesReportService`, `AllPlayersReportService`, `TeamsPrintService`, `SchedulePrintService`, `StandingsPrintService`) that builds a `PrintDocument` via GDI+ (`Graphics.DrawString`/`DrawRectangle`/etc.) from data pulled straight out of the DB — no template files.
+- Most of these services also expose flat `(string[] Headers, List<string[]> Rows)` export data for Excel/CSV.
+- The resulting `PrintDocument` is shown via `PrintPreviewService.ShowPrintPreview(...)`, which provides the shared preview window, Print/PDF/Excel/CSV toolbar.
+- PDF export drives the OS's "Microsoft Print to PDF" virtual printer (`Services/PdfRenderService.cs` for headless use, e.g. email attachments; `PrintPreviewService.SendToPdf` for the interactive "Save as PDF" button).
+
+**Adding a new report**: write a new `Services/<Name>ReportService.cs` following the existing pattern (data builder → `PrintDocument` builder → optional flat export), and a panel that calls `PrintPreviewService.ShowPrintPreview`. No DB metadata rows or template files needed.
 
 **Related Files**:
-- `Services/ReportService.cs` - Report metadata and app parameters
-- `Panels/ReportViewerPanel.cs` - Unified report viewer UI
-- `Reports/` - FastReport definition files (.frx)
+- `Services/PrintPreviewService.cs` - Shared preview/print/export UI
+- `Services/PdfRenderService.cs` - Headless PrintDocument → PDF file
+- `Services/*ReportService.cs`, `Services/*PrintService.cs` - Per-report data + document builders
 
 ---
 
@@ -162,39 +158,21 @@ Stores application-wide configuration values as key-value pairs:
 - `WebsiteApiUrl` - URL for web report upload (placeholder)
 - `WebsiteApiKey` - API key for website integration (placeholder)
 
-Query via: `ReportService.GetAppParameter(db, "key")`
-
-### Reports & ReportParameters Tables
-Metadata-driven report discovery:
-- **Reports** - Available reports (Name, ReportPath, Description, DisplayOrder, IsActive)
-- **ReportParameters** - Parameters each report accepts (ReportId, ParameterName, DefaultSource)
-
-Dynamic report loading allows adding new reports without code changes.
+Query via: `AppParameterService.GetAppParameter(db, "key")`
 
 ---
 
 ## Common Development Tasks
 
 ### Adding a New Report
-1. Create `.frx` file in `/Reports` folder using FastReport Designer
-2. Add row to `Reports` table via migration or directly in PostgreSQL:
-   ```sql
-   INSERT INTO "Reports" ("Name", "ReportPath", "Description", "DisplayOrder", "IsActive", "CreatedDate", "ModifiedDate")
-   VALUES ('Report Name', 'Reports/ReportName.frx', 'Description', 3, true, NOW(), NOW());
-   ```
-3. If report needs parameters, add rows to `ReportParameters` table
-4. Rebuild and run app
-
-### Editing an Existing Report
-1. Open `/Reports/ReportName.frx` with FastReport Designer
-2. Edit layout, add/remove fields, change formatting
-3. Save the file
-4. Rebuild the app (RDLC-like editing, but FastReport format)
+1. Write `Services/<Name>ReportService.cs` following the existing pattern: a data builder (DB → DTOs), a `BuildDocument(...)` that draws the `PrintDocument` via GDI+, and optionally a flat `(headers, rows)` export for Excel/CSV.
+2. Add a panel (or a button on an existing panel) that builds the document and calls `PrintPreviewService.ShowPrintPreview(this, doc, headers, rows)`.
+3. No DB rows or template files needed — reports aren't metadata-driven.
 
 ### Exporting Report to PDF
-- Button click calls `ReportService.GetDefaultReportPdfLocation(db)`
-- Uses configured save location (AppParameter: "ReportPdfLocation")
-- Default: `Environment.SpecialFolder.MyDocuments`
+- Interactive: the Print Preview toolbar's "Save as PDF" button (`PrintPreviewService.SendToPdf`) drives the OS's "Microsoft Print to PDF" virtual printer via a `SaveFileDialog`.
+- Headless (e.g. for email attachments): `Services/PdfRenderService.TryRenderToPdf(doc, outputPath, out error)` does the same thing without a dialog.
+- Default save folder comes from the `ReportPdfLocation` AppParameter, falling back to `Environment.SpecialFolder.MyDocuments`.
 
 ---
 

@@ -1046,83 +1046,6 @@ namespace BocceManager.Data.Migrations
                     b.ToTable("PlayoffSeedings");
                 });
 
-            modelBuilder.Entity("BocceManager.Data.Entities.Report", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("ModifiedDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ReportPath")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Name")
-                        .IsUnique();
-
-                    b.ToTable("Reports");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.ReportParameter", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("DefaultSource")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsRequired")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("ParameterLabel")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ParameterName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("ReportId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ReportId", "ParameterName")
-                        .IsUnique();
-
-                    b.ToTable("ReportParameters");
-                });
-
             modelBuilder.Entity("BocceManager.Data.Entities.ScheduleDivision", b =>
                 {
                     b.Property<int>("Id")
@@ -2442,17 +2365,6 @@ namespace BocceManager.Data.Migrations
                     b.Navigation("Season");
 
                     b.Navigation("Team");
-                });
-
-            modelBuilder.Entity("BocceManager.Data.Entities.ReportParameter", b =>
-                {
-                    b.HasOne("BocceManager.Data.Entities.Report", "Report")
-                        .WithMany()
-                        .HasForeignKey("ReportId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Report");
                 });
 
             modelBuilder.Entity("BocceManager.Data.Entities.ScheduleDivision", b =>

@@ -117,10 +117,6 @@ public class BocceDbContext : DbContext
     // Ideas
     public DbSet<NewIdea> NewIdeas => Set<NewIdea>();
 
-    // Reports
-    public DbSet<Report> Reports => Set<Report>();
-    public DbSet<ReportParameter> ReportParameters => Set<ReportParameter>();
-
     // Views
     public DbSet<Stats>        Stats    => Set<Stats>();
     public DbSet<Scoring>      Scoring  => Set<Scoring>();
@@ -165,11 +161,6 @@ model.Entity<SeasonCourt>().HasIndex(e => new { e.SeasonId, e.CourtId }).IsUniqu
             .WithMany()
             .HasForeignKey(e => e.PartnerPlayerId)
             .OnDelete(DeleteBehavior.SetNull);
-
-        // Report: unique key on Name
-        model.Entity<Report>().HasIndex(e => e.Name).IsUnique();
-        // ReportParameter: unique on ReportId + ParameterName
-        model.Entity<ReportParameter>().HasIndex(e => new { e.ReportId, e.ParameterName }).IsUnique();
 
         // BocceMatch: multiple FKs to Team
         model.Entity<BocceMatch>()
