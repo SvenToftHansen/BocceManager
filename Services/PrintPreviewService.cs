@@ -159,23 +159,32 @@ public static class PrintPreviewService
     {
         using var db = new BocceDbContext();
         var docsFolder = AppParameterService.GetAppParameter(db, "DocumentsFolder");
-        var initialDir = !string.IsNullOrWhiteSpace(docsFolder) && Directory.Exists(docsFolder)
-            ? docsFolder
-            : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        var dateSuffix = DateTime.Now.ToString("MMM_dd_yyyy");
+        var fileName = $"{suggestedName}_{dateSuffix}.pdf";
 
-        using var saveDlg = new SaveFileDialog
+        string targetPath;
+        if (!string.IsNullOrWhiteSpace(docsFolder) && Directory.Exists(docsFolder))
         {
-            Title = "Save as PDF",
-            Filter = "PDF files (*.pdf)|*.pdf",
-            FileName = suggestedName + ".pdf",
-            DefaultExt = "pdf",
-            InitialDirectory = initialDir
-        };
-        if (saveDlg.ShowDialog(parent) != DialogResult.OK) return;
+            // Documents Folder is configured — save straight there, no dialog.
+            targetPath = Path.Combine(docsFolder, fileName);
+        }
+        else
+        {
+            using var saveDlg = new SaveFileDialog
+            {
+                Title = "Save as PDF",
+                Filter = "PDF files (*.pdf)|*.pdf",
+                FileName = fileName,
+                DefaultExt = "pdf",
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+            };
+            if (saveDlg.ShowDialog(parent) != DialogResult.OK) return;
+            targetPath = saveDlg.FileName;
+        }
 
-        if (PdfRenderService.TryRenderToPdf(doc, saveDlg.FileName, out var error))
+        if (PdfRenderService.TryRenderToPdf(doc, targetPath, out var error))
         {
-            MessageBox.Show("PDF saved successfully.", "Save as PDF",
+            MessageBox.Show($"PDF saved to {targetPath}", "Save as PDF",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         else

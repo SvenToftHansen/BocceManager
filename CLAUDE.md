@@ -171,9 +171,10 @@ Query via: `AppParameterService.GetAppParameter(db, "key")`
 3. No DB rows or template files needed — reports aren't metadata-driven.
 
 ### Exporting Report to PDF
-- Interactive: the Print Preview toolbar's "Save as PDF" button (`PrintPreviewService.SendToPdf`) drives the OS's "Microsoft Print to PDF" virtual printer via a `SaveFileDialog`.
-- Headless (e.g. for email attachments): `Services/PdfRenderService.TryRenderToPdf(doc, outputPath, out error)` does the same thing without a dialog.
-- Default save folder comes from the `DocumentsFolder` AppParameter (set on the Parameters panel's "Documents Folder" field), falling back to `Environment.SpecialFolder.MyDocuments` if unset or missing.
+- Interactive: the Print Preview toolbar's "Save as PDF" button (`PrintPreviewService.SendToPdf`) drives the OS's "Microsoft Print to PDF" virtual printer.
+- If the `DocumentsFolder` AppParameter (Parameters panel's "Documents Folder" field) is set and exists, it saves straight there with no dialog — filename is `<ReportName>_<MMM_dd_yyyy>.pdf` (e.g. `SpareList_Jan_01_2026.pdf`), overwriting silently if a file with the same name already exists.
+- If `DocumentsFolder` isn't configured, it falls back to a `SaveFileDialog` (initial folder `Environment.SpecialFolder.MyDocuments`) with the same dated filename pre-filled.
+- Headless (e.g. for email attachments): `Services/PdfRenderService.TryRenderToPdf(doc, outputPath, out error)` does the same rendering without a dialog.
 
 ---
 
