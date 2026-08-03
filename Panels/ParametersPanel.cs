@@ -10,7 +10,6 @@ public class ParametersPanel : UserControl
     // Folder params (auto-save on browse)
     private TextBox _txtBackupFolder    = null!;
     private TextBox _txtDocsFolder      = null!;
-    private TextBox _txtReportPdfFolder = null!;
 
     // File param (auto-save on browse)
     private TextBox _txtClubRulesDoc = null!;
@@ -54,7 +53,6 @@ public class ParametersPanel : UserControl
         y = AddSectionHeader(scroll, "FOLDER LOCATIONS", y);
         y = AddFolderRow(scroll, "Backup Folder",      "BackupFolder",      ref _txtBackupFolder,    y);
         y = AddFolderRow(scroll, "Documents Folder",   "DocumentsFolder",   ref _txtDocsFolder,      y);
-        y = AddFolderRow(scroll, "Report PDF Folder",  "ReportPdfLocation", ref _txtReportPdfFolder, y);
 
         y += 12;
 

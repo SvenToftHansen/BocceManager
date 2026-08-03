@@ -296,8 +296,7 @@ AddColumnIfMissing(conn, "Seasons", "TimeslotDriven",        "INTEGER NOT NULL D
         (string Key, string Desc)[] ensure =
         [
             ("BackupFolder",      "Folder where database backups are saved"),
-            ("DocumentsFolder",   "Folder where imported document files are stored"),
-            ("ReportPdfLocation", "Default folder for PDF report exports"),
+            ("DocumentsFolder",   "Folder where imported document files and generated report PDFs are stored"),
             ("ClubRulesDocument", "Path to the club rules PDF or Word document"),
         ];
         foreach (var (key, desc) in ensure)

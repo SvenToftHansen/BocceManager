@@ -73,6 +73,23 @@ public static class DocumentService
         return doc;
     }
 
+    // Registers a report PDF that was rendered directly into DocumentsFolder (no copy needed —
+    // the file is already there). Re-saving the same report the same day overwrites the file on
+    // disk, so upsert by FileName rather than creating a duplicate row.
+    public static ClubDocument RegisterGeneratedPdf(BocceDbContext db, string fileName, string title)
+    {
+        var doc = db.ClubDocuments.FirstOrDefault(d => d.FileName == fileName);
+        if (doc == null)
+        {
+            doc = new ClubDocument { FileName = fileName, DocType = "pdf" };
+            db.ClubDocuments.Add(doc);
+        }
+        doc.Title = title;
+        doc.UploadedAt = DateTime.Now;
+        db.SaveChanges();
+        return doc;
+    }
+
     public static void Delete(BocceDbContext db, ClubDocument doc)
     {
         if (!string.IsNullOrEmpty(doc.FileName))

@@ -163,10 +163,12 @@ public static class PrintPreviewService
         var fileName = $"{suggestedName}_{dateSuffix}.pdf";
 
         string targetPath;
+        bool savedToDocsFolder;
         if (!string.IsNullOrWhiteSpace(docsFolder) && Directory.Exists(docsFolder))
         {
             // Documents Folder is configured — save straight there, no dialog.
             targetPath = Path.Combine(docsFolder, fileName);
+            savedToDocsFolder = true;
         }
         else
         {
@@ -180,10 +182,17 @@ public static class PrintPreviewService
             };
             if (saveDlg.ShowDialog(parent) != DialogResult.OK) return;
             targetPath = saveDlg.FileName;
+            savedToDocsFolder = false;
         }
 
         if (PdfRenderService.TryRenderToPdf(doc, targetPath, out var error))
         {
+            if (savedToDocsFolder)
+            {
+                try { DocumentService.RegisterGeneratedPdf(db, fileName, suggestedName); }
+                catch (Exception ex) { AppLogger.Error(ex, "Failed to register report PDF {FileName} in Documents", fileName); }
+            }
+
             MessageBox.Show($"PDF saved to {targetPath}", "Save as PDF",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }

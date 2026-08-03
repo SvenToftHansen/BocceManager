@@ -130,7 +130,7 @@ ReportExportService.ExportToExcel(this, "filename", headers, rows);
 
 ### HTTP Resilience (Added 2026-06-24)
 
-**Decision**: Use **Polly** for retry logic on all external HTTP calls (Brevo email API, website API).
+**Decision**: Use **Polly** for retry logic on all external HTTP calls (Gmail API, website API).
 
 **Implementation**:
 - `Services/PollyPolicies.cs` — shared pipeline definitions; add new policies here as needed
@@ -154,8 +154,7 @@ await PollyPolicies.HttpRetry.ExecuteAsync(async ct =>
 
 ### AppParameters Table
 Stores application-wide configuration values as key-value pairs:
-- `DocumentsFolder` - Default folder the "Save as PDF" dialog opens to for all reports
-- `ReportPdfLocation` - Legacy/unused; superseded by `DocumentsFolder` for PDF export defaulting
+- `DocumentsFolder` - Folder where imported documents and generated report PDFs are saved; also where the "Save as PDF" report toolbar button saves without prompting
 - `WebsiteApiUrl` - URL for web report upload (placeholder)
 - `WebsiteApiKey` - API key for website integration (placeholder)
 
@@ -172,9 +171,9 @@ Query via: `AppParameterService.GetAppParameter(db, "key")`
 
 ### Exporting Report to PDF
 - Interactive: the Print Preview toolbar's "Save as PDF" button (`PrintPreviewService.SendToPdf`) drives the OS's "Microsoft Print to PDF" virtual printer.
-- If the `DocumentsFolder` AppParameter (Parameters panel's "Documents Folder" field) is set and exists, it saves straight there with no dialog — filename is `<ReportName>_<MMM_dd_yyyy>.pdf` (e.g. `SpareList_Jan_01_2026.pdf`), overwriting silently if a file with the same name already exists.
-- If `DocumentsFolder` isn't configured, it falls back to a `SaveFileDialog` (initial folder `Environment.SpecialFolder.MyDocuments`) with the same dated filename pre-filled.
-- Headless (e.g. for email attachments): `Services/PdfRenderService.TryRenderToPdf(doc, outputPath, out error)` does the same rendering without a dialog.
+- If the `DocumentsFolder` AppParameter (Parameters panel's "Documents Folder" field) is set and exists, it saves straight there with no dialog — filename is `<ReportName>_<MMM_dd_yyyy>.pdf` (e.g. `SpareList_Jan_01_2026.pdf`), overwriting silently if a file with the same name already exists. It also registers/updates a `ClubDocuments` row (`DocumentService.RegisterGeneratedPdf`) so the report shows up in the Documents panel — `Title` is the report name without the date suffix, `FileName` is the actual dated filename on disk, `DocType` is `"pdf"`, `UploadedAt` is the save time. Upserted by `FileName`, so re-exporting the same report the same day updates the existing row instead of duplicating it.
+- If `DocumentsFolder` isn't configured, it falls back to a `SaveFileDialog` (initial folder `Environment.SpecialFolder.MyDocuments`) with the same dated filename pre-filled, and does **not** create a Documents row (the file isn't in the managed folder).
+- Headless (e.g. for email attachments): `Services/PdfRenderService.TryRenderToPdf(doc, outputPath, out error)` does the same rendering without a dialog and without touching `ClubDocuments`.
 
 ---
 
