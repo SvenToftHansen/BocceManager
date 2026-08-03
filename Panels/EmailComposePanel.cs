@@ -354,10 +354,21 @@ public class EmailComposePanel : UserControl
         };
         var previewView = new WebView2 { Dock = DockStyle.Fill };
         dialog.Controls.Add(previewView);
-        dialog.Load += async (_, _) =>
+        // Initialize on Shown (not Load) — starting WebView2 before the dialog's window
+        // handle is fully realized intermittently throws E_ABORT from CreateCoreWebView2ControllerAsync.
+        dialog.Shown += async (_, _) =>
         {
-            await previewView.EnsureCoreWebView2Async();
-            previewView.CoreWebView2.NavigateToString(html);
+            try
+            {
+                await previewView.EnsureCoreWebView2Async();
+                previewView.CoreWebView2.NavigateToString(html);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error(ex, "Failed to initialize preview WebView2");
+                MessageBox.Show("Could not open the preview.", "Preview", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                dialog.Close();
+            }
         };
         dialog.ShowDialog(this);
     }
