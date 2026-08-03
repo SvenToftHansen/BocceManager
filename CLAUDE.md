@@ -154,7 +154,8 @@ await PollyPolicies.HttpRetry.ExecuteAsync(async ct =>
 
 ### AppParameters Table
 Stores application-wide configuration values as key-value pairs:
-- `ReportPdfLocation` - Default folder for PDF exports
+- `DocumentsFolder` - Default folder the "Save as PDF" dialog opens to for all reports
+- `ReportPdfLocation` - Legacy/unused; superseded by `DocumentsFolder` for PDF export defaulting
 - `WebsiteApiUrl` - URL for web report upload (placeholder)
 - `WebsiteApiKey` - API key for website integration (placeholder)
 
@@ -172,7 +173,7 @@ Query via: `AppParameterService.GetAppParameter(db, "key")`
 ### Exporting Report to PDF
 - Interactive: the Print Preview toolbar's "Save as PDF" button (`PrintPreviewService.SendToPdf`) drives the OS's "Microsoft Print to PDF" virtual printer via a `SaveFileDialog`.
 - Headless (e.g. for email attachments): `Services/PdfRenderService.TryRenderToPdf(doc, outputPath, out error)` does the same thing without a dialog.
-- Default save folder comes from the `ReportPdfLocation` AppParameter, falling back to `Environment.SpecialFolder.MyDocuments`.
+- Default save folder comes from the `DocumentsFolder` AppParameter (set on the Parameters panel's "Documents Folder" field), falling back to `Environment.SpecialFolder.MyDocuments` if unset or missing.
 
 ---
 

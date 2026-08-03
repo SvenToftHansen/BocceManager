@@ -1,4 +1,5 @@
 using System.Drawing.Printing;
+using BocceManager.Data;
 
 namespace BocceManager.Services;
 
@@ -156,12 +157,19 @@ public static class PrintPreviewService
 
     private static void SendToPdf(Control parent, PrintDocument doc, string suggestedName)
     {
+        using var db = new BocceDbContext();
+        var docsFolder = AppParameterService.GetAppParameter(db, "DocumentsFolder");
+        var initialDir = !string.IsNullOrWhiteSpace(docsFolder) && Directory.Exists(docsFolder)
+            ? docsFolder
+            : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+
         using var saveDlg = new SaveFileDialog
         {
             Title = "Save as PDF",
             Filter = "PDF files (*.pdf)|*.pdf",
             FileName = suggestedName + ".pdf",
-            DefaultExt = "pdf"
+            DefaultExt = "pdf",
+            InitialDirectory = initialDir
         };
         if (saveDlg.ShowDialog(parent) != DialogResult.OK) return;
 
