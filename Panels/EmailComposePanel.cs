@@ -2,6 +2,7 @@ using System.Text.Json;
 using BocceManager.Data;
 using BocceManager.Data.Entities;
 using BocceManager.Services;
+using BocceManager.UI.Controls;
 using BocceManager.UI.Theme;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Web.WebView2.WinForms;
@@ -21,6 +22,8 @@ public class EmailComposePanel : UserControl
 
     private ComboBox _cmbScope = null!;
     private ComboBox _cmbTarget = null!;
+    private Button _btnSelectIndividuals = null!;
+    private Label _lblSelectedIndividuals = null!;
     private Label _lblRecipientCount = null!;
     private TextBox _txtSubject = null!;
     private WebView2 _webView = null!;
@@ -32,6 +35,7 @@ public class EmailComposePanel : UserControl
 
     private List<EmailRecipient> _currentRecipients = [];
     private readonly List<(string FileName, byte[] Bytes)> _attachments = [];
+    private readonly HashSet<int> _selectedIndividualIds = [];
 
     public EmailComposePanel()
     {
@@ -39,6 +43,7 @@ public class EmailComposePanel : UserControl
         Dock = DockStyle.Fill;
         BuildUI();
         Load += async (_, _) => await InitWebViewAsync();
+        UpdateScopeControlsVisibility();
         LoadTargets();
     }
 
@@ -56,10 +61,13 @@ public class EmailComposePanel : UserControl
         var scopeRow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8, 6, 8, 0) };
         scopeRow.Controls.Add(new Label { Text = "Send To:", AutoSize = true, ForeColor = AppTheme.TextSecondary, Font = AppTheme.FontDefault, Margin = new Padding(0, 8, 6, 0) });
 
-        _cmbScope = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 150, Font = AppTheme.FontDefault };
-        _cmbScope.Items.AddRange(["All Members", "Division", "Team", "Email List", "Individual"]);
+        _cmbScope = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 170, Font = AppTheme.FontDefault };
+        _cmbScope.Items.AddRange([
+            "All Active Players", "Players on Teams", "Division", "Team",
+            "Players on Spare List", "Unpaid Players", "Email List", "Individual(s)"
+        ]);
         _cmbScope.SelectedIndex = 0;
-        _cmbScope.SelectedIndexChanged += (_, _) => { LoadTargets(); RefreshRecipientPreview(); };
+        _cmbScope.SelectedIndexChanged += (_, _) => { UpdateScopeControlsVisibility(); LoadTargets(); RefreshRecipientPreview(); };
         scopeRow.Controls.Add(_cmbScope);
 
         _cmbTarget = new ComboBox
@@ -73,6 +81,14 @@ public class EmailComposePanel : UserControl
         };
         _cmbTarget.SelectedIndexChanged += (_, _) => RefreshRecipientPreview();
         scopeRow.Controls.Add(_cmbTarget);
+
+        _btnSelectIndividuals = MakeButton("Select Players...", Color.FromArgb(100, 116, 139));
+        _btnSelectIndividuals.Margin = new Padding(8, 0, 0, 0);
+        _btnSelectIndividuals.Click += OnSelectIndividuals;
+        scopeRow.Controls.Add(_btnSelectIndividuals);
+
+        _lblSelectedIndividuals = new Label { Text = "No players selected", AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.FontDefault, Margin = new Padding(8, 8, 0, 0) };
+        scopeRow.Controls.Add(_lblSelectedIndividuals);
 
         _lblRecipientCount = new Label { Text = "0 recipient(s)", AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.FontDefault, Margin = new Padding(16, 8, 0, 0) };
         scopeRow.Controls.Add(_lblRecipientCount);
@@ -346,10 +362,22 @@ public class EmailComposePanel : UserControl
         dialog.ShowDialog(this);
     }
 
+    // Scope indices: 0 All Active Players, 1 Players on Teams, 2 Division, 3 Team,
+    // 4 Players on Spare List, 5 Unpaid Players, 6 Email List, 7 Individual(s).
+    private void UpdateScopeControlsVisibility()
+    {
+        int idx = _cmbScope.SelectedIndex;
+        bool needsTarget = idx is 2 or 3 or 6;
+        bool isIndividual = idx == 7;
+
+        _cmbTarget.Visible = needsTarget;
+        _btnSelectIndividuals.Visible = isIndividual;
+        _lblSelectedIndividuals.Visible = isIndividual;
+    }
+
     private void LoadTargets()
     {
         _cmbTarget.Items.Clear();
-        _cmbTarget.Enabled = _cmbScope.SelectedIndex != 0; // not "All Members"
 
         try
         {
@@ -360,12 +388,12 @@ public class EmailComposePanel : UserControl
 
             switch (_cmbScope.SelectedIndex)
             {
-                case 1: // Division
+                case 2: // Division
                     foreach (var d in db.Divisions.Where(d => d.SeasonId == seasonId.Value && d.IsActive).OrderBy(d => d.SortName))
                         _cmbTarget.Items.Add(new ComboItem(d.Id, d.Name));
                     break;
 
-                case 2: // Team
+                case 3: // Team
                     var teams = db.Teams.Include(t => t.Division)
                         .Where(t => t.Division.SeasonId == seasonId.Value && t.IsActive)
                         .OrderBy(t => t.SortOrder)
@@ -374,15 +402,10 @@ public class EmailComposePanel : UserControl
                         _cmbTarget.Items.Add(new ComboItem(t.Id, $"{t.Division.ShortName} - {t.EffectiveDisplayName}"));
                     break;
 
-                case 3: // Email List
+                case 6: // Email List
                     if (leagueId.HasValue)
                         foreach (var l in db.EmailLists.Where(l => l.LeagueId == leagueId.Value && l.IsActive).OrderBy(l => l.Name))
                             _cmbTarget.Items.Add(new ComboItem(l.Id, l.Name));
-                    break;
-
-                case 4: // Individual
-                    foreach (var p in db.Players.Where(p => p.IsActive).OrderBy(p => p.LastName).ThenBy(p => p.FirstName))
-                        _cmbTarget.Items.Add(new ComboItem(p.Id, $"{p.LastName}, {p.FirstName}"));
                     break;
             }
         }
@@ -394,13 +417,90 @@ public class EmailComposePanel : UserControl
         if (_cmbTarget.Items.Count > 0) _cmbTarget.SelectedIndex = 0;
     }
 
-    private (EmailRecipientScope Scope, int? ScopeId)? GetCurrentScope() => _cmbScope.SelectedIndex switch
+    private void OnSelectIndividuals(object? sender, EventArgs e)
     {
-        0 => (EmailRecipientScope.AllMembers, (int?)null),
-        1 when _cmbTarget.SelectedItem is ComboItem d => (EmailRecipientScope.Division, d.Id),
-        2 when _cmbTarget.SelectedItem is ComboItem t => (EmailRecipientScope.Team, t.Id),
-        3 when _cmbTarget.SelectedItem is ComboItem l => (EmailRecipientScope.EmailList, l.Id),
-        4 when _cmbTarget.SelectedItem is ComboItem p => (EmailRecipientScope.Individual, p.Id),
+        using var dialog = new Form
+        {
+            Text = "Select Players",
+            Width = 420,
+            Height = 520,
+            StartPosition = FormStartPosition.CenterParent,
+            BackColor = AppTheme.ContentBackground,
+            Font = AppTheme.FontDefault,
+            MinimizeBox = false,
+            MaximizeBox = false
+        };
+
+        var search = new SearchBoxControl("Search name, email, phone, lot") { Dock = DockStyle.Top, Margin = new Padding(8) };
+        var clb = new CheckedListBox { Dock = DockStyle.Fill, CheckOnClick = true };
+        var btnOk = new Button { Text = "Done", DialogResult = DialogResult.OK, Dock = DockStyle.Bottom, Height = 32 };
+
+        List<(int Id, string Display, string SearchBlob)> allPlayers;
+        using (var db = new BocceDbContext())
+        {
+            allPlayers = db.Players.Where(p => p.IsActive)
+                .OrderBy(p => p.LastName).ThenBy(p => p.FirstName)
+                .Select(p => new { p.Id, p.FirstName, p.LastName, p.Email, p.Phone, p.LotNumber })
+                .ToList()
+                .Select(p => (p.Id, Display: $"{p.LastName}, {p.FirstName}",
+                    SearchBlob: $"{p.LastName} {p.FirstName} {p.Email} {p.Phone} {p.LotNumber}"))
+                .ToList();
+        }
+
+        void RefreshList()
+        {
+            var filter = search.SearchText.Trim();
+            var visible = filter.Length == 0
+                ? allPlayers
+                : allPlayers.Where(p => SearchQueryService.MatchesAnyTerm(p.SearchBlob, filter)).ToList();
+
+            clb.Items.Clear();
+            foreach (var p in visible)
+                clb.Items.Add(new ComboItem(p.Id, p.Display), _selectedIndividualIds.Contains(p.Id));
+        }
+
+        search.SearchTextChanged += (_, _) => RefreshList();
+        clb.ItemCheck += (_, e2) =>
+        {
+            if (clb.Items[e2.Index] is not ComboItem item) return;
+            bool willCheck = e2.NewValue == CheckState.Checked;
+            BeginInvoke(new Action(() =>
+            {
+                if (willCheck) _selectedIndividualIds.Add(item.Id);
+                else _selectedIndividualIds.Remove(item.Id);
+                UpdateIndividualsLabel();
+            }));
+        };
+
+        RefreshList();
+
+        dialog.Controls.Add(clb);
+        dialog.Controls.Add(btnOk);
+        dialog.Controls.Add(search);
+        dialog.AcceptButton = btnOk;
+
+        dialog.ShowDialog(this);
+        UpdateIndividualsLabel();
+        RefreshRecipientPreview();
+    }
+
+    private void UpdateIndividualsLabel()
+    {
+        _lblSelectedIndividuals.Text = _selectedIndividualIds.Count == 0
+            ? "No players selected"
+            : $"{_selectedIndividualIds.Count} player(s) selected";
+    }
+
+    private (EmailRecipientScope Scope, int[] ScopeIds)? GetCurrentScope() => _cmbScope.SelectedIndex switch
+    {
+        0 => (EmailRecipientScope.AllActivePlayers, []),
+        1 => (EmailRecipientScope.PlayersOnTeams, []),
+        2 when _cmbTarget.SelectedItem is ComboItem d => (EmailRecipientScope.Division, [d.Id]),
+        3 when _cmbTarget.SelectedItem is ComboItem t => (EmailRecipientScope.Team, [t.Id]),
+        4 => (EmailRecipientScope.SpareList, []),
+        5 => (EmailRecipientScope.UnpaidPlayers, []),
+        6 when _cmbTarget.SelectedItem is ComboItem l => (EmailRecipientScope.EmailList, [l.Id]),
+        7 => (EmailRecipientScope.Individual, _selectedIndividualIds.ToArray()),
         _ => null
     };
 
@@ -409,6 +509,7 @@ public class EmailComposePanel : UserControl
         try
         {
             using var db = new BocceDbContext();
+            var leagueId = AppParameterService.GetDefaultLeagueId(db);
             var seasonId = AppParameterService.GetDefaultSeasonId(db);
             var scope = GetCurrentScope();
             if (!seasonId.HasValue || scope == null)
@@ -417,7 +518,7 @@ public class EmailComposePanel : UserControl
             }
             else
             {
-                _currentRecipients = EmailRecipientService.GetRecipients(db, scope.Value.Scope, scope.Value.ScopeId, seasonId.Value);
+                _currentRecipients = EmailRecipientService.GetRecipients(db, scope.Value.Scope, scope.Value.ScopeIds, leagueId, seasonId.Value);
             }
         }
         catch (Exception ex)
