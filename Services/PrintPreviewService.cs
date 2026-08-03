@@ -165,21 +165,15 @@ public static class PrintPreviewService
         };
         if (saveDlg.ShowDialog(parent) != DialogResult.OK) return;
 
-        doc.PrinterSettings.PrinterName = "Microsoft Print to PDF";
-        doc.PrinterSettings.PrintToFile = true;
-        doc.PrinterSettings.PrintFileName = saveDlg.FileName;
-
-        try
+        if (PdfRenderService.TryRenderToPdf(doc, saveDlg.FileName, out var error))
         {
-            doc.PrintController = new StandardPrintController();
-            doc.Print();
             MessageBox.Show("PDF saved successfully.", "Save as PDF",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
-        catch (Exception ex)
+        else
         {
             MessageBox.Show(
-                $"PDF export failed:\n\n{ex.Message}\n\n" +
+                $"PDF export failed:\n\n{error}\n\n" +
                 "Ensure 'Microsoft Print to PDF' is installed on this computer.",
                 "Save as PDF", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
