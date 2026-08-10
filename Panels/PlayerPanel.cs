@@ -110,6 +110,7 @@ public class PlayerPanel : UserControl
     private List<Control> _fieldControls = [];
 
     private Button _btnNew = null!;
+    private Button _btnExportContacts = null!;
     private Button _btnSave = null!;
     private Button _btnClear = null!;
     private Button _btnDelete = null!;
@@ -309,6 +310,20 @@ public class PlayerPanel : UserControl
         _btnNew.FlatAppearance.BorderSize = 0;
         _btnNew.Click += (_, _) => AddNewPlayer();
 
+        _btnExportContacts = new Button
+        {
+            Text = "Export to Google Contacts",
+            Dock = DockStyle.Top,
+            Height = 30,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = AppTheme.Surface,
+            ForeColor = AppTheme.TextPrimary,
+            Font = AppTheme.FontButton,
+            Cursor = Cursors.Hand
+        };
+        _btnExportContacts.FlatAppearance.BorderSize = 1;
+        _btnExportContacts.Click += (_, _) => GoogleContactsExportService.Export(this);
+
         _lstPlayers = new ListBox
         {
             Dock = DockStyle.Fill,
@@ -321,6 +336,8 @@ public class PlayerPanel : UserControl
         panel.Controls.Add(_lstPlayers);
         panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 10, BackColor = AppTheme.Surface });
         panel.Controls.Add(_btnNew);
+        panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 8, BackColor = AppTheme.Surface });
+        panel.Controls.Add(_btnExportContacts);
         panel.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 8, BackColor = AppTheme.Surface });
         panel.Controls.Add(searchHint);
         panel.Controls.Add(_txtSearch);
