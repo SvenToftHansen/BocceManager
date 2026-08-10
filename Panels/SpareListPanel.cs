@@ -358,29 +358,27 @@ public class SpareListPanel : UserControl
             };
 
             var y = 12;
-            Control MakeReadOnlyRow(string label, string value)
+            void MakeReadOnlyRow(string label, string value)
             {
                 var lbl = new Label
                 {
                     Text = label,
-                    Location = new Point(12, y + 3),
+                    Location = new Point(12, y),
                     Size = new Size(80, 20),
                     Font = AppTheme.FontSmallBold,
                     ForeColor = AppTheme.TextSecondary
                 };
-                var txtValue = new TextBox
+                var lblValue = new Label
                 {
+                    Text = value,
                     Location = new Point(96, y),
-                    Size = new Size(292, 24),
+                    Size = new Size(292, 20),
                     Font = AppTheme.FontDefault,
-                    ReadOnly = true,
-                    BackColor = AppTheme.Surface,
-                    Text = value
+                    ForeColor = AppTheme.TextPrimary
                 };
                 form.Controls.Add(lbl);
-                form.Controls.Add(txtValue);
-                y += 28;
-                return txtValue;
+                form.Controls.Add(lblValue);
+                y += 24;
             }
 
             MakeReadOnlyRow("Email", player?.Email ?? "");
