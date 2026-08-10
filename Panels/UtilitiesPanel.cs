@@ -54,6 +54,11 @@ public class UtilitiesPanel : UserControl
         BuildIdeasTab(ideasPage);
         tabs.TabPages.Add(ideasPage);
 
+        // Contacts export tab
+        var exportPage = new TabPage("  Contacts Export  ");
+        BuildContactsExportTab(exportPage);
+        tabs.TabPages.Add(exportPage);
+
         Controls.Add(tabs);
     }
 
@@ -232,6 +237,50 @@ public class UtilitiesPanel : UserControl
         page.Controls.Add(toolbar);
 
         LoadIdeas();
+    }
+
+    private void BuildContactsExportTab(TabPage page)
+    {
+        var panel = new Panel
+        {
+            Dock    = DockStyle.Top,
+            Height  = 120,
+            Padding = new Padding(12)
+        };
+
+        var lblTitle = new Label
+        {
+            Text      = "Google Contacts",
+            Font      = AppTheme.FontSmallBold,
+            ForeColor = AppTheme.TextPrimary,
+            Dock      = DockStyle.Top,
+            Height    = 24,
+            TextAlign = ContentAlignment.MiddleLeft
+        };
+
+        var lblDescription = new Label
+        {
+            Text      = "Export all active players to a Google-Contacts-importable CSV, grouped into\n" +
+                         "labels (All Players, per-season Team Players, per-league Sublist, Executive).\n" +
+                         "Couples sharing one email address are combined into a single contact.",
+            Font      = AppTheme.FontDefault,
+            ForeColor = AppTheme.TextSecondary,
+            Dock      = DockStyle.Top,
+            Height    = 54,
+            TextAlign = ContentAlignment.TopLeft
+        };
+
+        var btnExportContacts = MakeButton("Export to Google Contacts", AppTheme.Accent);
+        btnExportContacts.Click += (_, _) => GoogleContactsExportService.Export(this);
+
+        var btnPanel = new Panel { Dock = DockStyle.Top, Height = 44 };
+        btnPanel.Controls.Add(btnExportContacts);
+
+        panel.Controls.Add(btnPanel);
+        panel.Controls.Add(lblDescription);
+        panel.Controls.Add(lblTitle);
+
+        page.Controls.Add(panel);
     }
 
     private static Button MakeButton(string text, Color back) => new()
