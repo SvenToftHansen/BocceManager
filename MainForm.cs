@@ -340,7 +340,7 @@ public partial class MainForm : Form
         });
 
         AddGroup("UTILITIES", add => {
-            add("Backup",         NavSection.Utilities);
+            add("Utilities",      NavSection.Utilities);
             add("Theme",          NavSection.Theme);
         });
     }
