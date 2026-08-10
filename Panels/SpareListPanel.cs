@@ -344,6 +344,8 @@ public class SpareListPanel : UserControl
                 .FirstOrDefault(s => s.LeagueId == leagueId.Value && s.PlayerId == item.Id && s.IsActive);
             if (sparePlayer == null) return;
 
+            var player = db.Players.Find(item.Id);
+
             using var form = new Form
             {
                 Text = $"Note for {item.DisplayName}",
@@ -351,29 +353,72 @@ public class SpareListPanel : UserControl
                 FormBorderStyle = FormBorderStyle.FixedDialog,
                 MinimizeBox = false,
                 MaximizeBox = false,
-                ClientSize = new Size(400, 160),
+                ClientSize = new Size(400, 260),
                 BackColor = AppTheme.Surface
             };
 
+            var y = 12;
+            Control MakeReadOnlyRow(string label, string value)
+            {
+                var lbl = new Label
+                {
+                    Text = label,
+                    Location = new Point(12, y + 3),
+                    Size = new Size(80, 20),
+                    Font = AppTheme.FontSmallBold,
+                    ForeColor = AppTheme.TextSecondary
+                };
+                var txtValue = new TextBox
+                {
+                    Location = new Point(96, y),
+                    Size = new Size(292, 24),
+                    Font = AppTheme.FontDefault,
+                    ReadOnly = true,
+                    BackColor = AppTheme.Surface,
+                    Text = value
+                };
+                form.Controls.Add(lbl);
+                form.Controls.Add(txtValue);
+                y += 28;
+                return txtValue;
+            }
+
+            MakeReadOnlyRow("Email", player?.Email ?? "");
+            MakeReadOnlyRow("Phone", player?.Phone ?? "");
+            MakeReadOnlyRow("Lot Number", player?.LotNumber ?? "");
+
+            y += 8;
+            var lblNote = new Label
+            {
+                Text = "Note",
+                Location = new Point(12, y),
+                Size = new Size(80, 18),
+                Font = AppTheme.FontSmallBold,
+                ForeColor = AppTheme.TextSecondary
+            };
+            form.Controls.Add(lblNote);
+            y += 20;
+
             var txt = new TextBox
             {
-                Location = new Point(12, 12),
+                Location = new Point(12, y),
                 Size = new Size(376, 60),
                 Multiline = true,
                 Font = AppTheme.FontDefault,
                 Text = sparePlayer.Notes ?? ""
             };
+            y += 68;
 
             var btnOk = new Button
             {
                 Text = "Save", DialogResult = DialogResult.OK,
-                Location = new Point(224, 84), Size = new Size(80, 36),
+                Location = new Point(224, y), Size = new Size(80, 36),
                 FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White, Font = AppTheme.FontButton
             };
             var btnCancel = new Button
             {
                 Text = "Cancel", DialogResult = DialogResult.Cancel,
-                Location = new Point(308, 84), Size = new Size(80, 36),
+                Location = new Point(308, y), Size = new Size(80, 36),
                 FlatStyle = FlatStyle.Flat, BackColor = AppTheme.Surface, ForeColor = AppTheme.TextPrimary, Font = AppTheme.FontButton
             };
 
