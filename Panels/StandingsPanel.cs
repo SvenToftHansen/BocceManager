@@ -28,6 +28,7 @@ public class StandingsPanel : UserControl
 
     private Label            _lblStatus  = null!;
     private Button           _btnFilter  = null!;
+    private Button           _btnEmailStandings = null!;
     private NumericUpDown    _numFrom    = null!;
     private NumericUpDown    _numTo      = null!;
     private TabControl       _tabs       = null!;
@@ -93,36 +94,40 @@ public class StandingsPanel : UserControl
         _btnFilter.Click += (_, _) => ShowFilterDropdown();
         toolbar.Controls.Add(_btnFilter);
 
+        _btnEmailStandings = MakeBtn("Email Standings...", Color.FromArgb(39, 174, 96), 254, 150);
+        _btnEmailStandings.Click += async (_, _) => await OnEmailStandingsAsync();
+        toolbar.Controls.Add(_btnEmailStandings);
+
         // ── Week range controls ────────────────────────────────────────────────
         var lblWeek = new Label
         {
             Text = "Weeks:", AutoSize = true, Font = AppTheme.FontDefault,
             ForeColor = AppTheme.TextSecondary,
-            Location = new Point(260, 15)
+            Location = new Point(412, 15)
         };
         toolbar.Controls.Add(lblWeek);
 
-        _numFrom = MakeWeekSpinner(308);
+        _numFrom = MakeWeekSpinner(460);
         toolbar.Controls.Add(_numFrom);
 
         toolbar.Controls.Add(new Label
         {
             Text = "–", AutoSize = true, Font = AppTheme.FontDefault,
             ForeColor = AppTheme.TextSecondary,
-            Location = new Point(363, 15)
+            Location = new Point(515, 15)
         });
 
-        _numTo = MakeWeekSpinner(374);
+        _numTo = MakeWeekSpinner(526);
         toolbar.Controls.Add(_numTo);
 
-        var btnAllWeeks = MakeBtn("All", Color.FromArgb(90, 100, 110), 430, 42);
+        var btnAllWeeks = MakeBtn("All", Color.FromArgb(90, 100, 110), 582, 42);
         btnAllWeeks.Click += (_, _) => ResetWeekRange();
         toolbar.Controls.Add(btnAllWeeks);
 
         _lblStatus = new Label
         {
             AutoSize = true, Font = AppTheme.FontSmall,
-            ForeColor = AppTheme.TextMuted, Location = new Point(480, 17)
+            ForeColor = AppTheme.TextMuted, Location = new Point(632, 17)
         };
         toolbar.Controls.Add(_lblStatus);
 
@@ -294,20 +299,8 @@ public class StandingsPanel : UserControl
             using var db = new BocceDbContext();
             bool isAll = fromWeek == 1 && toWeek == _maxWeek;
 
-            if (isAll)
-            {
-                // Use the pre-aggregated (and H2H-resolved) Standings view
-                _currentRows = db.Standings
-                    .Where(s => s.SeasonId == _seasonId.Value)
-                    .OrderBy(s => s.DivisionId).ThenBy(s => s.DivisionRank).ThenBy(s => s.DivisionSeed)
-                    .ToList();
-            }
-            else
-            {
-                // Aggregate Scoring rows filtered to the chosen week range
-                _currentRows = AggregateForWeekRange(db, _seasonId.Value,
-                    _isGamesMode, _firstPlaceGuaranteed, fromWeek, toWeek);
-            }
+            _currentRows = StandingsAggregationService.GetStandings(db, _seasonId.Value,
+                _isGamesMode, _firstPlaceGuaranteed, fromWeek, toWeek, _maxWeek);
 
             // Rebuild per-timeslot column data
             _timeColDivs = _timeCols.ToDictionary(
@@ -340,92 +333,6 @@ public class StandingsPanel : UserControl
         _numTo.Value   = _maxWeek;
         _suppressWeekRefresh = false;
         RefreshStandings();
-    }
-
-    // ── Custom week-range aggregation (bypasses Standings view) ───────────────
-
-    private static List<StandingView> AggregateForWeekRange(
-        BocceDbContext db, int seasonId,
-        bool isGamesMode, bool firstPlaceGuaranteed,
-        int fromWeek, int toWeek)
-    {
-        var rows = db.Scoring
-            .Where(s => s.SeasonId == seasonId && s.WeekId >= fromWeek && s.WeekId <= toWeek)
-            .ToList();
-
-        if (rows.Count == 0) return [];
-
-        // Aggregate per (TeamId, DivisionId)
-        var agg = rows
-            .GroupBy(s => new { s.TeamId, s.DivisionId, s.TeamName, s.SeasonId, s.LeagueId })
-            .Select(g => new StandingView
-            {
-                TeamId   = g.Key.TeamId,
-                TeamName = g.Key.TeamName,
-                DivisionId  = g.Key.DivisionId,
-                SeasonId    = g.Key.SeasonId,
-                LeagueId    = g.Key.LeagueId,
-                GamesPlayed    = isGamesMode ? g.Count() : 0,
-                MatchesPlayed  = isGamesMode ? 0 : g.Select(s => s.ScheduleDivisionsId).Distinct().Count(),
-                Wins       = g.Count(s => s.IsWin),
-                Ties       = g.Count(s => s.IsTie),
-                Losses     = g.Count(s => s.IsLoss && !s.IsForfeit),
-                Forfeits   = g.Count(s => s.IsForfeit),
-                StandingsPoints = g.Sum(s => s.WinPTS + s.TiePTS + s.LossPTS + s.ForfeitPoints),
-                PlusMinus  = g.Sum(s => s.PlusMinus),
-                PointsFor  = g.Sum(s => s.PointsFor),
-                PointsAgainst = g.Sum(s => s.PointsAgainst),
-                H2HPlusMinus = 0,  // cross-div H2H not computed for date-range slices
-                H2HWins      = 0
-            })
-            .ToList();
-
-        // Division rank (DENSE_RANK per division)
-        foreach (var dg in agg.GroupBy(r => r.DivisionId))
-        {
-            int seed = 1;
-            int prevPts = int.MaxValue, prevPm = int.MaxValue, prevW = int.MaxValue;
-            foreach (var r in dg.OrderByDescending(r => r.StandingsPoints)
-                                 .ThenByDescending(r => r.PlusMinus)
-                                 .ThenByDescending(r => r.Wins))
-            {
-                if (r.StandingsPoints != prevPts || r.PlusMinus != prevPm || r.Wins != prevW)
-                {
-                    prevPts = r.StandingsPoints; prevPm = r.PlusMinus; prevW = r.Wins;
-                }
-                // Assign the rank at the first position for this stats group
-                r.DivisionRank = seed;
-                r.DivisionSeed = seed;
-                seed++;
-            }
-            // Correct DivisionRank to DENSE_RANK (tied teams share the same rank)
-            var sorted2 = dg.OrderByDescending(r => r.StandingsPoints)
-                            .ThenByDescending(r => r.PlusMinus)
-                            .ThenByDescending(r => r.Wins).ToList();
-            int rank = 1;
-            for (int i = 0; i < sorted2.Count; i++)
-            {
-                if (i > 0 && (sorted2[i].StandingsPoints != sorted2[i-1].StandingsPoints
-                           || sorted2[i].PlusMinus        != sorted2[i-1].PlusMinus
-                           || sorted2[i].Wins             != sorted2[i-1].Wins))
-                    rank = i + 1;
-                sorted2[i].DivisionRank = rank;
-            }
-        }
-
-        // Season seed (mirrors FixSeasonSeedOrdering logic)
-        int sseed = 1;
-        foreach (var r in agg
-            .OrderBy(r => firstPlaceGuaranteed && r.DivisionRank == 1 ? 0 : 1)
-            .ThenByDescending(r => r.StandingsPoints)
-            .ThenByDescending(r => r.PlusMinus)
-            .ThenByDescending(r => r.Wins)
-            .ThenBy(r => r.DivisionRank))
-        {
-            r.SeasonSeed = sseed++;
-        }
-
-        return agg.OrderBy(r => r.DivisionId).ThenBy(r => r.DivisionRank).ToList();
     }
 
     // ── All-Divisions scrollable panel ────────────────────────────────────────
@@ -797,6 +704,300 @@ public class StandingsPanel : UserControl
             StandingsPrintService.ShowPrintPreview(this, _seasonId.Value, StandingsPrintMode.SeasonSeed);
         else
             StandingsPrintService.ShowPrintPreview(this, _seasonId.Value, StandingsPrintMode.AllDivisions, _filteredDivIds);
+    }
+
+    private async Task OnEmailStandingsAsync()
+    {
+        if (!_seasonId.HasValue) { MessageBox.Show("No season selected.", "Email Standings", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+
+        if (!GmailAuthService.IsConnected())
+        {
+            MessageBox.Show("Connect a Gmail account in Parameters before sending email.", "Not Connected", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        int? leagueId;
+        using (var db = new BocceDbContext())
+            leagueId = AppParameterService.GetDefaultLeagueId(db);
+
+        int fromWeek = (int)(_numFrom?.Value ?? 1);
+        int toWeek   = (int)(_numTo?.Value   ?? _maxWeek);
+
+        StandingsEmailRoster roster;
+        try
+        {
+            roster = StandingsEmailService.BuildRoster(_seasonId.Value, leagueId);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error(ex, "Failed to build standings email roster");
+            MessageBox.Show($"Could not prepare standings emails:\n\n{ex.Message}", "Email Standings", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        if (roster.Recipients.Count == 0)
+        {
+            MessageBox.Show("No active players with an email address were found for the current season.", "Email Standings", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var choice = ShowSendConfirmDialog(roster, leagueId, fromWeek, toWeek, _maxWeek);
+        if (choice is not { Send: true }) return;
+        bool testMode = choice.Value.TestMode;
+
+        _btnEmailStandings.Enabled = false;
+        var originalStatus = _lblStatus.Text;
+        try
+        {
+            var plan = StandingsEmailService.BuildPlan(_seasonId.Value, leagueId, fromWeek, toWeek, choice.Value.ExtraMessage, choice.Value.UniqueEmailOnly);
+            var progress = new Progress<string>(msg => _lblStatus.Text = msg);
+            var summary = await StandingsEmailService.SendAsync(plan, testMode, choice.Value.TestEmail, progress);
+
+            var message = testMode
+                ? $"Test email sent to {choice.Value.TestEmail}."
+                : $"Sent to {summary.PlayersSent} player(s) across {summary.TeamsSent} team(s).";
+            if (!testMode && summary.SkippedTeams.Count > 0)
+                message += $"\n\n{summary.SkippedTeams.Count} team(s) had no emailable players and were skipped:\n" + string.Join("\n", summary.SkippedTeams.Select(t => $"  {t}"));
+            if (summary.FailedSends.Count > 0)
+                message += $"\n\nCould not email {summary.FailedSends.Count} player(s):\n" + string.Join("\n", summary.FailedSends.Select(f => $"  {f.FirstName} ({f.TeamLabel}) — {f.Error}"));
+
+            bool hasIssues = summary.FailedSends.Count > 0 || (!testMode && summary.SkippedTeams.Count > 0);
+            MessageBox.Show(message, "Email Standings", MessageBoxButtons.OK,
+                hasIssues ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error(ex, "Email Standings send failed");
+            MessageBox.Show($"Could not send standings emails:\n\n{ex.Message}", "Email Standings", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            _btnEmailStandings.Enabled = true;
+            _lblStatus.Text = originalStatus;
+        }
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex EmailPattern =
+        new(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private (bool Send, bool TestMode, string? TestEmail, string? ExtraMessage, bool UniqueEmailOnly)? ShowSendConfirmDialog(
+        StandingsEmailRoster roster, int? leagueId, int fromWeek, int toWeek, int maxWeek)
+    {
+        bool isAll = fromWeek <= 1 && toWeek >= maxWeek;
+        var currentRoster = roster;
+
+        using var dialog = new Form
+        {
+            Text = "Email Standings",
+            Width = 460,
+            Height = 460,
+            StartPosition = FormStartPosition.CenterParent,
+            BackColor = AppTheme.ContentBackground,
+            Font = AppTheme.FontDefault,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false
+        };
+
+        var lblInfo = new Label
+        {
+            Location = new Point(12, 12), Size = new Size(420, 56),
+            ForeColor = AppTheme.TextPrimary
+        };
+        dialog.Controls.Add(lblInfo);
+
+        var chkUniqueEmail = new CheckBox
+        {
+            Text = "Unique email addresses only (per team)", Checked = true,
+            Location = new Point(12, 70), Size = new Size(320, 20),
+            ForeColor = AppTheme.TextPrimary
+        };
+        dialog.Controls.Add(chkUniqueEmail);
+
+        var lblPreviewTeam = new Label { Text = "Preview for:", Location = new Point(12, 100), Size = new Size(90, 24), ForeColor = AppTheme.TextPrimary };
+        dialog.Controls.Add(lblPreviewTeam);
+
+        var cmbRecipient = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(104, 98), Width = 226, Font = AppTheme.FontDefault };
+        dialog.Controls.Add(cmbRecipient);
+
+        var btnPreview = new Button
+        {
+            Text = "Preview...", Location = new Point(340, 97), Size = new Size(92, 26),
+            FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(100, 116, 139), ForeColor = Color.White,
+            Font = AppTheme.FontButton, Cursor = Cursors.Hand, FlatAppearance = { BorderSize = 0 }
+        };
+        dialog.Controls.Add(btnPreview);
+
+        void RefreshForRoster()
+        {
+            int teamsCount = currentRoster.Recipients.Select(r => r.TeamLabel).Distinct().Count();
+            int totalPlayers = currentRoster.Recipients.Count;
+            int skippedCount = currentRoster.SkippedTeams.Count;
+
+            var infoText = skippedCount > 0
+                ? $"Will send to {totalPlayers} player(s) across {teamsCount} team(s).\n{skippedCount} team(s) have no emailable players and will be skipped."
+                : $"Will send to {totalPlayers} player(s) across {teamsCount} team(s).";
+            if (!isAll)
+                infoText += $"\nStandings as of Week {toWeek} (weeks {fromWeek}–{toWeek}), not the latest.";
+            lblInfo.Text = infoText;
+
+            cmbRecipient.Items.Clear();
+            foreach (var r in currentRoster.Recipients)
+                cmbRecipient.Items.Add($"{r.TeamLabel} — {r.FirstName} <{r.Email}>");
+            if (cmbRecipient.Items.Count > 0) cmbRecipient.SelectedIndex = 0;
+            btnPreview.Enabled = currentRoster.Recipients.Count > 0;
+        }
+
+        RefreshForRoster();
+
+        chkUniqueEmail.CheckedChanged += (_, _) =>
+        {
+            try
+            {
+                currentRoster = _seasonId.HasValue
+                    ? StandingsEmailService.BuildRoster(_seasonId.Value, leagueId, chkUniqueEmail.Checked)
+                    : currentRoster;
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error(ex, "Failed to rebuild standings email roster");
+            }
+            RefreshForRoster();
+        };
+
+        var lblExtra = new Label
+        {
+            Text = "Additional message (optional — e.g. upcoming events):",
+            Location = new Point(12, 142), Size = new Size(420, 18),
+            ForeColor = AppTheme.TextPrimary
+        };
+        dialog.Controls.Add(lblExtra);
+
+        var txtExtra = new TextBox
+        {
+            Location = new Point(12, 162), Size = new Size(420, 66),
+            Font = AppTheme.FontDefault, Multiline = true,
+            ScrollBars = ScrollBars.Vertical
+        };
+        dialog.Controls.Add(txtExtra);
+
+        btnPreview.Click += (_, _) =>
+        {
+            if (cmbRecipient.SelectedIndex < 0 || !_seasonId.HasValue) return;
+            var recipient = currentRoster.Recipients[cmbRecipient.SelectedIndex];
+            try
+            {
+                var (subject, body) = StandingsEmailService.BuildPreviewEmail(
+                    _seasonId.Value, fromWeek, toWeek, currentRoster.ClubName, recipient, txtExtra.Text);
+                ShowEmailPreview(dialog, subject, body);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error(ex, "Failed to build standings email preview");
+                MessageBox.Show($"Could not build preview:\n\n{ex.Message}", "Email Standings", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        };
+
+        var chkTestMode = new CheckBox
+        {
+            Text = "Test mode — send one copy to this address instead of all players:",
+            Location = new Point(12, 234), Size = new Size(420, 20),
+            ForeColor = AppTheme.TextPrimary
+        };
+        dialog.Controls.Add(chkTestMode);
+
+        var txtTestEmail = new TextBox
+        {
+            Location = new Point(30, 258), Width = 300, Font = AppTheme.FontDefault,
+            Enabled = false
+        };
+        try
+        {
+            using var db = new BocceDbContext();
+            txtTestEmail.Text = AppParameterService.GetAppParameter(db, "LeagueCaptainEmail") ?? "";
+        }
+        catch { }
+        dialog.Controls.Add(txtTestEmail);
+
+        chkTestMode.CheckedChanged += (_, _) =>
+        {
+            txtTestEmail.Enabled = chkTestMode.Checked;
+            if (chkTestMode.Checked) txtTestEmail.Focus();
+        };
+
+        var btnSend = new Button
+        {
+            Text = "Send",
+            Location = new Point(258, 380), Size = new Size(88, 30),
+            FlatStyle = FlatStyle.Flat, BackColor = AppTheme.ButtonSuccess, ForeColor = Color.White,
+            Font = AppTheme.FontButton
+        };
+        btnSend.Click += (_, _) =>
+        {
+            if (chkTestMode.Checked && !EmailPattern.IsMatch(txtTestEmail.Text.Trim()))
+            {
+                MessageBox.Show("Enter a valid test email address.", "Email Standings", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            dialog.DialogResult = DialogResult.OK;
+        };
+        var btnCancel = new Button
+        {
+            Text = "Cancel", DialogResult = DialogResult.Cancel,
+            Location = new Point(354, 380), Size = new Size(88, 30),
+            FlatStyle = FlatStyle.Flat, Font = AppTheme.FontButton
+        };
+        dialog.Controls.Add(btnSend);
+        dialog.Controls.Add(btnCancel);
+        dialog.AcceptButton = btnSend;
+        dialog.CancelButton = btnCancel;
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return null;
+        return (true, chkTestMode.Checked, txtTestEmail.Text.Trim(), txtExtra.Text, chkUniqueEmail.Checked);
+    }
+
+    private static void ShowEmailPreview(Control parent, string subject, string bodyHtml)
+    {
+        using var dialog = new Form
+        {
+            Text = "Preview",
+            Width = 700,
+            Height = 600,
+            StartPosition = FormStartPosition.CenterParent,
+            BackColor = AppTheme.ContentBackground,
+            MinimizeBox = false,
+            MaximizeBox = true
+        };
+
+        var webView = new Microsoft.Web.WebView2.WinForms.WebView2 { Dock = DockStyle.Fill };
+        var lblSubject = new Label
+        {
+            Text = "Subject: " + subject,
+            Dock = DockStyle.Top,
+            Height = 32,
+            Font = AppTheme.FontDefaultBold,
+            ForeColor = AppTheme.TextPrimary,
+            BackColor = AppTheme.Surface,
+            Padding = new Padding(8, 8, 8, 0)
+        };
+        dialog.Controls.Add(webView);
+        dialog.Controls.Add(lblSubject);
+
+        dialog.Shown += async (_, _) =>
+        {
+            try
+            {
+                await webView.EnsureCoreWebView2Async();
+                var html = $"<html><body style=\"font-family:Segoe UI,Arial,sans-serif;padding:16px;\">{bodyHtml}</body></html>";
+                webView.CoreWebView2.NavigateToString(html);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error(ex, "Failed to render standings email preview");
+            }
+        };
+
+        dialog.ShowDialog(parent);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

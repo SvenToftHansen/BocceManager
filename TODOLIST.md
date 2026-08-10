@@ -149,19 +149,25 @@ Reports are hand-rolled `PrintDocument` GDI+ services (see CLAUDE.md's "Reportin
   - Send via Gmail API (OAuth2 desktop flow); personal Gmail accounts cap at ~500/day, comfortably covers 240–500/week
   - Gmail Client ID/Secret and refresh token stored DPAPI-encrypted in AppParameters (Parameters panel "Gmail Integration" section)
   - Per-recipient send history log (EmailLog/EmailLogRecipient)
-  - Insert Report... — attach (PDF) or embed (HTML table) Spare List/Unpaid Fees/All Players/Team Listing via `ReportAttachmentService`
+  - Insert Report... — inserts a themed HTML version (colors/headers mirroring the print report) of Spare List, Unpaid Fees, All Players, Team Listing, Schedule, Standings, Season Seed, or Playoff Schedule at the cursor, via `ReportAttachmentService`/`ReportHtmlService`. Content-only, no PDF-attach path.
+  - Attach Document... — attach any PDF/Word file from the Documents folder (`ClubDocuments`) to the email
+  - Clear Content — wipes the body editor back to empty
+  - Manual Email Address(es) scope — type semicolon/comma-separated addresses directly (not tied to a Player row) for one-off recipients not in the roster
   - Preview — renders subject/body (merged against a sample or real recipient) before sending
+  - Replies tab — lists the connected inbox (`GmailReadService`), matches senders against Players by email, shows the message body on selection (auto-marks read), and can Archive. Uses the `gmail.modify` OAuth scope (superset of send/read/label-write; replaced the old `gmail.send`-only scope, which was also too narrow for the "Connected as ..." profile lookup)
+  - "Unique email addresses only" checkbox (default on) next to the recipient count — toggles `EmailRecipientService`'s email dedup on/off per send, rather than always forcing it
   - Related: Email Lists Panel
-  - Note: superseded the originally planned Brevo integration, which was never built
 
-- [ ] **Automated Standings Email per Team** — email each team their own division standings + overall season seed report
-  - Generate per-team divisional standings (their division only, formatted as a compact table)
-  - Generate overall Season Seed / Playoff Seeding Order report (all teams)
-  - Combine into one email per team: "Your Standings + League Standings"
-  - Trigger manually from Standings panel ("Email Standings" button) or from Email panel
-  - Use the Gmail integration (same as general email); one send per team = 1 email per team per send
-  - Extend `ReportAttachmentService`'s `AttachableReport` enum with a Standings option (its `BuildDocument` is currently private and needs a mode/division filter — see `StandingsPrintService`)
-  - Low-volume: ~60 teams × 2 reports = 60 emails per send (well within Gmail's daily limit)
+- [x] **Automated Standings Email per Team** *(built 2026-08-06, updated 2026-08-07)* — email each player their team's division standings + overall season seed report, with a personalized greeting
+  - `Services/StandingsEmailService.cs` — one email per active player (switched from one-per-team once a personalized "Hello {FirstName}" greeting was requested — the greeting differs per recipient, so the send has to too). Division/season-seed HTML is still built once per division and reused across all its players' emails, not rebuilt per send
+  - Body = greeting ("Hello {FirstName}. Here are the standings for your Division ({DivisionName}) and for your team {TeamName}. Included is the current seeding table for season end tournament." + optional admin-typed extra message paragraph + "Thanks for participating, and we hope you enjoy the league." + "GVBB Executive.") + 2-blank-line spacer + `ReportHtmlService.BuildStandingsHtml(seasonId, divisionId, fromWeek, toWeek)` + 3-blank-line spacer + `ReportHtmlService.BuildSeasonSeedHtml(seasonId, fromWeek, toWeek)`. Week-ending date via `ReportHtmlService.GetStandingsWeekEndDate`
+  - Confirm dialog has a multi-line "Additional message" text box (e.g. for upcoming-event announcements) inserted into the greeting; `StandingsEmailService.BuildRoster`/`BuildPreviewEmail`/`BuildPlan` are split so the Preview button can rebuild just one recipient's email live as that text changes, without rebuilding everyone's
+  - Respects the Standings panel's current week-range slider — if it's showing "as of Week 1" while 3 weeks are scored, the email (and its "Weekending" date) reflects that same historical cutoff, not always the latest. Both reports pull from the shared `Services/StandingsAggregationService.cs` (extracted from `StandingsPanel`'s week-range aggregation, used by both the on-screen panel and the emailed reports so they never disagree)
+  - Recipients per team via `EmailRecipientService.GetRecipients(..., EmailRecipientScope.Team, ...)`; teams with no active/emailable players are skipped and reported back, not silently dropped. `EmailRecipientService` optionally dedupes by (email, team name) — not email alone, since the same person can legitimately be on more than one team and needs a separate, team-specific send for each; a plain-email key would have wrongly merged those. Toggle lives in the confirm dialog as "Unique email addresses only (per team)" (default on) and rebuilds the roster/preview list live when switched
+  - When dedup merges two people sharing one email/team (e.g. spouses), `CombineFirstNames` joins their first names ("John & Jane") into the single surviving `EmailRecipient.FirstName` instead of silently dropping one person's name — applies to the `{FirstName}` merge field everywhere `EmailRecipientService` is used (Compose and Standings), not just the Standings greeting
+  - Triggered from Standings panel's "Email Standings..." button (now under the REPORTS nav group, moved from LEAGUE); logs to EmailLog/EmailLogRecipient like Compose sends (test sends are not logged)
+  - Confirm dialog includes a per-player Preview (WebView2, exact subject/body), the current week range, and a Test Mode checkbox + text box — test mode sends exactly one email (the first recipient's content) to whatever address is typed in (defaults to the Parameters "League Captain Email"), instead of fanning out to everyone
+  - Not yet done: trigger from the Email panel too (currently Standings panel only)
 
 - [ ] **Daily Send Count Indicator in Compose** — show today's Gmail send count against the ~500/day account limit
   - Derive from EmailLogRecipient rows (Status = "Sent", SentAt = today) — no external API call needed

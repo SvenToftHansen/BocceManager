@@ -8,7 +8,7 @@
 - [ ] **Spare Lists** — panel not started
 - [ ] **Announcements** — panel not started
 - [ ] **Fees** — panel not started
-- [ ] **Email Lists** — panel not started (Brevo API integration planned)
+- [ ] **Email Lists** — panel not started
 
 ## Schedule
 

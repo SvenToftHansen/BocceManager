@@ -308,7 +308,6 @@ public partial class MainForm : Form
         AddGroup("LEAGUE", add => {
             add("Score Entry", NavSection.ScoreEntry);
             add("Schedule",    NavSection.Schedule);
-            add("Standings",   NavSection.Standings);
         });
 
         AddGroup("PLAYOFFS", add => {
@@ -317,6 +316,7 @@ public partial class MainForm : Form
         });
 
         AddGroup("REPORTS", add => {
+            add("Standings",    NavSection.Standings);
             add("Team Listing", NavSection.ReportTeamListing);
             add("Schedules",    NavSection.ReportScheduleGeneric);
             add("Spare List",   NavSection.ReportSpareLists);

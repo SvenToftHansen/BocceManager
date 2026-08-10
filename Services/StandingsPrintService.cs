@@ -37,7 +37,9 @@ public static class StandingsPrintService
         bool IsSeasonComplete,    // true when maxWeek >= WeeksInSeason
         string[] StatHeaders,
         float[]  StatWidths,
-        float[]  TimeColTeamW);   // per timeslot column
+        float[]  TimeColTeamW,    // per timeslot column
+        int      WeekNumber,
+        DateOnly? WeekEndDate);
 
     // ── Entry point ───────────────────────────────────────────────────────────
 
@@ -69,10 +71,22 @@ public static class StandingsPrintService
             .Max(s => (int?)s.WeekId) ?? 0);
         bool isSeasonComplete = season.WeeksInSeason > 0 && maxWeek >= season.WeeksInSeason;
 
-        var clubName  = AppParameterService.GetAppParameter(db, "ClubName") ?? "Bocce League";
-        string docHdr = $"{clubName}  —  {season.League.Name}  —  {season.Name}  —  Standings";
-
         var divIds = allRows.Select(r => r.DivisionId).Distinct().ToList();
+
+        // Calendar date matches were played on for the last scored week — same "week" semantics
+        // as elsewhere: Scoring.WeekId is sourced from ScheduleDivision.TemplateWeekNumber.
+        DateOnly? weekEndDate = null;
+        if (maxWeek > 0)
+        {
+            var weekDates = db.ScheduleDivisions
+                .Where(sd => divIds.Contains(sd.DivisionId) && sd.TemplateWeekNumber == maxWeek)
+                .Select(sd => sd.MatchDate)
+                .ToList();
+            if (weekDates.Count > 0) weekEndDate = weekDates.Max();
+        }
+
+        var clubName  = AppParameterService.GetAppParameter(db, "ClubName") ?? "Bocce League";
+        string docHdr = $"{clubName}  —  {season.League.Name}  —  {season.Name}  —  Standings{WeekSuffix(maxWeek, weekEndDate)}";
         var divisions = db.Divisions
             .Include(d => d.DaySlot)
             .Include(d => d.TimeSlot)
@@ -144,7 +158,8 @@ public static class StandingsPrintService
         }
 
         var lay = new Layout(docHdr, timeCols, columnDivs, seedRows,
-            season.TeamsInPlayoffs, isGamesMode, isSeasonComplete, statHdrs, statWidths, tcTeamW);
+            season.TeamsInPlayoffs, isGamesMode, isSeasonComplete, statHdrs, statWidths, tcTeamW,
+            maxWeek, weekEndDate);
 
         return CreatePrintDoc(lay, mode);
     }
@@ -373,7 +388,7 @@ public static class StandingsPrintService
     {
         float y = b.Top;
         g.FillRectangle(darkBr, b.Left, y, b.Width, DocHdrH);
-        g.DrawString("Season Standings — Playoff Seeding Order", bigF, Brushes.White,
+        g.DrawString($"Season Standings — Playoff Seeding Order{WeekSuffix(lay.WeekNumber, lay.WeekEndDate)}", bigF, Brushes.White,
             new RectangleF(b.Left, y, b.Width, DocHdrH), csf);
         y += DocHdrH;
 
@@ -499,6 +514,11 @@ public static class StandingsPrintService
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static string PmStr(int v) => v >= 0 ? $"+{v}" : $"{v}";
+
+    private static string WeekSuffix(int weekNumber, DateOnly? weekEndDate) => weekNumber <= 0 ? "" :
+        weekEndDate.HasValue
+            ? $"  —  Week {weekNumber} (Week Ending {weekEndDate.Value:MMM d, yyyy})"
+            : $"  —  Week {weekNumber}";
 
     private static string ToTitle(string? s) =>
         string.IsNullOrEmpty(s) ? "" : char.ToUpper(s[0]) + s.Substring(1).ToLower();

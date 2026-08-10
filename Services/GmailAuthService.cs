@@ -16,7 +16,10 @@ public static class GmailAuthService
     private const string ClientIdKey = "Gmail.ClientId";
     private const string ClientSecretKey = "Gmail.ClientSecretProtected";
     private const string TokenStoreKey = "Gmail.TokenStore";
-    private static readonly string[] Scopes = [GmailService.Scope.GmailSend];
+    // GmailModify covers send + read + label changes (mark read/archive) in one scope — a
+    // superset of GmailSend, and (unlike GmailSend alone) accepted by users.getProfile, which
+    // GetConnectedAccountAsync calls to show "Connected as ...". Doesn't allow permanent delete.
+    private static readonly string[] Scopes = [GmailService.Scope.GmailModify];
 
     public static bool IsConnected()
     {

@@ -187,8 +187,8 @@ public class DocumentsPanel : UserControl
             foreach (var doc in db.ClubDocuments.OrderBy(d => d.Title).ToList())
             {
                 var item = new ListViewItem(doc.Title);
-                item.SubItems.Add(doc.LeagueId.HasValue && leagueNames.TryGetValue(doc.LeagueId.Value, out var leagueName) ? leagueName : "");
-                item.SubItems.Add(doc.SeasonId.HasValue && seasonNames.TryGetValue(doc.SeasonId.Value, out var seasonName) ? seasonName : "");
+                item.SubItems.Add(doc.LeagueId.HasValue && leagueNames.TryGetValue(doc.LeagueId.Value, out var leagueName) ? StripRedundantWord(leagueName, "League") : "");
+                item.SubItems.Add(doc.SeasonId.HasValue && seasonNames.TryGetValue(doc.SeasonId.Value, out var seasonName) ? StripRedundantWord(seasonName, "Season") : "");
                 item.SubItems.Add(doc.DocType == "googledocs" ? "GDOC" : doc.DocType.ToUpper());
                 item.SubItems.Add(doc.UploadedAt.ToString("MM/dd/yy"));
                 item.Tag = doc;
@@ -196,6 +196,14 @@ public class DocumentsPanel : UserControl
             }
         }
         catch { }
+    }
+
+    // League/Season names already carry "League"/"Season" in their full names (e.g. "Green
+    // Valley League"), which is redundant once shown under a column already labeled that way.
+    private static string StripRedundantWord(string name, string word)
+    {
+        var stripped = System.Text.RegularExpressions.Regex.Replace(name, $@"\b{word}\b", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return System.Text.RegularExpressions.Regex.Replace(stripped, @"\s+", " ").Trim();
     }
 
     private void OnSelectionChanged(object? sender, EventArgs e)

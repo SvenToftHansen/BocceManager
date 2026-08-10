@@ -22,9 +22,11 @@ public class EmailComposePanel : UserControl
 
     private ComboBox _cmbScope = null!;
     private ComboBox _cmbTarget = null!;
+    private TextBox _txtManualEmails = null!;
     private Button _btnSelectIndividuals = null!;
     private Label _lblSelectedIndividuals = null!;
     private Label _lblRecipientCount = null!;
+    private CheckBox _chkUniqueEmail = null!;
     private TextBox _txtSubject = null!;
     private WebView2 _webView = null!;
     private FlowLayoutPanel _attachmentsPanel = null!;
@@ -34,7 +36,7 @@ public class EmailComposePanel : UserControl
     private bool _webViewReady;
 
     private List<EmailRecipient> _currentRecipients = [];
-    private readonly List<(string FileName, byte[] Bytes)> _attachments = [];
+    private readonly List<(string FileName, byte[] Bytes, string MimeType)> _attachments = [];
     private readonly HashSet<int> _selectedIndividualIds = [];
 
     private FlowLayoutPanel _mergeRow = null!;
@@ -69,7 +71,7 @@ public class EmailComposePanel : UserControl
         _cmbScope = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 170, Font = AppTheme.FontDefault };
         _cmbScope.Items.AddRange([
             "All Active Players", "Players on Teams", "Division", "Team",
-            "Players on Spare List", "Unpaid Players", "Email List", "Individual(s)"
+            "Players on Spare List", "Unpaid Players", "Email List", "Individual(s)", "Manual Email Address(es)"
         ]);
         _cmbScope.SelectedIndex = 0;
         _cmbScope.SelectedIndexChanged += (_, _) => { UpdateScopeControlsVisibility(); LoadTargets(); RefreshRecipientPreview(); };
@@ -87,6 +89,19 @@ public class EmailComposePanel : UserControl
         _cmbTarget.SelectedIndexChanged += (_, _) => RefreshRecipientPreview();
         scopeRow.Controls.Add(_cmbTarget);
 
+        _txtManualEmails = new TextBox
+        {
+            Width = 320,
+            Font = AppTheme.FontDefault,
+            BackColor = AppTheme.Surface,
+            ForeColor = AppTheme.TextPrimary,
+            PlaceholderText = "name@example.com;other@example.com",
+            Margin = new Padding(8, 0, 0, 0),
+            Visible = false
+        };
+        _txtManualEmails.TextChanged += (_, _) => RefreshRecipientPreview();
+        scopeRow.Controls.Add(_txtManualEmails);
+
         _btnSelectIndividuals = MakeButton("Select Players...", Color.FromArgb(100, 116, 139));
         _btnSelectIndividuals.Margin = new Padding(8, 0, 0, 0);
         _btnSelectIndividuals.Click += OnSelectIndividuals;
@@ -97,6 +112,14 @@ public class EmailComposePanel : UserControl
 
         _lblRecipientCount = new Label { Text = "0 recipient(s)", AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.FontDefault, Margin = new Padding(16, 8, 0, 0) };
         scopeRow.Controls.Add(_lblRecipientCount);
+
+        _chkUniqueEmail = new CheckBox
+        {
+            Text = "Unique email addresses only", Checked = true, AutoSize = true,
+            ForeColor = AppTheme.TextSecondary, Font = AppTheme.FontDefault, Margin = new Padding(16, 8, 0, 0)
+        };
+        _chkUniqueEmail.CheckedChanged += (_, _) => RefreshRecipientPreview();
+        scopeRow.Controls.Add(_chkUniqueEmail);
         layout.Controls.Add(scopeRow, 0, 0);
 
         // -- Row 2: subject --
@@ -125,6 +148,13 @@ public class EmailComposePanel : UserControl
         btnInsertReport.Margin = new Padding(16, 0, 6, 0);
         btnInsertReport.Click += OnInsertReport;
         _mergeRow.Controls.Add(btnInsertReport);
+        var btnAttachDocument = MakeButton("Attach Document...", AppTheme.Accent);
+        btnAttachDocument.Click += OnAttachDocument;
+        _mergeRow.Controls.Add(btnAttachDocument);
+        var btnClearContent = MakeButton("Clear Content", AppTheme.ButtonDanger);
+        btnClearContent.Margin = new Padding(16, 0, 6, 0);
+        btnClearContent.Click += OnClearContent;
+        _mergeRow.Controls.Add(btnClearContent);
         layout.Controls.Add(_mergeRow, 0, 2);
 
         // -- Row 4: attachment chips --
@@ -149,7 +179,17 @@ public class EmailComposePanel : UserControl
         sendRow.Controls.Add(_lblStatus);
         layout.Controls.Add(sendRow, 0, 5);
 
-        Controls.Add(layout);
+        var tabs = new TabControl { Dock = DockStyle.Fill, Font = AppTheme.FontDefault };
+
+        var composeTab = new TabPage("Compose") { BackColor = AppTheme.ContentBackground };
+        composeTab.Controls.Add(layout);
+        tabs.TabPages.Add(composeTab);
+
+        var repliesTab = new TabPage("Replies") { BackColor = AppTheme.ContentBackground };
+        repliesTab.Controls.Add(new EmailRepliesPanel());
+        tabs.TabPages.Add(repliesTab);
+
+        Controls.Add(tabs);
     }
 
     private static Button MakeButton(string text, Color back) => new()
@@ -194,8 +234,14 @@ public class EmailComposePanel : UserControl
 
     private async void OnInsertReport(object? sender, EventArgs e)
     {
-        var choice = ShowReportPickerDialog();
-        if (choice == null) return;
+        if (!_webViewReady)
+        {
+            MessageBox.Show("The email editor is still loading — try again in a moment.", "Insert Report", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var report = ShowReportPickerDialog();
+        if (report == null) return;
 
         int? leagueId;
         int? seasonId;
@@ -213,22 +259,8 @@ public class EmailComposePanel : UserControl
 
         try
         {
-            if (choice.Value.AsContent)
-            {
-                if (!_webViewReady)
-                {
-                    MessageBox.Show("The email editor is still loading — try again in a moment.", "Insert Report", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-                var html = ReportAttachmentService.BuildHtmlContent(choice.Value.Report, leagueId.Value, seasonId);
-                await _webView.CoreWebView2.ExecuteScriptAsync($"window.insertHtmlAtCursor({JsonSerializer.Serialize(html)})");
-            }
-            else
-            {
-                var (fileName, bytes) = ReportAttachmentService.BuildPdfAttachment(choice.Value.Report, leagueId.Value, seasonId);
-                _attachments.Add((fileName, bytes));
-                RefreshAttachmentChips();
-            }
+            var html = ReportAttachmentService.BuildHtmlContent(report.Value, leagueId.Value, seasonId);
+            await _webView.CoreWebView2.ExecuteScriptAsync($"window.insertHtmlAtCursor({JsonSerializer.Serialize(html)})");
         }
         catch (Exception ex)
         {
@@ -237,7 +269,91 @@ public class EmailComposePanel : UserControl
         }
     }
 
-    private (AttachableReport Report, bool AsContent)? ShowReportPickerDialog()
+    private async void OnClearContent(object? sender, EventArgs e)
+    {
+        if (!_webViewReady)
+        {
+            MessageBox.Show("The email editor is still loading — try again in a moment.", "Clear Content", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        if (MessageBox.Show("Clear all content from the email body?", "Clear Content", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return;
+
+        await _webView.CoreWebView2.ExecuteScriptAsync("window.setBody('')");
+    }
+
+    private void OnAttachDocument(object? sender, EventArgs e)
+    {
+        List<ClubDocument> docs;
+        try
+        {
+            using var db = new BocceDbContext();
+            docs = db.ClubDocuments
+                .Where(d => d.DocType == "pdf" || d.DocType == "docx")
+                .OrderBy(d => d.Title)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error(ex, "Failed to load documents for attachment picker");
+            MessageBox.Show($"Could not load documents:\n\n{ex.Message}", "Attach Document", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        if (docs.Count == 0)
+        {
+            MessageBox.Show("No PDF or Word documents are available in the Documents folder.", "Attach Document", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var dialog = new Form
+        {
+            Text = "Attach Document",
+            Width = 420,
+            Height = 480,
+            StartPosition = FormStartPosition.CenterParent,
+            BackColor = AppTheme.ContentBackground,
+            Font = AppTheme.FontDefault,
+            MinimizeBox = false,
+            MaximizeBox = false
+        };
+
+        var clb = new CheckedListBox { Dock = DockStyle.Fill, CheckOnClick = true, DisplayMember = "Title" };
+        foreach (var doc in docs)
+            clb.Items.Add(doc, _attachments.Any(a => a.FileName == doc.FileName));
+
+        var btnOk = new Button { Text = "Attach", DialogResult = DialogResult.OK, Dock = DockStyle.Bottom, Height = 32 };
+
+        dialog.Controls.Add(clb);
+        dialog.Controls.Add(btnOk);
+        dialog.AcceptButton = btnOk;
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        foreach (var checkedItem in clb.CheckedItems.Cast<ClubDocument>())
+        {
+            if (_attachments.Any(a => a.FileName == checkedItem.FileName)) continue;
+
+            try
+            {
+                var bytes = File.ReadAllBytes(DocumentService.GetFilePath(checkedItem));
+                var mimeType = checkedItem.DocType == "pdf"
+                    ? "application/pdf"
+                    : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+                _attachments.Add((checkedItem.FileName, bytes, mimeType));
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error(ex, "Failed to attach document {FileName}", checkedItem.FileName);
+                MessageBox.Show($"Could not attach \"{checkedItem.Title}\":\n\n{ex.Message}", "Attach Document", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        RefreshAttachmentChips();
+    }
+
+    private AttachableReport? ShowReportPickerDialog()
     {
         var options = ReportAttachmentService.GetOptions();
 
@@ -245,7 +361,7 @@ public class EmailComposePanel : UserControl
         {
             Text = "Insert Report",
             Width = 380,
-            Height = 200,
+            Height = 152,
             StartPosition = FormStartPosition.CenterParent,
             BackColor = AppTheme.ContentBackground,
             Font = AppTheme.FontDefault,
@@ -257,35 +373,24 @@ public class EmailComposePanel : UserControl
         var lblReport = new Label { Text = "Report:", Location = new Point(10, 15), Size = new Size(100, 20), ForeColor = AppTheme.TextPrimary };
         var cmbReport = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(10, 38), Size = new Size(340, 26) };
         foreach (var opt in options) cmbReport.Items.Add(opt);
-
-        var rbPdf = new RadioButton { Text = "Attach as PDF", Location = new Point(10, 72), AutoSize = true, Checked = true, ForeColor = AppTheme.TextPrimary };
-        var rbContent = new RadioButton { Text = "Insert as content (HTML table)", Location = new Point(10, 96), AutoSize = true, ForeColor = AppTheme.TextPrimary };
-
-        cmbReport.SelectedIndexChanged += (_, _) =>
-        {
-            var selected = (AttachableReportOption)cmbReport.SelectedItem!;
-            rbContent.Enabled = selected.SupportsContent;
-            if (!selected.SupportsContent) rbPdf.Checked = true;
-        };
         cmbReport.SelectedIndex = 0;
 
-        var btnOk = new Button { Text = "OK", Location = new Point(174, 132), Size = new Size(75, 28), DialogResult = DialogResult.OK };
-        var btnCancel = new Button { Text = "Cancel", Location = new Point(255, 132), Size = new Size(75, 28), DialogResult = DialogResult.Cancel };
+        var btnOk = new Button { Text = "Insert", Location = new Point(174, 78), Size = new Size(75, 28), DialogResult = DialogResult.OK };
+        var btnCancel = new Button { Text = "Cancel", Location = new Point(255, 78), Size = new Size(75, 28), DialogResult = DialogResult.Cancel };
 
-        dialog.Controls.AddRange([lblReport, cmbReport, rbPdf, rbContent, btnOk, btnCancel]);
+        dialog.Controls.AddRange([lblReport, cmbReport, btnOk, btnCancel]);
         dialog.AcceptButton = btnOk;
         dialog.CancelButton = btnCancel;
 
         if (dialog.ShowDialog(this) != DialogResult.OK) return null;
 
-        var chosen = (AttachableReportOption)cmbReport.SelectedItem!;
-        return (chosen.Report, rbContent.Checked);
+        return ((AttachableReportOption)cmbReport.SelectedItem!).Report;
     }
 
     private void RefreshAttachmentChips()
     {
         _attachmentsPanel.Controls.Clear();
-        foreach (var (fileName, _) in _attachments)
+        foreach (var (fileName, _, _) in _attachments)
         {
             var chip = new FlowLayoutPanel
             {
@@ -401,16 +506,18 @@ public class EmailComposePanel : UserControl
     }
 
     // Scope indices: 0 All Active Players, 1 Players on Teams, 2 Division, 3 Team,
-    // 4 Players on Spare List, 5 Unpaid Players, 6 Email List, 7 Individual(s).
+    // 4 Players on Spare List, 5 Unpaid Players, 6 Email List, 7 Individual(s), 8 Manual Email Address(es).
     private void UpdateScopeControlsVisibility()
     {
         int idx = _cmbScope.SelectedIndex;
         bool needsTarget = idx is 2 or 3 or 6;
         bool isIndividual = idx == 7;
+        bool isManual = idx == 8;
 
         _cmbTarget.Visible = needsTarget;
         _btnSelectIndividuals.Visible = isIndividual;
         _lblSelectedIndividuals.Visible = isIndividual;
+        _txtManualEmails.Visible = isManual;
     }
 
     private void LoadTargets()
@@ -544,6 +651,13 @@ public class EmailComposePanel : UserControl
 
     private void RefreshRecipientPreview()
     {
+        if (_cmbScope.SelectedIndex == 8)
+        {
+            _currentRecipients = ParseManualEmails(_txtManualEmails.Text);
+            _lblRecipientCount.Text = $"{_currentRecipients.Count} recipient(s)";
+            return;
+        }
+
         try
         {
             using var db = new BocceDbContext();
@@ -556,7 +670,7 @@ public class EmailComposePanel : UserControl
             }
             else
             {
-                _currentRecipients = EmailRecipientService.GetRecipients(db, scope.Value.Scope, scope.Value.ScopeIds, leagueId, seasonId.Value);
+                _currentRecipients = EmailRecipientService.GetRecipients(db, scope.Value.Scope, scope.Value.ScopeIds, leagueId, seasonId.Value, _chkUniqueEmail.Checked);
             }
         }
         catch (Exception ex)
@@ -567,6 +681,18 @@ public class EmailComposePanel : UserControl
 
         _lblRecipientCount.Text = $"{_currentRecipients.Count} recipient(s)";
     }
+
+    private static readonly System.Text.RegularExpressions.Regex EmailPattern =
+        new(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    // Manually typed addresses aren't tied to a Player row, so PlayerId is left null —
+    // EmailRecipient.PlayerId is nullable for exactly this case.
+    private static List<EmailRecipient> ParseManualEmails(string text) =>
+        text.Split([';', ',', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(a => EmailPattern.IsMatch(a))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(a => new EmailRecipient(null, "", "", a, null))
+            .ToList();
 
     private async void OnSend(object? sender, EventArgs e)
     {
@@ -627,7 +753,7 @@ public class EmailComposePanel : UserControl
 
             List<EmailAttachment>? attachments = _attachments.Count == 0
                 ? null
-                : _attachments.Select(a => new EmailAttachment(a.FileName, "application/pdf", a.Bytes)).ToList();
+                : _attachments.Select(a => new EmailAttachment(a.FileName, a.MimeType, a.Bytes)).ToList();
 
             int sent = 0, failed = 0;
             var results = new List<(EmailRecipient Recipient, bool Success, string? Error)>();

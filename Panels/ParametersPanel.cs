@@ -169,7 +169,8 @@ public class ParametersPanel : UserControl
         try
         {
             using var db = new BocceDbContext();
-            AppParameterService.SetAppParameter(db, "Gmail.ClientId", _txtGmailClientId.Text.Trim());
+            if (_txtGmailClientId.Text.Trim().Length > 0)
+                AppParameterService.SetAppParameter(db, "Gmail.ClientId", _txtGmailClientId.Text.Trim());
 
             if (_txtGmailClientSecret.Text.Length > 0)
             {
@@ -437,6 +438,7 @@ public class ParametersPanel : UserControl
             SetText(_txtCaptainName,          AppParameterService.GetAppParameter(db, "LeagueCaptainName"));
             SetText(_txtCaptainEmail,         AppParameterService.GetAppParameter(db, "LeagueCaptainEmail"));
             SetText(_txtInitiationFeeAmount,  AppParameterService.GetAppParameter(db, "InitiationFeeAmount"));
+            SetText(_txtGmailClientId,        AppParameterService.GetAppParameter(db, "Gmail.ClientId"));
         }
         catch { }
 

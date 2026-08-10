@@ -4,7 +4,7 @@ using Polly.Retry;
 namespace BocceManager.Services;
 
 /// <summary>
-/// Shared Polly resilience policies for external HTTP calls (Brevo, website API).
+/// Shared Polly resilience policies for external HTTP calls (Gmail API, website API).
 /// </summary>
 public static class PollyPolicies
 {
