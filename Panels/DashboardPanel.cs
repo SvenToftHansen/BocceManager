@@ -76,6 +76,8 @@ public class DashboardPanel : UserControl
         _statsPanel.Margin = new Padding(0, 0, 0, 28);
         flow.Controls.Add(_statsPanel);
 
+        flow.Controls.Add(BuildGmailStatusPanel(flowWidth));
+
         scroll.Controls.Add(flow);
         Controls.Add(scroll);
     }
@@ -166,6 +168,60 @@ public class DashboardPanel : UserControl
             panel.Controls.Add(card);
             x += 116;
         }
+
+        return panel;
+    }
+
+    private static Panel BuildGmailStatusPanel(int width)
+    {
+        bool connected = false;
+        int failedCount = 0;
+        try
+        {
+            connected = GmailAuthService.IsConnected();
+            using var db = new BocceDbContext();
+            failedCount = db.EmailLogRecipients.Count(r => r.Status == "Failed");
+        }
+        catch { }
+
+        var panel = new Panel
+        {
+            Size = new Size(width, 50),
+            BackColor = AppTheme.Surface
+        };
+
+        panel.Controls.Add(new Label
+        {
+            Text = "●",
+            Font = AppTheme.FontDefaultBold,
+            ForeColor = connected ? AppTheme.ButtonSuccess : AppTheme.ButtonDanger,
+            AutoSize = false,
+            Size = new Size(24, 50),
+            Location = new Point(16, 0),
+            TextAlign = ContentAlignment.MiddleCenter
+        });
+
+        panel.Controls.Add(new Label
+        {
+            Text = connected ? "Gmail Connected" : "Gmail Not Connected",
+            Font = AppTheme.FontDefaultBold,
+            ForeColor = AppTheme.TextPrimary,
+            AutoSize = false,
+            Size = new Size(240, 50),
+            Location = new Point(44, 0),
+            TextAlign = ContentAlignment.MiddleLeft
+        });
+
+        panel.Controls.Add(new Label
+        {
+            Text = failedCount == 1 ? "1 email failure" : $"{failedCount} email failures",
+            Font = AppTheme.FontDefault,
+            ForeColor = failedCount > 0 ? AppTheme.ButtonDanger : AppTheme.TextMuted,
+            AutoSize = false,
+            Size = new Size(width - 300, 50),
+            Location = new Point(300, 0),
+            TextAlign = ContentAlignment.MiddleRight
+        });
 
         return panel;
     }
