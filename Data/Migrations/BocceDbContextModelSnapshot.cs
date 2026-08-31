@@ -253,6 +253,48 @@ namespace BocceManager.Data.Migrations
                     b.ToTable("Divisions");
                 });
 
+            modelBuilder.Entity("BocceManager.Data.Entities.EmailDraft", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BodyHtml")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ManualEmails")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("SavedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SavedBy")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ScopeIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SelectedIndividualIds")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("TargetId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("UniqueEmailOnly")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("EmailDrafts");
+                });
+
             modelBuilder.Entity("BocceManager.Data.Entities.EmailList", b =>
                 {
                     b.Property<int>("Id")

@@ -50,3 +50,20 @@ public class EmailLogRecipient
     public EmailLog EmailLog { get; set; } = null!;
     public Player? Player { get; set; }
 }
+
+// A saved-in-progress Compose Email screen so the admin can leave and pick it back up later.
+// Recipient selection is stored by its raw scope index/target rather than resolved emails, since
+// the underlying roster (team assignments, spare lists, etc.) may change between save and reload.
+public class EmailDraft
+{
+    public int Id { get; set; }
+    public string Subject { get; set; } = "";
+    public string BodyHtml { get; set; } = "";
+    public int ScopeIndex { get; set; }
+    public int? TargetId { get; set; }
+    public string? ManualEmails { get; set; }
+    public bool UniqueEmailOnly { get; set; } = true;
+    public string? SelectedIndividualIds { get; set; } // comma-separated player ids, scope 7 only
+    public string? SavedBy { get; set; }
+    public DateTime SavedAt { get; set; } = DateTime.UtcNow;
+}

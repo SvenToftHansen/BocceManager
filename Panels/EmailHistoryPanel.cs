@@ -1,6 +1,8 @@
 using BocceManager.Data;
+using BocceManager.Data.Entities;
 using BocceManager.Services;
 using BocceManager.UI.Theme;
+using Microsoft.Web.WebView2.WinForms;
 
 namespace BocceManager.Panels;
 
@@ -8,19 +10,37 @@ public class EmailHistoryPanel : UserControl
 {
     private ListView _lvLogs = null!;
     private ListView _lvRecipients = null!;
-    private SplitContainer _split = null!;
+    private WebView2 _webView = null!;
+    private SplitContainer _outerSplit = null!;
+    private SplitContainer _leftSplit = null!;
+    private bool _webViewReady;
+    private string? _pendingNavHtml;
 
     public EmailHistoryPanel()
     {
         BackColor = AppTheme.ContentBackground;
         Dock = DockStyle.Fill;
         BuildUI();
+        Load += async (_, _) => await InitWebViewAsync();
         LoadLogs();
     }
 
     private void BuildUI()
     {
-        _split = new SplitContainer
+        // Left/right: the log + recipient lists vs. the selected email's body, for reference.
+        _outerSplit = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Vertical,
+            Panel1MinSize = 0,
+            Panel2MinSize = 0,
+            BackColor = AppTheme.Separator
+        };
+        _outerSplit.SizeChanged += (_, _) => SafeApplySplitDistance(_outerSplit, 260, 320, 420);
+        _outerSplit.HandleCreated += (_, _) => BeginInvoke(new Action(() => SafeApplySplitDistance(_outerSplit, 260, 320, 420)));
+
+        // Top/bottom, within the left side: sent-email log, then its recipients.
+        _leftSplit = new SplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
@@ -28,11 +48,8 @@ public class EmailHistoryPanel : UserControl
             Panel2MinSize = 0,
             BackColor = AppTheme.Separator
         };
-        // Panel1MinSize/Panel2MinSize/SplitterDistance can't be set to their real values
-        // until the control has a real size — WinForms recomputes SplitterDistance
-        // internally when the min sizes are set, and throws if Height is still 0.
-        _split.SizeChanged += (_, _) => SafeApplySplitDistance(_split, 150, 150, 260);
-        _split.HandleCreated += (_, _) => BeginInvoke(new Action(() => SafeApplySplitDistance(_split, 150, 150, 260)));
+        _leftSplit.SizeChanged += (_, _) => SafeApplySplitDistance(_leftSplit, 150, 150, 260);
+        _leftSplit.HandleCreated += (_, _) => BeginInvoke(new Action(() => SafeApplySplitDistance(_leftSplit, 150, 150, 260)));
 
         _lvLogs = new ListView
         {
@@ -50,8 +67,8 @@ public class EmailHistoryPanel : UserControl
         _lvLogs.Columns.Add("Subject", 300);
         _lvLogs.Columns.Add("Recipients", 90);
         _lvLogs.Columns.Add("Sent By", 140);
-        _lvLogs.SelectedIndexChanged += (_, _) => LoadRecipients();
-        _split.Panel1.Controls.Add(_lvLogs);
+        _lvLogs.SelectedIndexChanged += (_, _) => OnLogSelectionChanged();
+        _leftSplit.Panel1.Controls.Add(_lvLogs);
 
         _lvRecipients = new ListView
         {
@@ -68,9 +85,14 @@ public class EmailHistoryPanel : UserControl
         _lvRecipients.Columns.Add("Email", 240);
         _lvRecipients.Columns.Add("Status", 80);
         _lvRecipients.Columns.Add("Error", 400);
-        _split.Panel2.Controls.Add(_lvRecipients);
+        _leftSplit.Panel2.Controls.Add(_lvRecipients);
 
-        Controls.Add(_split);
+        _outerSplit.Panel1.Controls.Add(_leftSplit);
+
+        _webView = new WebView2 { Dock = DockStyle.Fill };
+        _outerSplit.Panel2.Controls.Add(_webView);
+
+        Controls.Add(_outerSplit);
     }
 
     private static void SafeApplySplitDistance(SplitContainer split, int desiredFirstMin, int desiredSecondMin, int preferred)
@@ -108,6 +130,29 @@ public class EmailHistoryPanel : UserControl
             split.SplitterDistance = clamped;
     }
 
+    private async Task InitWebViewAsync()
+    {
+        try
+        {
+            await _webView.EnsureCoreWebView2Async();
+            _webViewReady = true;
+            if (_pendingNavHtml != null)
+            {
+                _webView.CoreWebView2.NavigateToString(_pendingNavHtml);
+                _pendingNavHtml = null;
+            }
+        }
+        catch { }
+    }
+
+    private void NavigateWebView(string html)
+    {
+        if (_webViewReady && _webView.CoreWebView2 != null)
+            _webView.CoreWebView2.NavigateToString(html);
+        else
+            _pendingNavHtml = html;
+    }
+
     private void LoadLogs()
     {
         try
@@ -118,7 +163,7 @@ public class EmailHistoryPanel : UserControl
             _lvLogs.Items.Clear();
             foreach (var log in logs)
             {
-                var item = new ListViewItem(log.SentAt.ToLocalTime().ToString("g")) { Tag = log.Id };
+                var item = new ListViewItem(log.SentAt.ToLocalTime().ToString("g")) { Tag = log };
                 item.SubItems.Add(log.Subject);
                 item.SubItems.Add((log.RecipientCount ?? 0).ToString());
                 item.SubItems.Add(log.SentBy ?? "");
@@ -126,7 +171,11 @@ public class EmailHistoryPanel : UserControl
             }
 
             if (_lvLogs.Items.Count > 0) _lvLogs.Items[0].Selected = true;
-            else _lvRecipients.Items.Clear();
+            else
+            {
+                _lvRecipients.Items.Clear();
+                NavigateWebView("<html><body></body></html>");
+            }
         }
         catch (Exception ex)
         {
@@ -134,16 +183,22 @@ public class EmailHistoryPanel : UserControl
         }
     }
 
+    private void OnLogSelectionChanged()
+    {
+        LoadRecipients();
+        LoadBodyPreview();
+    }
+
     private void LoadRecipients()
     {
         _lvRecipients.Items.Clear();
-        if (_lvLogs.SelectedItems.Count == 0 || _lvLogs.SelectedItems[0].Tag is not int logId) return;
+        if (_lvLogs.SelectedItems.Count == 0 || _lvLogs.SelectedItems[0].Tag is not EmailLog log) return;
 
         try
         {
             using var db = new BocceDbContext();
             var recipients = db.EmailLogRecipients
-                .Where(r => r.EmailLogId == logId)
+                .Where(r => r.EmailLogId == log.Id)
                 .OrderBy(r => r.Email)
                 .ToList();
 
@@ -159,5 +214,27 @@ public class EmailHistoryPanel : UserControl
         {
             AppLogger.Error(ex, "Failed to load email log recipients");
         }
+    }
+
+    private void LoadBodyPreview()
+    {
+        if (_lvLogs.SelectedItems.Count == 0 || _lvLogs.SelectedItems[0].Tag is not EmailLog log)
+        {
+            NavigateWebView("<html><body></body></html>");
+            return;
+        }
+
+        var header = $"""
+            <div style="font-family:Segoe UI,Arial,sans-serif;border-bottom:1px solid #ddd;padding-bottom:8px;margin-bottom:12px;">
+            <div style="font-size:14px;font-weight:bold;">{System.Net.WebUtility.HtmlEncode(log.Subject)}</div>
+            <div style="font-size:12px;color:#666;">Sent {log.SentAt.ToLocalTime():dddd, MMM d, yyyy h:mm tt} by {System.Net.WebUtility.HtmlEncode(log.SentBy ?? "")} to {log.RecipientCount ?? 0} recipient(s)</div>
+            </div>
+            """;
+
+        string bodyHtml = string.IsNullOrWhiteSpace(log.Body)
+            ? "<p style=\"color:#999;\">(no body recorded)</p>"
+            : log.Body;
+
+        NavigateWebView($"<html><body style=\"padding:16px;\">{header}{bodyHtml}</body></html>");
     }
 }

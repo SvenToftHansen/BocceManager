@@ -102,6 +102,7 @@ public class BocceDbContext : DbContext
     public DbSet<EmailListMember> EmailListMembers => Set<EmailListMember>();
     public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
     public DbSet<EmailLogRecipient> EmailLogRecipients => Set<EmailLogRecipient>();
+    public DbSet<EmailDraft> EmailDrafts => Set<EmailDraft>();
 
     // Playoffs
     public DbSet<PlayoffConfig>    PlayoffConfigs   => Set<PlayoffConfig>();

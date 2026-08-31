@@ -35,12 +35,15 @@ public class EmailComposePanel : UserControl
     private FlowLayoutPanel _attachmentsPanel = null!;
     private Button _btnSend = null!;
     private Button _btnPreview = null!;
+    private Button _btnSaveDraft = null!;
+    private Button _btnLoadDraft = null!;
     private Label _lblStatus = null!;
     private bool _webViewReady;
 
     private List<EmailRecipient> _currentRecipients = [];
     private readonly List<(string FileName, byte[] Bytes, string MimeType)> _attachments = [];
     private readonly HashSet<int> _selectedIndividualIds = [];
+    private int? _loadedDraftId;
 
     private FlowLayoutPanel _mergeRow = null!;
     private TableLayoutPanel _composeLayout = null!;
@@ -233,6 +236,13 @@ public class EmailComposePanel : UserControl
         _btnPreview = MakeButton("Preview", Color.FromArgb(100, 116, 139));
         _btnPreview.Click += OnPreview;
         sendRow.Controls.Add(_btnPreview);
+        _btnSaveDraft = MakeButton("Save Draft", Color.FromArgb(100, 116, 139));
+        _btnSaveDraft.Margin = new Padding(16, 0, 6, 0);
+        _btnSaveDraft.Click += OnSaveDraft;
+        sendRow.Controls.Add(_btnSaveDraft);
+        _btnLoadDraft = MakeButton("Load Draft...", Color.FromArgb(100, 116, 139));
+        _btnLoadDraft.Click += OnLoadDraft;
+        sendRow.Controls.Add(_btnLoadDraft);
         _lblStatus = new Label { AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.FontDefault, Margin = new Padding(12, 8, 0, 0) };
         sendRow.Controls.Add(_lblStatus);
         _composeLayout.Controls.Add(sendRow, 0, 8);
@@ -761,6 +771,176 @@ public class EmailComposePanel : UserControl
             : $"{_selectedIndividualIds.Count} player(s) selected";
     }
 
+    // ── Drafts ─────────────────────────────────────────────────────────────────
+    // Lets the admin step away mid-compose and pick back up later. Recipient selection is
+    // stored as the raw scope/target rather than resolved emails, since the roster underneath
+    // (team assignments, spare lists, etc.) may have changed by the time the draft is reloaded.
+
+    private async void OnSaveDraft(object? sender, EventArgs e)
+    {
+        if (!_webViewReady)
+        {
+            MessageBox.Show("The email editor is still loading — try again in a moment.", "Save Draft", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var bodyRaw = await _webView.CoreWebView2.ExecuteScriptAsync("window.getBody()");
+        var bodyHtml = JsonSerializer.Deserialize<string>(bodyRaw) ?? "";
+
+        int? targetId = (_cmbScope.SelectedIndex is 2 or 3 or 6) && _cmbTarget.SelectedItem is ComboItem t ? t.Id : null;
+
+        try
+        {
+            using var db = new BocceDbContext();
+            var draft = _loadedDraftId.HasValue
+                ? db.EmailDrafts.FirstOrDefault(d => d.Id == _loadedDraftId.Value)
+                : null;
+            if (draft == null)
+            {
+                draft = new EmailDraft();
+                db.EmailDrafts.Add(draft);
+            }
+
+            draft.Subject = _txtSubject.Text.Trim();
+            draft.BodyHtml = bodyHtml;
+            draft.ScopeIndex = _cmbScope.SelectedIndex;
+            draft.TargetId = targetId;
+            draft.ManualEmails = _txtManualEmails.Text;
+            draft.UniqueEmailOnly = _chkUniqueEmail.Checked;
+            draft.SelectedIndividualIds = _selectedIndividualIds.Count == 0 ? null : string.Join(",", _selectedIndividualIds);
+            draft.SavedBy = Environment.UserName;
+            draft.SavedAt = DateTime.UtcNow;
+
+            db.SaveChanges();
+            _loadedDraftId = draft.Id;
+
+            _lblStatus.Text = "Draft saved.";
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error(ex, "Failed to save email draft");
+            MessageBox.Show($"Could not save draft:\n\n{ex.Message}", "Save Draft", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void OnLoadDraft(object? sender, EventArgs e)
+    {
+        List<EmailDraft> drafts;
+        try
+        {
+            using var db = new BocceDbContext();
+            drafts = db.EmailDrafts.OrderByDescending(d => d.SavedAt).ToList();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error(ex, "Failed to load email drafts");
+            MessageBox.Show($"Could not load drafts:\n\n{ex.Message}", "Load Draft", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        if (drafts.Count == 0)
+        {
+            MessageBox.Show("No saved drafts.", "Load Draft", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var dialog = new Form
+        {
+            Text = "Load Draft",
+            Width = 480,
+            Height = 420,
+            StartPosition = FormStartPosition.CenterParent,
+            BackColor = AppTheme.ContentBackground,
+            Font = AppTheme.FontDefault,
+            MinimizeBox = false,
+            MaximizeBox = false
+        };
+
+        var list = new ListBox { Dock = DockStyle.Fill, Font = AppTheme.FontDefault, IntegralHeight = false };
+        foreach (var d in drafts)
+        {
+            string subject = string.IsNullOrWhiteSpace(d.Subject) ? "(no subject)" : d.Subject;
+            list.Items.Add(new DraftListItem(d, $"{subject}  —  {d.SavedAt.ToLocalTime():g}"));
+        }
+        list.SelectedIndex = 0;
+
+        var buttonRow = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 44, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(8) };
+        var btnLoad = new Button { Text = "Load", DialogResult = DialogResult.OK, Width = 90, Height = 28 };
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Width = 90, Height = 28 };
+        var btnDelete = new Button { Text = "Delete", Width = 90, Height = 28, ForeColor = AppTheme.ButtonDanger };
+        btnDelete.Click += (_, _) =>
+        {
+            if (list.SelectedItem is not DraftListItem item) return;
+            if (MessageBox.Show("Delete this draft?", "Delete Draft", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                return;
+            try
+            {
+                using var db = new BocceDbContext();
+                var d = db.EmailDrafts.FirstOrDefault(x => x.Id == item.Draft.Id);
+                if (d != null) { db.EmailDrafts.Remove(d); db.SaveChanges(); }
+                if (_loadedDraftId == item.Draft.Id) _loadedDraftId = null;
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error(ex, "Failed to delete email draft");
+            }
+            list.Items.Remove(item);
+            if (list.Items.Count == 0) dialog.DialogResult = DialogResult.Cancel;
+        };
+
+        buttonRow.Controls.AddRange([btnCancel, btnLoad, btnDelete]);
+        dialog.Controls.Add(list);
+        dialog.Controls.Add(buttonRow);
+        dialog.AcceptButton = btnLoad;
+        dialog.CancelButton = btnCancel;
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (list.SelectedItem is not DraftListItem selected) return;
+
+        _ = ApplyDraftAsync(selected.Draft);
+    }
+
+    private sealed record DraftListItem(EmailDraft Draft, string Label)
+    {
+        public override string ToString() => Label;
+    }
+
+    private async Task ApplyDraftAsync(EmailDraft draft)
+    {
+        if (!_webViewReady)
+        {
+            MessageBox.Show("The email editor is still loading — try again in a moment.", "Load Draft", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        _txtSubject.Text = draft.Subject;
+
+        _cmbScope.SelectedIndex = draft.ScopeIndex;
+        LoadTargets();
+        if (draft.TargetId.HasValue)
+        {
+            for (int i = 0; i < _cmbTarget.Items.Count; i++)
+                if (_cmbTarget.Items[i] is ComboItem t && t.Id == draft.TargetId.Value) { _cmbTarget.SelectedIndex = i; break; }
+        }
+
+        _txtManualEmails.Text = draft.ManualEmails ?? "";
+        _chkUniqueEmail.Checked = draft.UniqueEmailOnly;
+
+        _selectedIndividualIds.Clear();
+        if (!string.IsNullOrWhiteSpace(draft.SelectedIndividualIds))
+            foreach (var part in draft.SelectedIndividualIds.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                if (int.TryParse(part, out int id)) _selectedIndividualIds.Add(id);
+        UpdateIndividualsLabel();
+
+        UpdateScopeControlsVisibility();
+
+        await _webView.CoreWebView2.ExecuteScriptAsync($"window.setBody({JsonSerializer.Serialize(draft.BodyHtml)})");
+
+        _loadedDraftId = draft.Id;
+        RefreshRecipientPreview();
+        _lblStatus.Text = "Draft loaded.";
+    }
+
     private (EmailRecipientScope Scope, int[] ScopeIds)? GetCurrentScope() => _cmbScope.SelectedIndex switch
     {
         0 => (EmailRecipientScope.AllActivePlayers, []),
@@ -947,6 +1127,15 @@ public class EmailComposePanel : UserControl
                     });
                 }
                 db.SaveChanges();
+
+                // The draft this send came from (if any) is now obsolete.
+                if (_loadedDraftId.HasValue)
+                {
+                    var draft = db.EmailDrafts.FirstOrDefault(d => d.Id == _loadedDraftId.Value);
+                    if (draft != null) db.EmailDrafts.Remove(draft);
+                    db.SaveChanges();
+                    _loadedDraftId = null;
+                }
             }
 
             _lblStatus.Text = "";
