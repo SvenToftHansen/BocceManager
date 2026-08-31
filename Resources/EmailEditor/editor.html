@@ -70,6 +70,13 @@
     editor.focus();
     document.execCommand('insertHTML', false, html);
   };
+
+  // Lets the host app know the user is typing in the body, not some other WinForms control —
+  // WebView2's hosted content lives in its own Chromium window, so .NET focus events on the
+  // WebView2 control don't fire when the user clicks into the page.
+  editor.addEventListener('focus', () => {
+    window.chrome?.webview?.postMessage('editor-focus');
+  });
 </script>
 </body>
 </html>

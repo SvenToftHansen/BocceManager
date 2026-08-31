@@ -84,6 +84,7 @@ public class EmailRepliesPanel : UserControl
         _listView.Columns.Add("From", 150);
         _listView.Columns.Add("Subject", 220);
         _listView.Columns.Add("Date", 110);
+        _listView.ShowGroups = true;
         _listView.SelectedIndexChanged += OnSelectionChanged;
         _mainSplit.Panel1.Controls.Add(_listView);
 
@@ -181,6 +182,14 @@ public class EmailRepliesPanel : UserControl
             _messages = await GmailReadService.ListInboxAsync(credential);
 
             _listView.Items.Clear();
+            _listView.Groups.Clear();
+
+            // One group for senders who match a player in our roster, then one group per
+            // distinct outside sender — keeps league replies separate from vendor/other mail.
+            var playersGroup = new ListViewGroup("players", "Players");
+            _listView.Groups.Add(playersGroup);
+            var otherGroups = new Dictionary<string, ListViewGroup>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var m in _messages)
             {
                 var from = m.PlayerName != null ? $"{m.PlayerName} <{m.FromEmail}>" : m.FromDisplay;
@@ -189,8 +198,28 @@ public class EmailRepliesPanel : UserControl
                 item.SubItems.Add(m.Date == DateTime.MinValue ? "" : m.Date.ToString("MM/dd/yy h:mm tt"));
                 item.Tag = m;
                 if (m.IsUnread) item.Font = AppTheme.FontDefaultBold;
+
+                if (m.PlayerId.HasValue)
+                {
+                    item.Group = playersGroup;
+                }
+                else
+                {
+                    var key = m.FromEmail.Trim().ToLowerInvariant();
+                    if (!otherGroups.TryGetValue(key, out var group))
+                    {
+                        group = new ListViewGroup(key, m.FromDisplay);
+                        otherGroups[key] = group;
+                        _listView.Groups.Add(group);
+                    }
+                    item.Group = group;
+                }
+
                 _listView.Items.Add(item);
             }
+
+            if (playersGroup.Items.Count == 0) _listView.Groups.Remove(playersGroup);
+
             _lblStatus.Text = $"{_messages.Count} message(s).";
         }
         catch (Exception ex)

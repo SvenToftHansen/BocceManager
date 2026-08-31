@@ -88,14 +88,13 @@ public static class RosterCompareService
                 continue;
             }
 
-            CompareSlot(teamInfo, 1, c2, allPlayers, diffs);
-
+            var newSlots = new Dictionary<int, string> { [1] = c2 };
             foreach (var (col, pn) in colToPlayerNumber)
             {
                 if (pn == null) continue;
-                string val = ws.Cell(r, col).GetString().Trim();
-                CompareSlot(teamInfo, pn.Value, val, allPlayers, diffs);
+                newSlots[pn.Value] = ws.Cell(r, col).GetString().Trim();
             }
+            CompareTeamRoster(teamInfo, newSlots, allPlayers, diffs);
 
             if (phoneCol > 0)
             {
@@ -232,6 +231,81 @@ public static class RosterCompareService
             result[key] = info;
         }
         return result;
+    }
+
+    // Compares a whole team's row against the DB. Captain (slot 1) is a distinct role, so it's
+    // always compared directly by slot. The other seats (Player 2+, Team Spare) are treated as
+    // an interchangeable pool: what matters is whether a player is still on the team at all, not
+    // which specific column they land in — otherwise the same roster returned with Player 3 and
+    // Player 4 swapped reads as two false "changes" instead of zero.
+    private static void CompareTeamRoster(DbTeamInfo team, Dictionary<int, string> newSlots, List<Player> allPlayers, List<RosterDiff> diffs)
+    {
+        newSlots.TryGetValue(1, out var captainName);
+        CompareSlot(team, 1, captainName ?? "", allPlayers, diffs);
+
+        var newResolved = new Dictionary<int, (string Name, int? PlayerId)>();
+        foreach (var (pn, raw) in newSlots)
+        {
+            if (pn == 1) continue;
+            string name = (raw ?? "").Trim();
+            if (name.Length > 0) newResolved[pn] = (name, ResolvePlayer(name, allPlayers));
+        }
+
+        var pendingOldPns = new HashSet<int>(team.Slots.Keys.Where(pn => pn != 1));
+        var pendingNewPns = new HashSet<int>(newResolved.Keys);
+
+        // Seats whose text didn't change need no further work.
+        foreach (var pn in pendingOldPns.ToList())
+        {
+            if (newResolved.TryGetValue(pn, out var nv) &&
+                string.Equals(team.Slots[pn].Name, nv.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                pendingOldPns.Remove(pn);
+                pendingNewPns.Remove(pn);
+            }
+        }
+
+        // Players who are still on the team, just under a different column, aren't a change.
+        var oldIdToPn = pendingOldPns
+            .GroupBy(pn => team.Slots[pn].PlayerId)
+            .ToDictionary(g => g.Key, g => g.First());
+        foreach (var pn in pendingNewPns.ToList())
+        {
+            var nv = newResolved[pn];
+            if (nv.PlayerId.HasValue && oldIdToPn.TryGetValue(nv.PlayerId.Value, out var oldPn) && pendingOldPns.Contains(oldPn))
+            {
+                pendingOldPns.Remove(oldPn);
+                pendingNewPns.Remove(pn);
+            }
+        }
+
+        // What's left are genuine additions, removals, or substitutions.
+        foreach (var pn in pendingOldPns.Union(pendingNewPns).Distinct().OrderBy(x => x))
+        {
+            bool hasOld = pendingOldPns.Contains(pn);
+            bool hasNew = pendingNewPns.Contains(pn);
+            string slotLabel = SlotLabel(pn);
+
+            if (hasOld && hasNew)
+            {
+                var old = team.Slots[pn];
+                var nv = newResolved[pn];
+                diffs.Add(new RosterDiff(team.TeamId, team.Label, pn, slotLabel,
+                    DiffKind.PlayerChanged, old.Name, nv.Name, old.PlayerId, nv.PlayerId, nv.PlayerId.HasValue));
+            }
+            else if (hasOld)
+            {
+                var old = team.Slots[pn];
+                diffs.Add(new RosterDiff(team.TeamId, team.Label, pn, slotLabel,
+                    DiffKind.PlayerRemoved, old.Name, "", old.PlayerId, null, true));
+            }
+            else
+            {
+                var nv = newResolved[pn];
+                diffs.Add(new RosterDiff(team.TeamId, team.Label, pn, slotLabel,
+                    DiffKind.PlayerAdded, "", nv.Name, null, nv.PlayerId, nv.PlayerId.HasValue));
+            }
+        }
     }
 
     private static void CompareSlot(DbTeamInfo team, int playerNumber, string newName, List<Player> allPlayers, List<RosterDiff> diffs)

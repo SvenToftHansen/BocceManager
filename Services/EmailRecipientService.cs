@@ -9,7 +9,8 @@ public enum EmailRecipientScope
     AllActivePlayers, PlayersOnTeams, Division, Team, SpareList, UnpaidPlayers, EmailList, Individual
 }
 
-public record EmailRecipient(int? PlayerId, string FirstName, string LastName, string Email, string? TeamName);
+public record EmailRecipient(int? PlayerId, string FirstName, string LastName, string Email, string? TeamName,
+    string? DivisionName = null, string? DayName = null, string? TimeName = null);
 
 // Builds the recipient set for each of Compose's scopes, for merge-field personalization.
 public static class EmailRecipientService
@@ -63,8 +64,30 @@ public static class EmailRecipientService
                 .ToDictionary(g => g.Key, g => g.First().TeamName)
             : [];
 
+        // Best-effort division/day/time for {Division}/{Day}/{Time} — same "first active team
+        // in the current season" fallback as teamNames above.
+        var divisionInfo = seasonId.HasValue
+            ? db.TeamPlayers
+                .Where(tp => tp.IsActive && tp.Team.Division.SeasonId == seasonId.Value && playerIds.Contains(tp.PlayerId))
+                .Select(tp => new
+                {
+                    tp.PlayerId,
+                    DivisionName = tp.Team.Division.Name,
+                    DayName = tp.Team.Division.DaySlot != null ? tp.Team.Division.DaySlot.DayName : null,
+                    TimeName = tp.Team.Division.TimeSlot != null ? tp.Team.Division.TimeSlot.Timeslot12h : null
+                })
+                .ToList()
+                .GroupBy(x => x.PlayerId)
+                .ToDictionary(g => g.Key, g => g.First())
+            : [];
+
         var recipients = distinctPlayers
-            .Select(p => new EmailRecipient(p.Id, p.FirstName, p.LastName, p.Email!, teamNames.GetValueOrDefault(p.Id)))
+            .Select(p =>
+            {
+                var div = divisionInfo.GetValueOrDefault(p.Id);
+                return new EmailRecipient(p.Id, p.FirstName, p.LastName, p.Email!, teamNames.GetValueOrDefault(p.Id),
+                    div?.DivisionName, div?.DayName, div?.TimeName);
+            })
             .ToList();
 
         if (!uniqueEmailOnly) return recipients;

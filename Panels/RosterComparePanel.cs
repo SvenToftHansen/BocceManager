@@ -52,7 +52,7 @@ public class RosterComparePanel : UserControl
         var toolbar = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 84,
+            Height = 114,
             BackColor = AppTheme.Surface,
             Padding = new Padding(12, 8, 12, 8)
         };
@@ -86,7 +86,7 @@ public class RosterComparePanel : UserControl
 
         _btnSelectAll = new Button
         {
-            Text = "Select All", Location = new Point(12, 46), Size = new Size(100, 26),
+            Text = "Select All", Location = new Point(12, 78), Size = new Size(100, 26),
             FlatStyle = FlatStyle.Flat, Font = AppTheme.FontButton, Cursor = Cursors.Hand,
             FlatAppearance = { BorderSize = 1, BorderColor = AppTheme.Separator }, Visible = false
         };
@@ -94,7 +94,7 @@ public class RosterComparePanel : UserControl
 
         _btnSelectNone = new Button
         {
-            Text = "Select None", Location = new Point(120, 46), Size = new Size(100, 26),
+            Text = "Select None", Location = new Point(120, 78), Size = new Size(100, 26),
             FlatStyle = FlatStyle.Flat, Font = AppTheme.FontButton, Cursor = Cursors.Hand,
             FlatAppearance = { BorderSize = 1, BorderColor = AppTheme.Separator }, Visible = false
         };

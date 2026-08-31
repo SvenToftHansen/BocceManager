@@ -20,12 +20,15 @@ public class EmailComposePanel : UserControl
     // before a send would push the day's total past this conservative shared floor.
     private const int DailySendWarningThreshold = 480;
 
+    private enum FocusTarget { Subject, Body }
+
     private ComboBox _cmbScope = null!;
     private ComboBox _cmbTarget = null!;
     private TextBox _txtManualEmails = null!;
     private Button _btnSelectIndividuals = null!;
     private Label _lblSelectedIndividuals = null!;
     private Label _lblRecipientCount = null!;
+    private ListBox _lstRecipients = null!;
     private CheckBox _chkUniqueEmail = null!;
     private TextBox _txtSubject = null!;
     private WebView2 _webView = null!;
@@ -40,6 +43,9 @@ public class EmailComposePanel : UserControl
     private readonly HashSet<int> _selectedIndividualIds = [];
 
     private FlowLayoutPanel _mergeRow = null!;
+    private TableLayoutPanel _composeLayout = null!;
+    private const int ManualRowIndex = 1;
+    private FocusTarget _lastFocusTarget = FocusTarget.Body;
     private bool _inPreviewMode;
     private string? _preservedBodyHtml;
     private TaskCompletionSource? _pendingNavigation;
@@ -56,25 +62,66 @@ public class EmailComposePanel : UserControl
 
     private void BuildUI()
     {
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, BackColor = AppTheme.ContentBackground };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
+        var split = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            Panel1MinSize = 0,
+            Panel2MinSize = 0,
+            BackColor = AppTheme.Separator
+        };
+        split.SizeChanged += (_, _) => SafeApplySplitDistance(split, 160, 420, 220);
+        split.HandleCreated += (_, _) => BeginInvoke(new Action(() => SafeApplySplitDistance(split, 160, 420, 220)));
 
-        // -- Row 1: recipient scope --
-        var scopeRow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8, 6, 8, 0) };
+        // -- Left: recipients in the currently selected group --
+        var leftLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = AppTheme.Surface };
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        _lblRecipientCount = new Label
+        {
+            Text = "Recipients (0)", Dock = DockStyle.Fill, ForeColor = AppTheme.TextSecondary,
+            Font = AppTheme.FontDefaultBold, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(8, 0, 0, 0)
+        };
+        leftLayout.Controls.Add(_lblRecipientCount, 0, 0);
+
+        _lstRecipients = new ListBox
+        {
+            Dock = DockStyle.Fill,
+            BackColor = AppTheme.Surface,
+            ForeColor = AppTheme.TextPrimary,
+            Font = AppTheme.FontDefault,
+            BorderStyle = BorderStyle.None,
+            IntegralHeight = false
+        };
+        _lstRecipients.Enter += (_, _) => _lastFocusTarget = FocusTarget.Body;
+        leftLayout.Controls.Add(_lstRecipients, 0, 1);
+
+        split.Panel1.Controls.Add(leftLayout);
+
+        // -- Right: compose form --
+        _composeLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 9, BackColor = AppTheme.ContentBackground };
+        _composeLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); // 0: Send To
+        _composeLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));  // 1: manual email addresses (toggled)
+        _composeLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); // 2: unique email checkbox
+        _composeLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 1));  // 3: separator
+        _composeLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); // 4: subject
+        _composeLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40)); // 5: merge/insert buttons
+        _composeLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); // 6: attachment chips
+        _composeLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // 7: body editor
+        _composeLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56)); // 8: send
+
+        // -- Row 0: recipient scope --
+        var scopeRow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8, 6, 8, 0), WrapContents = false };
         scopeRow.Controls.Add(new Label { Text = "Send To:", AutoSize = true, ForeColor = AppTheme.TextSecondary, Font = AppTheme.FontDefault, Margin = new Padding(0, 8, 6, 0) });
 
-        _cmbScope = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 170, Font = AppTheme.FontDefault };
+        _cmbScope = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 190, Font = AppTheme.FontDefault };
         _cmbScope.Items.AddRange([
             "All Active Players", "Players on Teams", "Division", "Team",
             "Players on Spare List", "Unpaid Players", "Email List", "Individual(s)", "Manual Email Address(es)"
         ]);
         _cmbScope.SelectedIndex = 0;
         _cmbScope.SelectedIndexChanged += (_, _) => { UpdateScopeControlsVisibility(); LoadTargets(); RefreshRecipientPreview(); };
+        _cmbScope.Enter += (_, _) => _lastFocusTarget = FocusTarget.Body;
         scopeRow.Controls.Add(_cmbScope);
 
         _cmbTarget = new ComboBox
@@ -87,42 +134,52 @@ public class EmailComposePanel : UserControl
             Margin = new Padding(8, 0, 0, 0)
         };
         _cmbTarget.SelectedIndexChanged += (_, _) => RefreshRecipientPreview();
+        _cmbTarget.Enter += (_, _) => _lastFocusTarget = FocusTarget.Body;
         scopeRow.Controls.Add(_cmbTarget);
-
-        _txtManualEmails = new TextBox
-        {
-            Width = 320,
-            Font = AppTheme.FontDefault,
-            BackColor = AppTheme.Surface,
-            ForeColor = AppTheme.TextPrimary,
-            PlaceholderText = "name@example.com;other@example.com",
-            Margin = new Padding(8, 0, 0, 0),
-            Visible = false
-        };
-        _txtManualEmails.TextChanged += (_, _) => RefreshRecipientPreview();
-        scopeRow.Controls.Add(_txtManualEmails);
 
         _btnSelectIndividuals = MakeButton("Select Players...", Color.FromArgb(100, 116, 139));
         _btnSelectIndividuals.Margin = new Padding(8, 0, 0, 0);
         _btnSelectIndividuals.Click += OnSelectIndividuals;
+        _btnSelectIndividuals.Enter += (_, _) => _lastFocusTarget = FocusTarget.Body;
         scopeRow.Controls.Add(_btnSelectIndividuals);
 
         _lblSelectedIndividuals = new Label { Text = "No players selected", AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.FontDefault, Margin = new Padding(8, 8, 0, 0) };
         scopeRow.Controls.Add(_lblSelectedIndividuals);
+        _composeLayout.Controls.Add(scopeRow, 0, 0);
 
-        _lblRecipientCount = new Label { Text = "0 recipient(s)", AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.FontDefault, Margin = new Padding(16, 8, 0, 0) };
-        scopeRow.Controls.Add(_lblRecipientCount);
+        // -- Row 1: manual email addresses, own line --
+        var manualRow = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8, 4, 8, 4) };
+        _txtManualEmails = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            Font = AppTheme.FontDefault,
+            BackColor = AppTheme.Surface,
+            ForeColor = AppTheme.TextPrimary,
+            PlaceholderText = "name@example.com; other@example.com",
+            Visible = false
+        };
+        _txtManualEmails.TextChanged += (_, _) => RefreshRecipientPreview();
+        _txtManualEmails.Enter += (_, _) => _lastFocusTarget = FocusTarget.Body;
+        manualRow.Controls.Add(_txtManualEmails);
+        _composeLayout.Controls.Add(manualRow, 0, ManualRowIndex);
 
+        // -- Row 2: unique email checkbox, own line --
+        var uniqueRow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8, 4, 8, 0) };
         _chkUniqueEmail = new CheckBox
         {
             Text = "Unique email addresses only", Checked = true, AutoSize = true,
-            ForeColor = AppTheme.TextSecondary, Font = AppTheme.FontDefault, Margin = new Padding(16, 8, 0, 0)
+            ForeColor = AppTheme.TextSecondary, Font = AppTheme.FontDefault
         };
         _chkUniqueEmail.CheckedChanged += (_, _) => RefreshRecipientPreview();
-        scopeRow.Controls.Add(_chkUniqueEmail);
-        layout.Controls.Add(scopeRow, 0, 0);
+        _chkUniqueEmail.Enter += (_, _) => _lastFocusTarget = FocusTarget.Body;
+        uniqueRow.Controls.Add(_chkUniqueEmail);
+        _composeLayout.Controls.Add(uniqueRow, 0, 2);
 
-        // -- Row 2: subject --
+        // -- Row 3: separator --
+        var separator = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Separator, Margin = new Padding(0) };
+        _composeLayout.Controls.Add(separator, 0, 3);
+
+        // -- Row 4: subject --
         var subjectRow = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8, 4, 8, 4) };
         _txtSubject = new TextBox
         {
@@ -130,15 +187,16 @@ public class EmailComposePanel : UserControl
             Font = AppTheme.FontDefault,
             BackColor = AppTheme.Surface,
             ForeColor = AppTheme.TextPrimary,
-            PlaceholderText = "Subject (supports {FirstName}, {LastName}, {TeamName}, {Email})"
+            PlaceholderText = "Subject (supports {FirstName}, {LastName}, {TeamName}, {Email}, {Division}, {Day}, {Time})"
         };
+        _txtSubject.Enter += (_, _) => _lastFocusTarget = FocusTarget.Subject;
         subjectRow.Controls.Add(_txtSubject);
-        layout.Controls.Add(subjectRow, 0, 1);
+        _composeLayout.Controls.Add(subjectRow, 0, 4);
 
-        // -- Row 3: merge field insert buttons + insert report --
+        // -- Row 5: merge field insert buttons + insert report --
         _mergeRow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8, 0, 8, 0) };
-        _mergeRow.Controls.Add(new Label { Text = "Insert into body:", AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.FontSmall, Margin = new Padding(0, 6, 6, 0) });
-        foreach (var field in new[] { "{FirstName}", "{LastName}", "{TeamName}", "{Email}" })
+        _mergeRow.Controls.Add(new Label { Text = "Insert placeholder:", AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.FontSmall, Margin = new Padding(0, 6, 6, 0) });
+        foreach (var field in new[] { "{FirstName}", "{LastName}", "{TeamName}", "{Email}", "{Division}", "{Day}", "{Time}" })
         {
             var btn = MakeButton(field, Color.FromArgb(100, 116, 139));
             btn.Click += async (_, _) => await InsertMergeFieldAsync(field);
@@ -155,19 +213,19 @@ public class EmailComposePanel : UserControl
         btnClearContent.Margin = new Padding(16, 0, 6, 0);
         btnClearContent.Click += OnClearContent;
         _mergeRow.Controls.Add(btnClearContent);
-        layout.Controls.Add(_mergeRow, 0, 2);
+        _composeLayout.Controls.Add(_mergeRow, 0, 5);
 
-        // -- Row 4: attachment chips --
+        // -- Row 6: attachment chips --
         _attachmentsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8, 2, 8, 2), AutoScroll = true };
-        layout.Controls.Add(_attachmentsPanel, 0, 3);
+        _composeLayout.Controls.Add(_attachmentsPanel, 0, 6);
 
-        // -- Row 5: body editor --
+        // -- Row 7: body editor --
         var bodyPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8, 0, 8, 0) };
         _webView = new WebView2 { Dock = DockStyle.Fill };
         bodyPanel.Controls.Add(_webView);
-        layout.Controls.Add(bodyPanel, 0, 4);
+        _composeLayout.Controls.Add(bodyPanel, 0, 7);
 
-        // -- Row 6: send --
+        // -- Row 8: send --
         var sendRow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8) };
         _btnSend = MakeButton("Send", AppTheme.ButtonSuccess);
         _btnSend.Click += OnSend;
@@ -177,12 +235,14 @@ public class EmailComposePanel : UserControl
         sendRow.Controls.Add(_btnPreview);
         _lblStatus = new Label { AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.FontDefault, Margin = new Padding(12, 8, 0, 0) };
         sendRow.Controls.Add(_lblStatus);
-        layout.Controls.Add(sendRow, 0, 5);
+        _composeLayout.Controls.Add(sendRow, 0, 8);
+
+        split.Panel2.Controls.Add(_composeLayout);
 
         var tabs = new TabControl { Dock = DockStyle.Fill, Font = AppTheme.FontDefault };
 
         var composeTab = new TabPage("Compose") { BackColor = AppTheme.ContentBackground };
-        composeTab.Controls.Add(layout);
+        composeTab.Controls.Add(split);
         tabs.TabPages.Add(composeTab);
 
         var repliesTab = new TabPage("Replies") { BackColor = AppTheme.ContentBackground };
@@ -190,6 +250,41 @@ public class EmailComposePanel : UserControl
         tabs.TabPages.Add(repliesTab);
 
         Controls.Add(tabs);
+    }
+
+    private static void SafeApplySplitDistance(SplitContainer split, int desiredFirstMin, int desiredSecondMin, int preferred)
+    {
+        int extent = split.Orientation == Orientation.Horizontal ? split.Height : split.Width;
+        if (extent <= 1) return;
+
+        int maxTotalMin = Math.Max(0, extent - 1);
+        int firstMin = desiredFirstMin, secondMin = desiredSecondMin;
+        if (firstMin + secondMin > maxTotalMin)
+        {
+            if (maxTotalMin == 0)
+            {
+                firstMin = 0;
+                secondMin = 0;
+            }
+            else
+            {
+                double ratio = desiredFirstMin / (double)(desiredFirstMin + desiredSecondMin);
+                firstMin = (int)Math.Floor(maxTotalMin * ratio);
+                secondMin = maxTotalMin - firstMin;
+            }
+        }
+
+        split.Panel1MinSize = firstMin;
+        split.Panel2MinSize = secondMin;
+
+        int maxFirst = extent - secondMin;
+        if (maxFirst < firstMin) maxFirst = firstMin;
+
+        int clamped = Math.Min(preferred, maxFirst);
+        clamped = Math.Max(firstMin, clamped);
+
+        if (clamped > 0)
+            split.SplitterDistance = clamped;
     }
 
     private static Button MakeButton(string text, Color back) => new()
@@ -218,6 +313,15 @@ public class EmailComposePanel : UserControl
                 _pendingNavigation?.TrySetResult();
                 _pendingNavigation = null;
             };
+            // The body editor's actual keyboard focus lives in the Chromium child window the
+            // WebView2 control hosts, not the WinForms control itself, so Control.GotFocus never
+            // fires when the user clicks into the page. editor.html posts a message on focus
+            // instead, which is the reliable signal for "user is in the body".
+            _webView.CoreWebView2.WebMessageReceived += (_, e) =>
+            {
+                if (e.TryGetWebMessageAsString() == "editor-focus")
+                    _lastFocusTarget = FocusTarget.Body;
+            };
             _webView.CoreWebView2.Navigate(new Uri(editorPath).AbsoluteUri);
         }
         catch (Exception ex)
@@ -226,8 +330,20 @@ public class EmailComposePanel : UserControl
         }
     }
 
+    // Inserts at the caret in whichever field last had focus before the placeholder button was
+    // clicked (tracked via _lastFocusTarget, since by the time this runs focus has already
+    // moved to the button itself) — Subject if that's where the user was, Body otherwise.
     private async Task InsertMergeFieldAsync(string field)
     {
+        if (_lastFocusTarget == FocusTarget.Subject)
+        {
+            int pos = Math.Max(0, Math.Min(_txtSubject.SelectionStart, _txtSubject.Text.Length));
+            _txtSubject.Text = _txtSubject.Text.Insert(pos, field);
+            _txtSubject.SelectionStart = pos + field.Length;
+            _txtSubject.Focus();
+            return;
+        }
+
         if (!_webViewReady) return;
         await _webView.CoreWebView2.ExecuteScriptAsync($"window.insertTextAtCursor('{field}')");
     }
@@ -443,21 +559,27 @@ public class EmailComposePanel : UserControl
         var subjectTemplate = _txtSubject.Text.Trim();
 
         Player samplePlayer;
-        string? sampleTeam;
+        string? sampleTeam, sampleDivision, sampleDay, sampleTime;
         if (_currentRecipients.Count > 0)
         {
             var r = _currentRecipients[0];
             samplePlayer = new Player { FirstName = r.FirstName, LastName = r.LastName, Email = r.Email };
             sampleTeam = r.TeamName;
+            sampleDivision = r.DivisionName;
+            sampleDay = r.DayName;
+            sampleTime = r.TimeName;
         }
         else
         {
             samplePlayer = new Player { FirstName = "Jane", LastName = "Doe", Email = "jane@example.com" };
             sampleTeam = "Sample Team";
+            sampleDivision = "Sample Division";
+            sampleDay = "Monday";
+            sampleTime = "6:00 PM";
         }
 
-        var subject = MergeFieldService.Apply(subjectTemplate, samplePlayer, sampleTeam);
-        var mergedBody = MergeFieldService.Apply(bodyTemplate, samplePlayer, sampleTeam);
+        var subject = MergeFieldService.Apply(subjectTemplate, samplePlayer, sampleTeam, sampleDivision, sampleDay, sampleTime);
+        var mergedBody = MergeFieldService.Apply(bodyTemplate, samplePlayer, sampleTeam, sampleDivision, sampleDay, sampleTime);
 
         var attachmentNote = _attachments.Count > 0
             ? $"<p style=\"color:#666;font-size:12px;\">Attachments: {string.Join(", ", _attachments.Select(a => System.Net.WebUtility.HtmlEncode(a.FileName)))}</p>"
@@ -518,6 +640,9 @@ public class EmailComposePanel : UserControl
         _btnSelectIndividuals.Visible = isIndividual;
         _lblSelectedIndividuals.Visible = isIndividual;
         _txtManualEmails.Visible = isManual;
+
+        _composeLayout.RowStyles[ManualRowIndex].Height = isManual ? 40 : 0;
+        _composeLayout.PerformLayout();
     }
 
     private void LoadTargets()
@@ -654,7 +779,7 @@ public class EmailComposePanel : UserControl
         if (_cmbScope.SelectedIndex == 8)
         {
             _currentRecipients = ParseManualEmails(_txtManualEmails.Text);
-            _lblRecipientCount.Text = $"{_currentRecipients.Count} recipient(s)";
+            UpdateRecipientDisplay();
             return;
         }
 
@@ -679,7 +804,19 @@ public class EmailComposePanel : UserControl
             _currentRecipients = [];
         }
 
-        _lblRecipientCount.Text = $"{_currentRecipients.Count} recipient(s)";
+        UpdateRecipientDisplay();
+    }
+
+    private void UpdateRecipientDisplay()
+    {
+        _lblRecipientCount.Text = $"Recipients ({_currentRecipients.Count})";
+
+        _lstRecipients.Items.Clear();
+        foreach (var r in _currentRecipients)
+        {
+            bool hasName = !string.IsNullOrWhiteSpace(r.FirstName) || !string.IsNullOrWhiteSpace(r.LastName);
+            _lstRecipients.Items.Add(hasName ? $"{r.LastName}, {r.FirstName}  —  {r.Email}" : r.Email);
+        }
     }
 
     private static readonly System.Text.RegularExpressions.Regex EmailPattern =
@@ -766,8 +903,8 @@ public class EmailComposePanel : UserControl
                 try
                 {
                     var player = new Player { FirstName = recipient.FirstName, LastName = recipient.LastName, Email = recipient.Email };
-                    var subject = ApplyMerge(subjectTemplate, player, recipient.TeamName);
-                    var body = ApplyMerge(bodyTemplate, player, recipient.TeamName);
+                    var subject = ApplyMerge(subjectTemplate, player, recipient.TeamName, recipient.DivisionName, recipient.DayName, recipient.TimeName);
+                    var body = ApplyMerge(bodyTemplate, player, recipient.TeamName, recipient.DivisionName, recipient.DayName, recipient.TimeName);
 
                     await GmailSendService.SendAsync(credential, fromEmail, recipient.Email, subject, body, attachments);
                     results.Add((recipient, true, null));
@@ -828,6 +965,7 @@ public class EmailComposePanel : UserControl
         }
     }
 
-    private static string ApplyMerge(string template, Player player, string? teamName) =>
-        MergeFieldService.Apply(template, player, teamName);
+    private static string ApplyMerge(string template, Player player, string? teamName,
+        string? divisionName = null, string? dayName = null, string? timeName = null) =>
+        MergeFieldService.Apply(template, player, teamName, divisionName, dayName, timeName);
 }

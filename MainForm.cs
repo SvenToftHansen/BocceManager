@@ -322,7 +322,6 @@ public partial class MainForm : Form
             add("Spare List",   NavSection.ReportSpareLists);
             add("Unpaid Fees",  NavSection.ReportUnpaidFees);
             add("All Players",  NavSection.ReportAllPlayers);
-            add("Roster Compare", NavSection.RosterCompare);
         });
 
         AddGroup("EMAIL", add => {
@@ -341,6 +340,7 @@ public partial class MainForm : Form
 
         AddGroup("UTILITIES", add => {
             add("Utilities",      NavSection.Utilities);
+            add("Roster Compare", NavSection.RosterCompare);
             add("Theme",          NavSection.Theme);
         });
     }
