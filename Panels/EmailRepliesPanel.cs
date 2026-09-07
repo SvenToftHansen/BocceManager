@@ -17,7 +17,8 @@ public class EmailRepliesPanel : UserControl
     private const int PreferredSplitDistance = 420;
 
     private List<InboxMessage> _messages = [];
-    private InboxMessage? _selected;
+    private readonly HashSet<string> _collapsedGroupKeys = new(StringComparer.OrdinalIgnoreCase);
+    private int _previewSeq;
 
     public EmailRepliesPanel()
     {
@@ -86,6 +87,8 @@ public class EmailRepliesPanel : UserControl
         _listView.Columns.Add("Date", 110);
         _listView.ShowGroups = true;
         _listView.SelectedIndexChanged += OnSelectionChanged;
+        _listView.GroupCollapsedStateChanged += OnGroupCollapsedStateChanged;
+        _listView.GroupTaskLinkClick += OnGroupTaskLinkClick;
         _mainSplit.Panel1.Controls.Add(_listView);
 
         _webView = new WebView2 { Dock = DockStyle.Fill };
@@ -157,6 +160,37 @@ public class EmailRepliesPanel : UserControl
         catch { }
     }
 
+    private void ApplyCollapsedState(ListViewGroup group)
+    {
+        group.CollapsedState = _collapsedGroupKeys.Contains(group.Name!)
+            ? ListViewGroupCollapsedState.Collapsed
+            : ListViewGroupCollapsedState.Expanded;
+    }
+
+    private void OnGroupCollapsedStateChanged(object? sender, ListViewGroupEventArgs e)
+    {
+        if (e.GroupIndex < 0 || e.GroupIndex >= _listView.Groups.Count) return;
+        var group = _listView.Groups[e.GroupIndex];
+        if (group.CollapsedState == ListViewGroupCollapsedState.Collapsed)
+            _collapsedGroupKeys.Add(group.Name!);
+        else
+            _collapsedGroupKeys.Remove(group.Name!);
+    }
+
+    private async void OnGroupTaskLinkClick(object? sender, ListViewGroupEventArgs e)
+    {
+        if (e.GroupIndex < 0 || e.GroupIndex >= _listView.Groups.Count) return;
+        var group = _listView.Groups[e.GroupIndex];
+        var items = group.Items.Cast<ListViewItem>().ToList();
+        if (items.Count == 0) return;
+
+        var confirm = MessageBox.Show($"Archive all {items.Count} message(s) in \"{group.Header}\"?",
+            "Archive Group", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (confirm != DialogResult.Yes) return;
+
+        await ArchiveItemsAsync(items);
+    }
+
     private void NavigateWebView(string html)
     {
         if (_webViewReady && _webView.CoreWebView2 != null)
@@ -186,7 +220,10 @@ public class EmailRepliesPanel : UserControl
 
             // One group for senders who match a player in our roster, then one group per
             // distinct outside sender — keeps league replies separate from vendor/other mail.
-            var playersGroup = new ListViewGroup("players", "Players");
+            // Groups are collapsible (click the chevron) and each carries an "Archive Group"
+            // task link to clear out a whole sender at once.
+            var playersGroup = new ListViewGroup("players", "Players") { TaskLink = "Archive Group" };
+            ApplyCollapsedState(playersGroup);
             _listView.Groups.Add(playersGroup);
             var otherGroups = new Dictionary<string, ListViewGroup>(StringComparer.OrdinalIgnoreCase);
 
@@ -208,7 +245,8 @@ public class EmailRepliesPanel : UserControl
                     var key = m.FromEmail.Trim().ToLowerInvariant();
                     if (!otherGroups.TryGetValue(key, out var group))
                     {
-                        group = new ListViewGroup(key, m.FromDisplay);
+                        group = new ListViewGroup(key, m.FromDisplay) { TaskLink = "Archive Group" };
+                        ApplyCollapsedState(group);
                         otherGroups[key] = group;
                         _listView.Groups.Add(group);
                     }
@@ -236,16 +274,27 @@ public class EmailRepliesPanel : UserControl
 
     private async void OnSelectionChanged(object? sender, EventArgs e)
     {
-        if (_listView.SelectedItems.Count == 0)
+        var selected = _listView.SelectedItems.Cast<ListViewItem>()
+            .Select(i => (InboxMessage)i.Tag!)
+            .ToList();
+
+        _btnArchive.Enabled = selected.Count > 0;
+
+        int seq = ++_previewSeq;
+
+        if (selected.Count == 0)
         {
-            _selected = null;
-            _btnArchive.Enabled = false;
+            NavigateWebView("<html><body></body></html>");
             return;
         }
 
-        var msg = (InboxMessage)_listView.SelectedItems[0].Tag!;
-        _selected = msg;
-        _btnArchive.Enabled = true;
+        if (selected.Count > 1)
+        {
+            NavigateWebView($"<html><body style=\"padding:16px;font-family:Segoe UI,Arial,sans-serif;color:#666;\">{selected.Count} messages selected.</body></html>");
+            return;
+        }
+
+        var msg = selected[0];
 
         var header = $"""
             <div style="font-family:Segoe UI,Arial,sans-serif;border-bottom:1px solid #ddd;padding-bottom:8px;margin-bottom:12px;">
@@ -260,7 +309,7 @@ public class EmailRepliesPanel : UserControl
         {
             var credential = await GmailAuthService.GetCredentialAsync();
             var bodyHtml = await GmailReadService.GetMessageBodyHtmlAsync(credential, msg.Id);
-            if (_selected?.Id != msg.Id) return; // selection changed while loading
+            if (seq != _previewSeq) return; // selection changed while loading
 
             NavigateWebView($"<html><body style=\"padding:16px;\">{header}{bodyHtml}</body></html>");
 
@@ -289,31 +338,53 @@ public class EmailRepliesPanel : UserControl
 
     private async Task OnArchiveAsync()
     {
-        if (_selected == null) return;
-        var msg = _selected;
+        var items = _listView.SelectedItems.Cast<ListViewItem>().ToList();
+        if (items.Count == 0) return;
+
+        if (items.Count > 1)
+        {
+            var confirm = MessageBox.Show($"Archive {items.Count} selected message(s)?",
+                "Archive", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (confirm != DialogResult.Yes) return;
+        }
+
+        await ArchiveItemsAsync(items);
+    }
+
+    private async Task ArchiveItemsAsync(List<ListViewItem> items)
+    {
+        _btnArchive.Enabled = false;
+        int failed = 0;
 
         try
         {
             var credential = await GmailAuthService.GetCredentialAsync();
-            await GmailReadService.ArchiveAsync(credential, msg.Id);
-            _messages.RemoveAll(m => m.Id == msg.Id);
-            foreach (ListViewItem item in _listView.Items)
+            foreach (var item in items)
             {
-                if (item.Tag is InboxMessage im && im.Id == msg.Id)
+                if (item.Tag is not InboxMessage msg) continue;
+                try
                 {
+                    await GmailReadService.ArchiveAsync(credential, msg.Id);
+                    _messages.RemoveAll(m => m.Id == msg.Id);
                     _listView.Items.Remove(item);
-                    break;
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Error(ex, "Failed to archive Gmail message {Id}", msg.Id);
+                    failed++;
                 }
             }
-            _selected = null;
-            _btnArchive.Enabled = false;
-            NavigateWebView("<html><body></body></html>");
-            _lblStatus.Text = $"{_messages.Count} message(s).";
         }
         catch (Exception ex)
         {
-            AppLogger.Error(ex, "Failed to archive Gmail message");
-            MessageBox.Show($"Could not archive message:\n\n{ex.Message}", "Email Replies", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            AppLogger.Error(ex, "Failed to archive Gmail messages");
+            MessageBox.Show($"Could not archive messages:\n\n{ex.Message}", "Email Replies", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+
+        NavigateWebView("<html><body></body></html>");
+        _lblStatus.Text = $"{_messages.Count} message(s).";
+
+        if (failed > 0)
+            MessageBox.Show($"{failed} message(s) could not be archived.", "Archive", MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 }
