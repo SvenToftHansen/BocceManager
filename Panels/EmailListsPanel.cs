@@ -496,28 +496,29 @@ public class EmailListsPanel : UserControl
     private void RefreshPlayerLists()
     {
         var filter = _txtSearch.SearchText.Trim();
-        IEnumerable<PlayerItem> visible = filter.Length == 0
-            ? _allPlayers
-            : _allPlayers.Where(p => SearchQueryService.MatchesAnyTerm(p.SearchBlob, filter));
-
         var filterIds = ComputeFilterIds();
-        if (filterIds != null)
-            visible = visible.Where(p => filterIds.Contains(p.Id));
 
-        var visibleList = visible.ToList();
+        // "On this list" always shows the full membership regardless of the search text, so
+        // you can review or remove someone without first typing their name — only "Not on
+        // this list" (what you're searching to find and add) is narrowed by it.
+        IEnumerable<PlayerItem> membersSource = _allPlayers.Where(p => _memberIds.Contains(p.Id));
+        IEnumerable<PlayerItem> availableSource = _allPlayers.Where(p => !_memberIds.Contains(p.Id));
+        if (filter.Length > 0)
+            availableSource = availableSource.Where(p => SearchQueryService.MatchesAnyTerm(p.SearchBlob, filter));
+
+        if (filterIds != null)
+        {
+            membersSource = membersSource.Where(p => filterIds.Contains(p.Id));
+            availableSource = availableSource.Where(p => filterIds.Contains(p.Id));
+        }
 
         _lstMembers.Items.Clear();
         _lstAvailable.Items.Clear();
 
-        foreach (var p in visibleList)
-        {
-            bool isMember = _memberIds.Contains(p.Id);
-            var row = new PlayerRow(p.Id, FormatPlayerRow(p, includeTeamAndSpare: !isMember));
-            if (isMember)
-                _lstMembers.Items.Add(row);
-            else
-                _lstAvailable.Items.Add(row);
-        }
+        foreach (var p in membersSource)
+            _lstMembers.Items.Add(new PlayerRow(p.Id, FormatPlayerRow(p, includeTeamAndSpare: false)));
+        foreach (var p in availableSource)
+            _lstAvailable.Items.Add(new PlayerRow(p.Id, FormatPlayerRow(p, includeTeamAndSpare: true)));
 
         bool hasSelection = _lstLists.SelectedItem is ListItem;
         _lstMembers.Enabled = hasSelection;
