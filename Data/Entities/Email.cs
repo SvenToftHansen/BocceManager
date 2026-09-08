@@ -64,6 +64,7 @@ public class EmailDraft
     public string? ManualEmails { get; set; }
     public bool UniqueEmailOnly { get; set; } = true;
     public string? SelectedIndividualIds { get; set; } // comma-separated player ids, scope 7 only
+    public bool GroupMail { get; set; } // Mail Merge (personalized, one send per recipient) vs Group Mail (one Bcc send)
     public string? SavedBy { get; set; }
     public DateTime SavedAt { get; set; } = DateTime.UtcNow;
 }

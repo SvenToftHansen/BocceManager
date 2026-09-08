@@ -30,6 +30,8 @@ public class EmailComposePanel : UserControl
     private Label _lblRecipientCount = null!;
     private ListBox _lstRecipients = null!;
     private CheckBox _chkUniqueEmail = null!;
+    private CheckBox _chkGroupMail = null!;
+    private readonly List<Button> _mergeFieldButtons = [];
     private TextBox _txtSubject = null!;
     private WebView2 _webView = null!;
     private FlowLayoutPanel _attachmentsPanel = null!;
@@ -176,6 +178,15 @@ public class EmailComposePanel : UserControl
         _chkUniqueEmail.CheckedChanged += (_, _) => RefreshRecipientPreview();
         _chkUniqueEmail.Enter += (_, _) => _lastFocusTarget = FocusTarget.Body;
         uniqueRow.Controls.Add(_chkUniqueEmail);
+
+        _chkGroupMail = new CheckBox
+        {
+            Text = "Group Mail (one email, recipients in Bcc — no {placeholders})", AutoSize = true,
+            ForeColor = AppTheme.TextSecondary, Font = AppTheme.FontDefault, Margin = new Padding(24, 0, 0, 0)
+        };
+        _chkGroupMail.CheckedChanged += (_, _) => UpdateGroupMailState();
+        _chkGroupMail.Enter += (_, _) => _lastFocusTarget = FocusTarget.Body;
+        uniqueRow.Controls.Add(_chkGroupMail);
         _composeLayout.Controls.Add(uniqueRow, 0, 2);
 
         // -- Row 3: separator --
@@ -204,6 +215,7 @@ public class EmailComposePanel : UserControl
             var btn = MakeButton(field, Color.FromArgb(100, 116, 139));
             btn.Click += async (_, _) => await InsertMergeFieldAsync(field);
             _mergeRow.Controls.Add(btn);
+            _mergeFieldButtons.Add(btn);
         }
         var btnInsertReport = MakeButton("Insert Report...", AppTheme.Accent);
         btnInsertReport.Margin = new Padding(16, 0, 6, 0);
@@ -655,6 +667,15 @@ public class EmailComposePanel : UserControl
         _composeLayout.PerformLayout();
     }
 
+    // Group Mail sends one shared body to everyone (Bcc), so per-recipient placeholders like
+    // {FirstName} have nothing to resolve to — disable the insert buttons rather than let the
+    // admin add one and have it go out to every recipient literally as "{FirstName}".
+    private void UpdateGroupMailState()
+    {
+        foreach (var btn in _mergeFieldButtons)
+            btn.Enabled = !_chkGroupMail.Checked;
+    }
+
     private void LoadTargets()
     {
         _cmbTarget.Items.Clear();
@@ -807,6 +828,7 @@ public class EmailComposePanel : UserControl
             draft.TargetId = targetId;
             draft.ManualEmails = _txtManualEmails.Text;
             draft.UniqueEmailOnly = _chkUniqueEmail.Checked;
+            draft.GroupMail = _chkGroupMail.Checked;
             draft.SelectedIndividualIds = _selectedIndividualIds.Count == 0 ? null : string.Join(",", _selectedIndividualIds);
             draft.SavedBy = Environment.UserName;
             draft.SavedAt = DateTime.UtcNow;
@@ -925,6 +947,7 @@ public class EmailComposePanel : UserControl
 
         _txtManualEmails.Text = draft.ManualEmails ?? "";
         _chkUniqueEmail.Checked = draft.UniqueEmailOnly;
+        _chkGroupMail.Checked = draft.GroupMail;
 
         _selectedIndividualIds.Clear();
         if (!string.IsNullOrWhiteSpace(draft.SelectedIndividualIds))
@@ -933,6 +956,7 @@ public class EmailComposePanel : UserControl
         UpdateIndividualsLabel();
 
         UpdateScopeControlsVisibility();
+        UpdateGroupMailState();
 
         await _webView.CoreWebView2.ExecuteScriptAsync($"window.setBody({JsonSerializer.Serialize(draft.BodyHtml)})");
 
@@ -1039,8 +1063,10 @@ public class EmailComposePanel : UserControl
             return;
         }
 
-        if (MessageBox.Show($"Send this email to {_currentRecipients.Count} recipient(s)?", "Confirm Send",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+        string confirmMessage = _chkGroupMail.Checked
+            ? $"Send one Group Mail (Bcc) email to {_currentRecipients.Count} recipient(s)?"
+            : $"Send this email to {_currentRecipients.Count} recipient(s)?";
+        if (MessageBox.Show(confirmMessage, "Confirm Send", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
 
         int leagueId;
@@ -1062,6 +1088,15 @@ public class EmailComposePanel : UserControl
         var bodyTemplateRaw = await _webView.CoreWebView2.ExecuteScriptAsync("window.getBody()");
         var bodyTemplate = JsonSerializer.Deserialize<string>(bodyTemplateRaw) ?? "";
 
+        if (_chkGroupMail.Checked && (MergeFieldService.ContainsAnyToken(subjectTemplate) || MergeFieldService.ContainsAnyToken(bodyTemplate)))
+        {
+            MessageBox.Show(
+                "Group Mail sends one shared email to everyone, so placeholders like {FirstName} can't be filled in per recipient. " +
+                "Remove them from the subject/body, or switch back to Mail Merge.",
+                "Group Mail", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
         _btnSend.Enabled = false;
         try
         {
@@ -1075,29 +1110,57 @@ public class EmailComposePanel : UserControl
             int sent = 0, failed = 0;
             var results = new List<(EmailRecipient Recipient, bool Success, string? Error)>();
 
-            for (int i = 0; i < _currentRecipients.Count; i++)
+            if (_chkGroupMail.Checked)
             {
-                var recipient = _currentRecipients[i];
-                _lblStatus.Text = $"Sending {i + 1}/{_currentRecipients.Count}...";
+                // One send, everyone in Bcc — dedupe by address since a shared body has no
+                // per-recipient content to distinguish otherwise-duplicate entries anyway.
+                var uniqueRecipients = _currentRecipients
+                    .Where(r => !string.IsNullOrWhiteSpace(r.Email))
+                    .GroupBy(r => r.Email, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => g.First())
+                    .ToList();
 
+                _lblStatus.Text = $"Sending to {uniqueRecipients.Count} recipient(s)...";
                 try
                 {
-                    var player = new Player { FirstName = recipient.FirstName, LastName = recipient.LastName, Email = recipient.Email };
-                    var subject = ApplyMerge(subjectTemplate, player, recipient.TeamName, recipient.DivisionName, recipient.DayName, recipient.TimeName);
-                    var body = ApplyMerge(bodyTemplate, player, recipient.TeamName, recipient.DivisionName, recipient.DayName, recipient.TimeName);
-
-                    await GmailSendService.SendAsync(credential, fromEmail, recipient.Email, subject, body, attachments);
-                    results.Add((recipient, true, null));
-                    sent++;
+                    await GmailSendService.SendGroupAsync(credential, fromEmail,
+                        uniqueRecipients.Select(r => r.Email).ToList(), subjectTemplate, bodyTemplate, attachments);
+                    foreach (var recipient in uniqueRecipients) results.Add((recipient, true, null));
+                    sent = uniqueRecipients.Count;
                 }
                 catch (Exception ex)
                 {
-                    AppLogger.Error(ex, "Failed to send email to {Email}", recipient.Email);
-                    results.Add((recipient, false, ex.Message));
-                    failed++;
+                    AppLogger.Error(ex, "Failed to send group email");
+                    foreach (var recipient in uniqueRecipients) results.Add((recipient, false, ex.Message));
+                    failed = uniqueRecipients.Count;
                 }
+            }
+            else
+            {
+                for (int i = 0; i < _currentRecipients.Count; i++)
+                {
+                    var recipient = _currentRecipients[i];
+                    _lblStatus.Text = $"Sending {i + 1}/{_currentRecipients.Count}...";
 
-                await Task.Delay(250);
+                    try
+                    {
+                        var player = new Player { FirstName = recipient.FirstName, LastName = recipient.LastName, Email = recipient.Email };
+                        var subject = ApplyMerge(subjectTemplate, player, recipient.TeamName, recipient.DivisionName, recipient.DayName, recipient.TimeName);
+                        var body = ApplyMerge(bodyTemplate, player, recipient.TeamName, recipient.DivisionName, recipient.DayName, recipient.TimeName);
+
+                        await GmailSendService.SendAsync(credential, fromEmail, recipient.Email, subject, body, attachments);
+                        results.Add((recipient, true, null));
+                        sent++;
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLogger.Error(ex, "Failed to send email to {Email}", recipient.Email);
+                        results.Add((recipient, false, ex.Message));
+                        failed++;
+                    }
+
+                    await Task.Delay(250);
+                }
             }
 
             using (var db = new BocceDbContext())

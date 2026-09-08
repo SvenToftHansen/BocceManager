@@ -265,6 +265,9 @@ namespace BocceManager.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("GroupMail")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("ManualEmails")
                         .HasColumnType("text");
 
