@@ -118,45 +118,55 @@ public static class RosterCompareService
         using var tx = db.Database.BeginTransaction();
         var teamsTouched = new HashSet<int>();
 
-        foreach (var d in list.Where(x => x.Kind != DiffKind.PhoneChanged))
+        // Player-slot diffs are staged as a delete-then-insert of the TeamPlayer row rather than
+        // an in-place PlayerId update, and every diff for a given team is saved together in one
+        // SaveChanges() call. A plain in-place update can't handle two slots trading players (e.g.
+        // Player 3 and Player 4 reversed on the returned sheet) — EF has to update both rows against
+        // the same TeamId+PlayerId unique index, and since each one's new value is the other's
+        // current value, there's no safe order to run them in, so it throws a "circular dependency"
+        // error. Deleting both rows first and then inserting both frees the unique values before
+        // either new one is written, so the swap (real or just a reordering) always applies cleanly.
+        foreach (var teamId in list.Where(x => x.Kind != DiffKind.PhoneChanged).Select(d => d.TeamId).Distinct())
         {
+            var teamDiffs = list.Where(x => x.Kind != DiffKind.PhoneChanged && x.TeamId == teamId).ToList();
+            var toStage = new List<RosterDiff>();
+
+            foreach (var d in teamDiffs)
+            {
+                if (d.Kind is DiffKind.PlayerAdded or DiffKind.PlayerChanged && !d.NewPlayerId.HasValue)
+                {
+                    errors.Add($"{d.TeamLabel} — {d.SlotLabel}: \"{d.NewValue}\" not found in Players, skipped.");
+                    continue;
+                }
+                toStage.Add(d);
+            }
+
+            if (toStage.Count == 0) continue;
+
+            foreach (var d in toStage)
+            {
+                var existing = db.TeamPlayers.FirstOrDefault(x => x.TeamId == d.TeamId && x.PlayerNumber == d.PlayerNumber);
+                if (existing != null) db.TeamPlayers.Remove(existing);
+
+                if (d.Kind is DiffKind.PlayerAdded or DiffKind.PlayerChanged)
+                    db.TeamPlayers.Add(new TeamPlayer
+                    {
+                        TeamId = d.TeamId, PlayerId = d.NewPlayerId!.Value, PlayerNumber = d.PlayerNumber,
+                        Role = d.PlayerNumber == 1 ? "captain" : "player"
+                    });
+            }
+
             try
             {
-                switch (d.Kind)
-                {
-                    case DiffKind.PlayerRemoved:
-                    {
-                        var tp = db.TeamPlayers.FirstOrDefault(x => x.TeamId == d.TeamId && x.PlayerNumber == d.PlayerNumber);
-                        if (tp != null) db.TeamPlayers.Remove(tp);
-                        break;
-                    }
-                    case DiffKind.PlayerAdded:
-                    case DiffKind.PlayerChanged:
-                    {
-                        if (!d.NewPlayerId.HasValue)
-                        {
-                            errors.Add($"{d.TeamLabel} — {d.SlotLabel}: \"{d.NewValue}\" not found in Players, skipped.");
-                            continue;
-                        }
-                        var tp = db.TeamPlayers.FirstOrDefault(x => x.TeamId == d.TeamId && x.PlayerNumber == d.PlayerNumber);
-                        if (tp == null)
-                            db.TeamPlayers.Add(new TeamPlayer
-                            {
-                                TeamId = d.TeamId, PlayerId = d.NewPlayerId.Value, PlayerNumber = d.PlayerNumber,
-                                Role = d.PlayerNumber == 1 ? "captain" : "player"
-                            });
-                        else
-                            tp.PlayerId = d.NewPlayerId.Value;
-                        break;
-                    }
-                }
                 db.SaveChanges();
-                applied++;
-                teamsTouched.Add(d.TeamId);
+                applied += toStage.Count;
+                teamsTouched.Add(teamId);
             }
             catch (Exception ex)
             {
-                errors.Add($"{d.TeamLabel} — {d.SlotLabel}: {ex.Message}");
+                AppLogger.Error(ex, "Failed to apply roster player changes for team {TeamId}", teamId);
+                errors.Add($"{teamDiffs[0].TeamLabel}: could not apply {toStage.Count} player change(s): {ex.Message}");
+                db.ChangeTracker.Clear(); // discard the failed batch so it can't poison a later SaveChanges
             }
         }
 
@@ -177,12 +187,25 @@ public static class RosterCompareService
             }
             catch (Exception ex)
             {
+                AppLogger.Error(ex, "Failed to apply roster phone change for team {TeamId}", d.TeamId);
                 errors.Add($"{d.TeamLabel} — Phone: {ex.Message}");
+                db.ChangeTracker.Clear();
             }
         }
 
         foreach (var teamId in teamsTouched)
-            TeamRosterService.SyncCaptain(db, teamId);
+        {
+            try
+            {
+                TeamRosterService.SyncCaptain(db, teamId);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error(ex, "Failed to sync captain for team {TeamId} after roster changes", teamId);
+                errors.Add($"Team {teamId}: applied, but couldn't refresh captain/display name: {ex.Message}");
+                db.ChangeTracker.Clear();
+            }
+        }
 
         tx.Commit();
         return (applied, errors);
