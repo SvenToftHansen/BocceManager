@@ -671,13 +671,43 @@ public class DivisionPanel : UserControl
                 if (season != null && season.LeagueId == _selectedLeagueId.Value)
                 {
                     _seasonIsLocked = season.IsLocked;
-                    _allDivisions = db.Divisions
+                    int seasonMax = season.PlayersPerTeamMaximum ?? 0;
+
+                    var divisions = db.Divisions
                         .Where(d => d.SeasonId == _selectedSeasonId.Value)
+                        .Include(d => d.DaySlot)
+                        .Include(d => d.TimeSlot)
+                        .AsNoTracking()
                         .OrderBy(d => d.SortName).ThenBy(d => d.Name)
-                        .Select(d => new { d.Id, d.Name, d.IsActive, d.TeamCount })
-                        .AsEnumerable()
-                        .Select(d => (d.Id, Display: $"{d.Name} ({d.TeamCount} team{(d.TeamCount == 1 ? "" : "s")})" + (d.IsActive ? "" : " (inactive)")))
                         .ToList();
+
+                    var divisionIds = divisions.Select(d => d.Id).ToList();
+                    var teamPlayerCounts = db.Teams
+                        .Where(t => divisionIds.Contains(t.DivisionId))
+                        .Select(t => new { t.DivisionId, PlayerCount = db.TeamPlayers.Count(tp => tp.TeamId == t.Id) })
+                        .ToList();
+
+                    // Full/Partial/Empty breakdown: "Full" is a team with at least (max - 1) players
+                    // (e.g. 4 or 5 out of a 5-player max), "Partial" is 1..(max - 2), "Empty" is 0.
+                    _allDivisions = divisions.Select(d =>
+                    {
+                        int max = (d.PlayersPerTeamMaximum ?? 0) > 0 ? d.PlayersPerTeamMaximum!.Value
+                            : seasonMax > 0 ? seasonMax : 5;
+                        int fullThreshold = Math.Max(1, max - 1);
+
+                        var teams = teamPlayerCounts.Where(t => t.DivisionId == d.Id).ToList();
+                        int full = teams.Count(t => t.PlayerCount >= fullThreshold);
+                        int partial = teams.Count(t => t.PlayerCount > 0 && t.PlayerCount < fullThreshold);
+                        int empty = teams.Count(t => t.PlayerCount == 0);
+
+                        string dayTime = d.DaySlot != null && d.TimeSlot != null
+                            ? $"{TitleAbbr(d.DaySlot.DayAbbr)} {d.TimeSlot.Timeslot12h}"
+                            : d.Name;
+
+                        string display = $"{dayTime} ({teams.Count} team{(teams.Count == 1 ? "" : "s")}: {full}-{partial}-{empty})"
+                            + (d.IsActive ? "" : " (inactive)");
+                        return (d.Id, Display: display);
+                    }).ToList();
                 }
             }
             catch { }
@@ -2586,6 +2616,11 @@ public class DivisionPanel : UserControl
 
 
     // â"€â"€ Control factories â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+
+    // "MON" -> "Mon", for the division lookup list (day/time display uses the same
+    // title-cased 3-letter convention as Standings and the printed reports).
+    private static string TitleAbbr(string? abbr) =>
+        string.IsNullOrEmpty(abbr) ? "" : char.ToUpper(abbr[0]) + abbr.Substring(1).ToLower();
 
     private static string BuildShortName(string dayAbbr, string time24h)
     {
